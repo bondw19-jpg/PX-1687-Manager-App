@@ -1,0 +1,1 @@
+{\n  "name": "manager-app",\n  "version": "1.0.0",\n  "description": "A manager app for overseeing operations.",\n  "main": "index.js",\n  "scripts": {\n    "start": "node index.js"\n  },\n  "keywords": [\n    "manager",\n    "app"\n  ],\n  "author": "bondw19-jpg",\n  "license": "ISC"\n}
