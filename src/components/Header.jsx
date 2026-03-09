@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { Menu, Plus, Bell } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import SideDrawer from './SideDrawer';
+import { PreviewButton } from './PreviewUpdateBanner';
+
+const PREVIEW_URL = 'https://4173-il9welzg75eglof37wb6r-ea026bf9.sandbox.novita.ai';
 
 export default function Header({ title, subtitle, showAdd = false, onAdd, rightIcon, onRightClick }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -37,10 +40,13 @@ export default function Header({ title, subtitle, showAdd = false, onAdd, rightI
                 {rightIcon}
               </button>
             ) : (
-              <button className="w-8 h-8 flex items-center justify-center text-white rounded-lg active:bg-white/20 relative">
-                <Bell size={20} />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-accent rounded-full"></span>
-              </button>
+              <>
+                <button className="w-8 h-8 flex items-center justify-center text-white rounded-lg active:bg-white/20 relative">
+                  <Bell size={20} />
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-accent rounded-full"></span>
+                </button>
+                <PreviewButton previewUrl={PREVIEW_URL} />
+              </>
             )}
             <button
               onClick={onAdd}

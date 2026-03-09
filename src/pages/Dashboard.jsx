@@ -4,6 +4,9 @@ import { Users, PhoneMissed, Calendar, Pin, UserCheck, ChevronRight, Phone } fro
 import { format } from 'date-fns';
 import Header from '../components/Header';
 import { useAppStore } from '../store/appStore';
+import PreviewUpdateBanner from '../components/PreviewUpdateBanner';
+
+const PREVIEW_URL = 'https://4173-il9welzg75eglof37wb6r-ea026bf9.sandbox.novita.ai';
 
 function StatCard({ icon, count, label, color, bgColor }) {
   return (
@@ -46,6 +49,8 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-background">
       <Header title="Dashboard" />
+
+      <PreviewUpdateBanner previewUrl={PREVIEW_URL} />
 
       <div className="p-4 space-y-4">
         {/* Stats Grid */}
