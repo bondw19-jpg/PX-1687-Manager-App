@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Eye, FileText, Pencil, Trash2, Search, Star, X, Plus, Phone, Calendar, User } from 'lucide-react';
+import { Eye, FileText, Pencil, Trash2, Search, Star, X, Plus, Phone, Calendar, User, Users, UserPlus } from 'lucide-react';
 import Header from '../components/Header';
 import { useAppStore } from '../store/appStore';
 import WorkFileModal from '../components/WorkFileModal';
@@ -281,15 +281,34 @@ export default function Associates() {
 
         {/* Associate Cards */}
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center py-12 text-gray-400">
-            <Users size={40} className="mb-3 text-gray-200" />
-            <p className="text-sm">No associates found</p>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="mt-3 bg-primary text-white px-4 py-2 rounded-xl text-sm font-medium"
-            >
-              + Add Associate
-            </button>
+          <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+            <div className="w-20 h-20 bg-gray-100 rounded-2xl flex items-center justify-center mb-4">
+              <Users size={36} className="text-gray-300" />
+            </div>
+            {associates.length === 0 ? (
+              <>
+                <h3 className="text-base font-semibold text-gray-700 mb-1">No Associates Yet</h3>
+                <p className="text-sm text-gray-400 mb-5">Add your first associate to start building your team roster.</p>
+                <button
+                  onClick={() => setShowAddModal(true)}
+                  className="flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-sm active:bg-primary-dark"
+                >
+                  <UserPlus size={16} />
+                  Add First Associate
+                </button>
+              </>
+            ) : (
+              <>
+                <h3 className="text-base font-semibold text-gray-700 mb-1">No Results Found</h3>
+                <p className="text-sm text-gray-400 mb-5">Try adjusting your search or filter to find associates.</p>
+                <button
+                  onClick={() => { setSearch(''); setStatusFilter('All Status'); setPositionFilter('All Positions'); }}
+                  className="flex items-center gap-2 bg-gray-100 text-gray-700 px-5 py-2.5 rounded-xl text-sm font-semibold"
+                >
+                  Clear Filters
+                </button>
+              </>
+            )}
           </div>
         ) : (
           filtered.map(assoc => (
