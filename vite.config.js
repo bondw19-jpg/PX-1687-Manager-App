@@ -9,8 +9,21 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  // Dev server — binds to all interfaces so sandbox tunneling works
   server: {
     host: '0.0.0.0',
-    port: 5173,
+    port: parseInt(process.env.PORT || '5173', 10),
+  },
+  // Preview server — reads PORT from env for Cloud Run compatibility
+  preview: {
+    host: '0.0.0.0',
+    port: parseInt(process.env.PORT || '4173', 10),
+    allowedHosts: 'all',
+  },
+  build: {
+    // Ensure sourcemaps are off in production for smaller bundles
+    sourcemap: false,
+    // Raise chunk size warning limit slightly
+    chunkSizeWarningLimit: 600,
   },
 })
