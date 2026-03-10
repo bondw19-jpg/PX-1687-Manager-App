@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Menu, Plus, Bell } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import SideDrawer from './SideDrawer';
@@ -13,8 +12,11 @@ export default function Header({ title, subtitle, showAdd = false, onAdd, rightI
 
   return (
     <>
-      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] bg-primary z-30 shadow-md"
-        style={{ left: '50%', transform: 'translateX(-50%)' }}>
+      {/* Mobile header — hidden on lg+ (desktop uses DesktopPageHeader + DesktopSidebar) */}
+      <div
+        className="mobile-header fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] bg-primary z-30 shadow-md lg:hidden"
+        style={{ left: '50%', transform: 'translateX(-50%)' }}
+      >
         <div className="flex items-center justify-between px-4 py-3 pt-10">
           <button
             onClick={() => setDrawerOpen(true)}
@@ -43,7 +45,7 @@ export default function Header({ title, subtitle, showAdd = false, onAdd, rightI
               <>
                 <button className="w-8 h-8 flex items-center justify-center text-white rounded-lg active:bg-white/20 relative">
                   <Bell size={20} />
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-accent rounded-full"></span>
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-accent rounded-full" />
                 </button>
                 <PreviewButton previewUrl={PREVIEW_URL} />
               </>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, X, Pencil, Trash2, Search, Phone, Mail } from 'lucide-react';
 import Header from '../components/Header';
+import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 
 const CONTACT_ICONS = {
@@ -131,6 +132,7 @@ export default function Contacts() {
   return (
     <div className="min-h-screen bg-background">
       <Header title="Quick Contacts" onAdd={() => setShowAdd(true)} />
+      <DesktopPageHeader title="Quick Contacts" onAdd={() => setShowAdd(true)} addLabel="+ Add Contact" />
 
       <div className="p-4 space-y-3">
         {/* Search */}

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Plus, X, Trash2, Megaphone } from 'lucide-react';
 import { format } from 'date-fns';
 import Header from '../components/Header';
+import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 
 function AnnouncementModal({ onClose, onSave }) {
@@ -88,6 +89,7 @@ export default function Announcements() {
   return (
     <div className="min-h-screen bg-background">
       <Header title="Announcements" onAdd={() => setShowAdd(true)} />
+      <DesktopPageHeader title="Announcements" onAdd={() => setShowAdd(true)} addLabel="+ New Announcement" />
 
       <div className="p-4 space-y-3">
         {announcements.length === 0 ? (

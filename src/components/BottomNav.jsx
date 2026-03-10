@@ -22,7 +22,7 @@ export default function BottomNav() {
   const location = useLocation();
 
   return (
-    <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] bg-white border-t border-gray-200 z-40 safe-bottom">
+    <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] bg-white border-t border-gray-200 z-40 safe-bottom lg:hidden">
       <div className="flex items-center justify-around px-1 py-1">
         {tabs.map(tab => {
           const Icon = tab.icon;

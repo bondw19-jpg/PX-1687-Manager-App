@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { format } from 'date-fns';
 import { CheckCircle2, Circle, Save, RotateCcw, History, ClipboardCheck } from 'lucide-react';
 import Header from '../components/Header';
+import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 
 const SHIFTS = ['opening', 'mid', 'closing'];
@@ -59,6 +60,7 @@ export default function Checklist() {
   return (
     <div className="min-h-screen bg-background">
       <Header title="Shift Checklist" />
+      <DesktopPageHeader title="Shift Checklist" />
 
       <div className="p-4 space-y-4">
         {/* Tabs */}

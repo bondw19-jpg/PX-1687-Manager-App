@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Eye, FileText, Pencil, Trash2, Search, Star, X, Plus, Phone, Calendar, User, Users, UserPlus } from 'lucide-react';
 import Header from '../components/Header';
+import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import WorkFileModal from '../components/WorkFileModal';
 
@@ -248,6 +249,7 @@ export default function Associates() {
   return (
     <div className="min-h-screen bg-background">
       <Header title="Associates" onAdd={() => setShowAddModal(true)} />
+      <DesktopPageHeader title="Associates" onAdd={() => setShowAddModal(true)} addLabel="+ Add Associate" />
 
       <div className="p-4 space-y-3">
         {/* Search */}

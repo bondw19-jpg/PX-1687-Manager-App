@@ -9,12 +9,13 @@
 
 body {
   font-family: 'Inter', sans-serif;
-  background-color: #F3F4F6;
+  background-color: #E5E7EB;
   margin: 0;
   padding: 0;
   overscroll-behavior: none;
 }
 
+/* ── Mobile: single-column centered card ── */
 #root {
   max-width: 480px;
   margin: 0 auto;
@@ -24,16 +25,80 @@ body {
   overflow-x: hidden;
 }
 
+/* ── Desktop: full-width sidebar + content layout ── */
+@media (min-width: 1024px) {
+  body {
+    background-color: #E5E7EB;
+  }
+
+  #root {
+    max-width: 100%;
+    display: flex;
+    min-height: 100vh;
+    overflow-x: unset;
+  }
+
+  /* Sidebar (desktop nav) */
+  #desktop-sidebar {
+    display: flex;
+  }
+
+  /* Hide mobile header on desktop */
+  .mobile-header {
+    display: none !important;
+  }
+
+  /* Hide bottom nav on desktop */
+  .bottom-nav {
+    display: none !important;
+  }
+
+  /* Content area on desktop */
+  .desktop-content {
+    margin-left: 260px;
+    flex: 1;
+    min-height: 100vh;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  /* Page wrapper on desktop — no extra top/bottom padding */
+  .layout-main {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  /* Desktop page header bar */
+  .desktop-page-header {
+    display: flex;
+  }
+
+  /* Modal centered on desktop instead of bottom sheet */
+  .modal-overlay {
+    align-items: center !important;
+  }
+
+  .modal-overlay > div {
+    border-radius: 1.25rem !important;
+    animation: fadeScaleIn 0.2s ease-out !important;
+    max-height: 90vh;
+  }
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
-  width: 4px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background: #D1D5DB;
-  border-radius: 2px;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #9CA3AF;
 }
 
 /* Safe area for iOS */
@@ -41,59 +106,48 @@ body {
   padding-bottom: env(safe-area-inset-bottom, 16px);
 }
 
-/* Animations */
+/* ── Animations ── */
 @keyframes slideInLeft {
   from { transform: translateX(-100%); }
-  to { transform: translateX(0); }
+  to   { transform: translateX(0); }
 }
-
 @keyframes fadeIn {
   from { opacity: 0; }
-  to { opacity: 1; }
+  to   { opacity: 1; }
 }
-
 @keyframes slideUp {
   from { transform: translateY(100%); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+@keyframes fadeScaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
 }
 
-.animate-slide-in-left {
-  animation: slideInLeft 0.25s ease-out;
-}
-
-.animate-fade-in {
-  animation: fadeIn 0.2s ease-out;
-}
-
-.animate-slide-up {
-  animation: slideUp 0.3s ease-out;
-}
+.animate-slide-in-left { animation: slideInLeft 0.25s ease-out; }
+.animate-fade-in       { animation: fadeIn 0.2s ease-out; }
+.animate-slide-up      { animation: slideUp 0.3s ease-out; }
+.animate-fade-scale-in { animation: fadeScaleIn 0.2s ease-out; }
 
 /* Bottom nav active tab */
-.tab-active {
-  color: #C8102E;
-}
+.tab-active { color: #C8102E; }
 
 /* Card hover */
-.card-hover {
-  transition: box-shadow 0.2s;
-}
-.card-hover:active {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
+.card-hover { transition: box-shadow 0.2s; }
+.card-hover:active { box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
 
 /* Input focus */
 input:focus, textarea:focus, select:focus {
   outline: none;
   border-color: #C8102E;
-  box-shadow: 0 0 0 2px rgba(200, 16, 46, 0.2);
+  box-shadow: 0 0 0 2px rgba(200, 16, 46, 0.15);
 }
 
 /* Star rating */
 .star-filled { color: #F5A623; }
-.star-empty { color: #D1D5DB; }
+.star-empty  { color: #D1D5DB; }
 
-/* Modal overlay */
+/* Modal overlay — mobile: bottom sheet */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -108,4 +162,9 @@ input:focus, textarea:focus, select:focus {
 .scroll-content {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+/* Desktop sidebar hidden by default on mobile */
+#desktop-sidebar {
+  display: none;
 }

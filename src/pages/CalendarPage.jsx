@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, isToday, parseISO } from 'date-fns';
 import { ChevronLeft, ChevronRight, Plus, X, Calendar } from 'lucide-react';
 import Header from '../components/Header';
+import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 
 const EVENT_TYPES = ['Meeting', 'Inspection', 'Training', 'Other'];
@@ -134,6 +135,7 @@ export default function CalendarPage() {
   return (
     <div className="min-h-screen bg-background">
       <Header title="Calendar" onAdd={() => setShowAddModal(true)} />
+      <DesktopPageHeader title="Calendar" onAdd={() => setShowAddModal(true)} addLabel="+ Add Event" />
 
       <div className="p-4 space-y-4">
         {/* Tabs */}

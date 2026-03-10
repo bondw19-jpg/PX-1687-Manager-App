@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Users, PhoneMissed, Calendar, Pin, UserCheck, ChevronRight, Phone } from 'lucide-react';
 import { format } from 'date-fns';
 import Header from '../components/Header';
+import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import PreviewUpdateBanner from '../components/PreviewUpdateBanner';
 
@@ -49,6 +50,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-background">
       <Header title="Dashboard" />
+      <DesktopPageHeader title="Dashboard" />
 
       <PreviewUpdateBanner previewUrl={PREVIEW_URL} />
 

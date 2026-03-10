@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { PhoneMissed, Plus, X, Search, BarChart2 } from 'lucide-react';
 import Header from '../components/Header';
+import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
@@ -158,6 +159,7 @@ export default function CallIns() {
   return (
     <div className="min-h-screen bg-background">
       <Header title="Call-Ins" onAdd={() => setShowModal(true)} />
+      <DesktopPageHeader title="Call-In Tracker" onAdd={() => setShowModal(true)} addLabel="+ Log Call-In" />
 
       <div className="p-4 space-y-4">
         {/* Stats */}

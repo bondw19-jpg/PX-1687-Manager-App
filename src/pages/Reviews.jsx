@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Star, Plus, X, Search, Pencil, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import Header from '../components/Header';
+import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 
 const REVIEW_CATS = ['Attendance', 'Attitude', 'Performance', 'Teamwork', 'Food Safety'];
@@ -152,6 +153,7 @@ export default function Reviews() {
   return (
     <div className="min-h-screen bg-background">
       <Header title="Performance Reviews" onAdd={() => setShowAdd(true)} />
+      <DesktopPageHeader title="Performance Reviews" onAdd={() => setShowAdd(true)} addLabel="+ New Review" />
 
       <div className="p-4 space-y-3">
         {/* Search */}

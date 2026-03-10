@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Plus, X, Search, Pencil, Trash2, Circle, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import Header from '../components/Header';
+import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 
 const PRIORITIES = ['Low', 'Medium', 'High', 'Urgent'];
@@ -232,6 +233,7 @@ export default function Tasks() {
   return (
     <div className="min-h-screen bg-background">
       <Header title="Tasks & To-Do" onAdd={() => setShowAdd(true)} />
+      <DesktopPageHeader title="Tasks & To-Do" onAdd={() => setShowAdd(true)} addLabel="+ Add Task" />
 
       <div className="p-4 space-y-4">
         {/* Stats */}
