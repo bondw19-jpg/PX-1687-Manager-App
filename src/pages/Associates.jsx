@@ -5,7 +5,14 @@ import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import WorkFileModal from '../components/WorkFileModal';
 
-const POSITIONS = ['All Positions', 'Team Member', 'Crew', 'Shift Lead', 'Manager', 'Other'];
+const POSITIONS = ['All Positions', 'FOH', 'BOH', 'Cook', 'Shift Lead', 'Manager'];
+const POSITION_COLORS = {
+  'FOH':        'bg-blue-50 text-blue-700 border-blue-200',
+  'BOH':        'bg-orange-50 text-orange-700 border-orange-200',
+  'Cook':       'bg-amber-50 text-amber-700 border-amber-200',
+  'Shift Lead': 'bg-purple-50 text-purple-700 border-purple-200',
+  'Manager':    'bg-red-50 text-primary border-red-200',
+};
 const STATUSES = ['All Status', 'Active', 'Inactive', 'On Leave'];
 const COLORS = ['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500'];
 
@@ -31,7 +38,7 @@ function StarRating({ rating, onRate }) {
 
 function AssociateModal({ associate, onClose, onSave }) {
   const [form, setForm] = useState(associate || {
-    name: '', employeeId: '', position: 'Team Member',
+    name: '', employeeId: '', position: 'FOH',
     telephone: '', birthday: '', hireDate: '',
     status: 'active', cleanStatus: 'clean', starRating: 0
   });
@@ -81,7 +88,7 @@ function AssociateModal({ associate, onClose, onSave }) {
                 value={form.position}
                 onChange={e => setForm({...form, position: e.target.value})}
               >
-                {POSITIONS.slice(1).map(p => <option key={p}>{p}</option>)}
+                {POSITIONS.slice(1).map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
           </div>
@@ -330,7 +337,7 @@ export default function Associates() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full border border-blue-100">
+                    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${POSITION_COLORS[assoc.position] || 'bg-gray-50 text-gray-600 border-gray-200'}`}>
                       {assoc.position}
                     </span>
                     <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${

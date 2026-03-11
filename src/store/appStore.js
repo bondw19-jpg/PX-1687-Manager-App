@@ -7,7 +7,7 @@ const demoAssociates = [
     id: 'assoc_1',
     name: 'Bond',
     employeeId: '447A736F',
-    position: 'Team Member',
+    position: 'FOH',
     telephone: '',
     birthday: '',
     hireDate: '',
