@@ -249,21 +249,54 @@ export const useAppStore = create(
     }),
     {
       name: 'panda-manager-storage',
+      // ── Version: bump this number whenever the state shape changes ──
+      // Zustand will run migrate() instead of wiping data on mismatch.
+      version: 2,
+      migrate: (persistedState, fromVersion) => {
+        const state = persistedState || {};
+
+        // v0 → v1: positions renamed (Team Member/Crew/Other → FOH/BOH/Cook/…)
+        if (fromVersion < 1) {
+          const posMap = {
+            'Team Member': 'FOH',
+            'Crew':        'BOH',
+            'Other':       'FOH',
+          };
+          if (Array.isArray(state.associates)) {
+            state.associates = state.associates.map(a => ({
+              ...a,
+              position: posMap[a.position] || a.position,
+            }));
+          }
+        }
+
+        // v1 → v2: notes gain attachments array (back-fill missing field)
+        if (fromVersion < 2) {
+          const addAttachments = (notes) =>
+            Array.isArray(notes)
+              ? notes.map(n => ({ attachments: [], ...n }))
+              : notes;
+          state.teamNotes = addAttachments(state.teamNotes);
+          state.myNotes   = addAttachments(state.myNotes);
+        }
+
+        return state;
+      },
       partialize: (state) => ({
-        user: state.user,
-        storeId: state.storeId,
-        storeName: state.storeName,
-        associates: state.associates,
-        workFiles: state.workFiles,
-        callIns: state.callIns,
-        teamEvents: state.teamEvents,
-        myEvents: state.myEvents,
-        checklists: state.checklists,
-        teamNotes: state.teamNotes,
-        myNotes: state.myNotes,
-        reviews: state.reviews,
-        tasks: state.tasks,
-        contacts: state.contacts,
+        user:         state.user,
+        storeId:      state.storeId,
+        storeName:    state.storeName,
+        associates:   state.associates,
+        workFiles:    state.workFiles,
+        callIns:      state.callIns,
+        teamEvents:   state.teamEvents,
+        myEvents:     state.myEvents,
+        checklists:   state.checklists,
+        teamNotes:    state.teamNotes,
+        myNotes:      state.myNotes,
+        reviews:      state.reviews,
+        tasks:        state.tasks,
+        contacts:     state.contacts,
         announcements: state.announcements,
       }),
     }
