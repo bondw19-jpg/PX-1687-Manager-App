@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, PhoneMissed, Star, Calendar,
   ClipboardCheck, StickyNote, ListChecks, Megaphone, BookUser,
-  Settings, LogOut, X
+  Settings, LogOut, X, HardDrive
 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 
@@ -36,6 +36,7 @@ const sections = [
     items: [
       { label: 'Announcements', icon: Megaphone, path: '/announcements' },
       { label: 'Quick Contacts', icon: BookUser, path: '/contacts' },
+      { label: 'Backup & Restore', icon: HardDrive, path: '/backup' },
     ]
   }
 ];

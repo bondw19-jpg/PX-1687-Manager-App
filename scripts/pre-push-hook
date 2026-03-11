@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────────────
+# .git/hooks/pre-push — Auto-backup before every git push
+#
+# Installed automatically by: npm run setup-hooks
+# ─────────────────────────────────────────────────────────────────────────────
+
+REPO_DIR="$(git rev-parse --show-toplevel)"
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+SHA=$(git rev-parse --short HEAD)
+DATE=$(date +%Y-%m-%d-%H%M)
+TAG="backup-${DATE}-${SHA}"
+
+# Only auto-backup when pushing main or genspark_ai_developer
+if [[ "$BRANCH" == "main" || "$BRANCH" == "genspark_ai_developer" ]]; then
+  echo ""
+  echo "🔒  [pre-push] Auto-creating backup snapshot before push..."
+
+  git tag -a "$TAG" -m "Auto-backup before push
+Date:   $DATE
+Branch: $BRANCH
+Commit: $SHA" 2>/dev/null
+
+  # Push the tag (best-effort — don't block the push if tag push fails)
+  git push origin "$TAG" 2>/dev/null && \
+    echo "✅  Backup tag pushed: $TAG" || \
+    echo "⚠️   Backup tag created locally (will sync on next push): $TAG"
+
+  echo ""
+fi
+
+exit 0

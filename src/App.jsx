@@ -13,6 +13,7 @@ const Reviews = lazy(() => import('./pages/Reviews'));
 const Tasks = lazy(() => import('./pages/Tasks'));
 const Contacts = lazy(() => import('./pages/Contacts'));
 const Announcements = lazy(() => import('./pages/Announcements'));
+const BackupManager = lazy(() => import('./pages/BackupManager'));
 const Login = lazy(() => import('./pages/Login'));
 
 function LoadingSpinner() {
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="/tasks" element={<Layout><Tasks /></Layout>} />
           <Route path="/contacts" element={<Layout><Contacts /></Layout>} />
           <Route path="/announcements" element={<Layout><Announcements /></Layout>} />
+          <Route path="/backup" element={<Layout><BackupManager /></Layout>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
