@@ -9,9 +9,10 @@ import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 
-const APP_VERSION = '2.0.0';
-const STORAGE_KEY = 'panda-manager-storage';
+const APP_VERSION  = '2.0.0';
+const STORAGE_KEY  = 'panda-manager-storage';
 const BACKUPS_KEY  = 'panda-manager-backups';
+const EMERGENCY_KEY = 'panda-manager-backup'; // auto-written by appStore on every save
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function getStorageSize(key) {
@@ -192,6 +193,44 @@ export default function BackupManager() {
   const [confirm, setConfirm]       = useState(null);
   const [creating, setCreating]     = useState(false);
   const [restoring, setRestoring]   = useState(false);
+
+  // ── Emergency recovery from auto-backup ──────────────────────────────────
+  const emergencyData = (() => {
+    try {
+      const raw = localStorage.getItem(EMERGENCY_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      const counts = countRecords(parsed);
+      const total  = Object.values(counts).reduce((s, v) => s + v, 0);
+      return total > 0 ? { parsed, counts, total } : null;
+    } catch { return null; }
+  })();
+
+  const handleEmergencyRecover = () => {
+    if (!emergencyData) return;
+    setConfirm({
+      title:        'Recover lost data?',
+      message:      `An emergency backup with ${emergencyData.total} records was found. This will restore it immediately. Current data will be replaced.`,
+      confirmLabel: 'Recover Now',
+      danger:       false,
+      onConfirm: () => {
+        setConfirm(null);
+        setRestoring(true);
+        setTimeout(() => {
+          try {
+            const str = localStorage.getItem(EMERGENCY_KEY);
+            localStorage.setItem(STORAGE_KEY, str);
+            showToast('Data recovered! Reloading…');
+            setTimeout(() => window.location.reload(), 1500);
+          } catch {
+            showToast('Recovery failed.', 'error');
+            setRestoring(false);
+          }
+        }, 300);
+      },
+      onCancel: () => setConfirm(null),
+    });
+  };
 
   const showToast = (message, type = 'success') => setToast({ message, type });
 
@@ -398,6 +437,30 @@ export default function BackupManager() {
             ))}
           </div>
         </div>
+
+        {/* ── Emergency Recovery Banner ──────────────────────────────── */}
+        {emergencyData && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+            <div className="w-9 h-9 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5">
+              <AlertCircle size={18} className="text-amber-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-amber-800 text-sm">Emergency Backup Found!</p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                The app found an auto-saved emergency backup with{' '}
+                <strong>{emergencyData.total} records</strong>{' '}
+                ({emergencyData.counts.associates} associates, {emergencyData.counts.callIns} call-ins, {emergencyData.counts.teamNotes + emergencyData.counts.myNotes} notes).
+                Tap below to restore your lost data.
+              </p>
+              <button
+                onClick={handleEmergencyRecover}
+                className="mt-2 flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors"
+              >
+                <RotateCcw size={13} /> Recover Lost Data Now
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div className="grid grid-cols-2 gap-3">

@@ -1,6 +1,55 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+// ── AUTO-RECOVERY: Before the store loads, attempt to recover data
+// if the primary storage key is missing or corrupted.
+function recoverStorageIfNeeded() {
+  try {
+    const PRIMARY_KEY = 'panda-manager-storage';
+    const BACKUP_KEY  = 'panda-manager-backup';
+
+    const primary = localStorage.getItem(PRIMARY_KEY);
+    if (!primary) {
+      // Primary is missing — try to restore from backup
+      const backup = localStorage.getItem(BACKUP_KEY);
+      if (backup) {
+        console.log('[PandaStore] Primary storage missing — restoring from backup...');
+        localStorage.setItem(PRIMARY_KEY, backup);
+      }
+    }
+  } catch {}
+}
+
+recoverStorageIfNeeded();
+
+// ── BACKUP WRITER: Keep a rolling backup of store data every save ──
+function createBackupStorage() {
+  return {
+    getItem: (name) => {
+      try {
+        const raw = localStorage.getItem(name);
+        if (!raw) return null;
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    },
+    setItem: (name, value) => {
+      try {
+        const str = JSON.stringify(value);
+        localStorage.setItem(name, str);
+        // Also write a backup copy so we can recover if primary is lost
+        localStorage.setItem('panda-manager-backup', str);
+      } catch (e) {
+        console.warn('[PandaStore] Storage quota exceeded.', e);
+      }
+    },
+    removeItem: (name) => {
+      try { localStorage.removeItem(name); } catch {}
+    },
+  };
+}
+
 // Demo data for offline/demo mode
 const demoAssociates = [
   {
@@ -249,14 +298,20 @@ export const useAppStore = create(
     }),
     {
       name: 'panda-manager-storage',
+      // ── SAFE STORAGE: custom wrapper that NEVER wipes existing data ──
+      // Instead of using the default storage which can lose data on version
+      // mismatches, we manually merge persisted data with defaults.
+      storage: createBackupStorage(),
       // ── Version: bump this number whenever the state shape changes ──
-      // Zustand will run migrate() instead of wiping data on mismatch.
-      version: 2,
+      // IMPORTANT: migrate() must ALWAYS return a valid state object.
+      version: 3,
       migrate: (persistedState, fromVersion) => {
-        const state = persistedState || {};
+        // Safety net: if persistedState is null/undefined, return empty object
+        // so Zustand merges with initial state (never wipes).
+        const state = { ...(persistedState || {}) };
 
         // v0 → v1: positions renamed (Team Member/Crew/Other → FOH/BOH/Cook/…)
-        if (fromVersion < 1) {
+        if ((fromVersion ?? -1) < 1) {
           const posMap = {
             'Team Member': 'FOH',
             'Crew':        'BOH',
@@ -271,32 +326,71 @@ export const useAppStore = create(
         }
 
         // v1 → v2: notes gain attachments array (back-fill missing field)
-        if (fromVersion < 2) {
+        if ((fromVersion ?? -1) < 2) {
           const addAttachments = (notes) =>
             Array.isArray(notes)
               ? notes.map(n => ({ attachments: [], ...n }))
-              : notes;
+              : notes ?? [];
           state.teamNotes = addAttachments(state.teamNotes);
           state.myNotes   = addAttachments(state.myNotes);
         }
 
+        // v2 → v3: ensure all arrays are initialized (back-fill missing arrays)
+        if ((fromVersion ?? -1) < 3) {
+          if (!Array.isArray(state.associates))   state.associates   = [];
+          if (!Array.isArray(state.callIns))       state.callIns       = [];
+          if (!Array.isArray(state.teamEvents))    state.teamEvents    = [];
+          if (!Array.isArray(state.myEvents))      state.myEvents      = [];
+          if (!Array.isArray(state.teamNotes))     state.teamNotes     = [];
+          if (!Array.isArray(state.myNotes))       state.myNotes       = [];
+          if (!Array.isArray(state.reviews))       state.reviews       = [];
+          if (!Array.isArray(state.tasks))         state.tasks         = [];
+          if (!Array.isArray(state.contacts))      state.contacts      = [];
+          if (!Array.isArray(state.announcements)) state.announcements = [];
+          if (!state.checklists || typeof state.checklists !== 'object') state.checklists = {};
+          if (!state.workFiles  || typeof state.workFiles  !== 'object') state.workFiles  = {};
+        }
+
         return state;
       },
+      // merge: instead of replacing state, MERGE persisted data with defaults
+      // This is the key fix — even if migration fails, existing data is kept
+      merge: (persistedState, currentState) => {
+        // Deep merge: persisted values override defaults, but missing keys
+        // fall back to currentState (initial values) rather than being lost
+        return {
+          ...currentState,
+          ...persistedState,
+          // Always ensure arrays are arrays (never undefined/null)
+          associates:   Array.isArray(persistedState?.associates)   ? persistedState.associates   : currentState.associates,
+          callIns:      Array.isArray(persistedState?.callIns)       ? persistedState.callIns       : currentState.callIns,
+          teamEvents:   Array.isArray(persistedState?.teamEvents)    ? persistedState.teamEvents    : currentState.teamEvents,
+          myEvents:     Array.isArray(persistedState?.myEvents)      ? persistedState.myEvents      : currentState.myEvents,
+          teamNotes:    Array.isArray(persistedState?.teamNotes)     ? persistedState.teamNotes     : currentState.teamNotes,
+          myNotes:      Array.isArray(persistedState?.myNotes)       ? persistedState.myNotes       : currentState.myNotes,
+          reviews:      Array.isArray(persistedState?.reviews)       ? persistedState.reviews       : currentState.reviews,
+          tasks:        Array.isArray(persistedState?.tasks)         ? persistedState.tasks         : currentState.tasks,
+          contacts:     Array.isArray(persistedState?.contacts)      ? persistedState.contacts      : currentState.contacts,
+          announcements:Array.isArray(persistedState?.announcements) ? persistedState.announcements : currentState.announcements,
+          checklists:   (persistedState?.checklists && typeof persistedState.checklists === 'object') ? persistedState.checklists : currentState.checklists,
+          workFiles:    (persistedState?.workFiles  && typeof persistedState.workFiles  === 'object') ? persistedState.workFiles  : currentState.workFiles,
+        };
+      },
       partialize: (state) => ({
-        user:         state.user,
-        storeId:      state.storeId,
-        storeName:    state.storeName,
-        associates:   state.associates,
-        workFiles:    state.workFiles,
-        callIns:      state.callIns,
-        teamEvents:   state.teamEvents,
-        myEvents:     state.myEvents,
-        checklists:   state.checklists,
-        teamNotes:    state.teamNotes,
-        myNotes:      state.myNotes,
-        reviews:      state.reviews,
-        tasks:        state.tasks,
-        contacts:     state.contacts,
+        user:          state.user,
+        storeId:       state.storeId,
+        storeName:     state.storeName,
+        associates:    state.associates,
+        workFiles:     state.workFiles,
+        callIns:       state.callIns,
+        teamEvents:    state.teamEvents,
+        myEvents:      state.myEvents,
+        checklists:    state.checklists,
+        teamNotes:     state.teamNotes,
+        myNotes:       state.myNotes,
+        reviews:       state.reviews,
+        tasks:         state.tasks,
+        contacts:      state.contacts,
         announcements: state.announcements,
       }),
     }
