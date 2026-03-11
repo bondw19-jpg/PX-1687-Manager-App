@@ -1,31 +1,36 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# .git/hooks/pre-push — Auto-backup before every git push
-#
-# Installed automatically by: npm run setup-hooks
+# .git/hooks/pre-push — Auto-backup before every git push (branches only)
 # ─────────────────────────────────────────────────────────────────────────────
 
 REPO_DIR="$(git rev-parse --show-toplevel)"
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 SHA=$(git rev-parse --short HEAD)
 DATE=$(date +%Y-%m-%d-%H%M)
-TAG="backup-${DATE}-${SHA}"
 
-# Only auto-backup when pushing main or genspark_ai_developer
+# Read the refs being pushed — skip if pushing a tag (refs/tags/*)
+while read local_ref local_sha remote_ref remote_sha; do
+  # If pushing a tag, skip entirely (prevents infinite loop)
+  if [[ "$local_ref" == refs/tags/* ]]; then
+    exit 0
+  fi
+done
+
+# Only auto-backup when pushing main or genspark_ai_developer branches
 if [[ "$BRANCH" == "main" || "$BRANCH" == "genspark_ai_developer" ]]; then
+  TAG="backup-${DATE}-${SHA}"
   echo ""
-  echo "🔒  [pre-push] Auto-creating backup snapshot before push..."
+  echo "🔒  [pre-push] Auto-creating backup tag: $TAG"
 
-  git tag -a "$TAG" -m "Auto-backup before push
-Date:   $DATE
-Branch: $BRANCH
-Commit: $SHA" 2>/dev/null
+  # Create the tag locally (quietly)
+  git tag -a "$TAG" -m "Auto-backup before push | Branch: $BRANCH | Commit: $SHA" 2>/dev/null || true
 
-  # Push the tag (best-effort — don't block the push if tag push fails)
-  git push origin "$TAG" 2>/dev/null && \
+  # Push tag separately without triggering this hook again
+  # (use GIT_PUSH_OPTION to skip hook — not available in all versions,
+  #  so we rely on the refs/tags/* guard above instead)
+  GIT_DIR="$(git rev-parse --git-dir)" git push origin "$TAG" --no-verify 2>/dev/null && \
     echo "✅  Backup tag pushed: $TAG" || \
-    echo "⚠️   Backup tag created locally (will sync on next push): $TAG"
-
+    echo "⚠️   Backup tag saved locally: $TAG (push manually with: git push origin $TAG)"
   echo ""
 fi
 
