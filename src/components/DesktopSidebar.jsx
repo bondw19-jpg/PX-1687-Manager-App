@@ -58,7 +58,7 @@ export default function DesktopSidebar() {
       {/* Brand header */}
       <div className="bg-primary px-5 py-5 flex items-center gap-3 flex-shrink-0">
         <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
-          <img src="/panda-icon.svg" alt="Panda" className="w-8 h-8" />
+          <img src="/panda-icon-192.png" alt="Panda Express" className="w-8 h-8 object-contain" />
         </div>
         <div className="text-white min-w-0">
           <div className="font-bold text-sm leading-tight truncate">{storeName}</div>

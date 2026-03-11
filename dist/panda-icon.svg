@@ -1,74 +1,67 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-
-  <!-- Red circle background -->
-  <circle cx="50" cy="50" r="50" fill="#C8102E"/>
-
-  <!-- Bamboo stalk (left side, green) -->
-  <rect x="18" y="22" width="5" height="58" rx="2.5" fill="#4A7C3F"/>
-  <rect x="18" y="22" width="5" height="58" rx="2.5" fill="url(#bambooGrad)"/>
-  <!-- Bamboo nodes/joints -->
-  <rect x="16.5" y="35" width="8" height="3" rx="1.5" fill="#3A6B30"/>
-  <rect x="16.5" y="52" width="8" height="3" rx="1.5" fill="#3A6B30"/>
-  <rect x="16.5" y="68" width="8" height="3" rx="1.5" fill="#3A6B30"/>
-  <!-- Bamboo leaves -->
-  <ellipse cx="14" cy="27" rx="7" ry="3" fill="#5A9E4A" transform="rotate(-35 14 27)"/>
-  <ellipse cx="25" cy="24" rx="7" ry="2.5" fill="#4A8A3A" transform="rotate(25 25 24)"/>
-
-  <!-- Panda white body/chest base -->
-  <ellipse cx="53" cy="73" rx="20" ry="16" fill="white"/>
-
-  <!-- Panda black body sides (arms) -->
-  <!-- Left arm -->
-  <ellipse cx="36" cy="72" rx="8" ry="11" fill="#1a1a1a" transform="rotate(-15 36 72)"/>
-  <!-- Right arm -->
-  <ellipse cx="70" cy="72" rx="8" ry="11" fill="#1a1a1a" transform="rotate(15 70 72)"/>
-
-  <!-- Panda white belly -->
-  <ellipse cx="53" cy="76" rx="13" ry="11" fill="white"/>
-
-  <!-- Panda white head -->
-  <ellipse cx="53" cy="46" rx="21" ry="20" fill="white"/>
-
-  <!-- Panda round black ears -->
-  <circle cx="35" cy="30" r="9" fill="#1a1a1a"/>
-  <circle cx="71" cy="30" r="9" fill="#1a1a1a"/>
-  <!-- Ear inner highlight -->
-  <circle cx="35" cy="30" r="5" fill="#2d2d2d"/>
-  <circle cx="71" cy="30" r="5" fill="#2d2d2d"/>
-
-  <!-- Panda large black eye patches (teardrop/oval shape) -->
-  <ellipse cx="43" cy="46" rx="10" ry="9" fill="#1a1a1a" transform="rotate(-10 43 46)"/>
-  <ellipse cx="63" cy="46" rx="10" ry="9" fill="#1a1a1a" transform="rotate(10 63 46)"/>
-
-  <!-- White inner eyes -->
-  <ellipse cx="43" cy="46" rx="5.5" ry="5" fill="white"/>
-  <ellipse cx="63" cy="46" rx="5.5" ry="5" fill="white"/>
-
-  <!-- Black pupils -->
-  <circle cx="44" cy="47" r="3" fill="#1a1a1a"/>
-  <circle cx="62" cy="47" r="3" fill="#1a1a1a"/>
-
-  <!-- Eye shine highlights -->
-  <circle cx="45.5" cy="45.5" r="1.2" fill="white"/>
-  <circle cx="63.5" cy="45.5" r="1.2" fill="white"/>
-
-  <!-- Panda nose (small rounded triangle) -->
-  <ellipse cx="53" cy="55" rx="4.5" ry="3" fill="#1a1a1a"/>
-
-  <!-- Panda mouth (happy subtle curve) -->
-  <path d="M 47 59.5 Q 53 63.5 59 59.5" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
-
-  <!-- Panda cheek blush (subtle) -->
-  <ellipse cx="38" cy="57" rx="5" ry="3" fill="#ffb3b3" opacity="0.4"/>
-  <ellipse cx="68" cy="57" rx="5" ry="3" fill="#ffb3b3" opacity="0.4"/>
-
-  <!-- Bamboo gradient def -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
   <defs>
-    <linearGradient id="bambooGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#3d6b30;stop-opacity:1"/>
-      <stop offset="50%" style="stop-color:#5aaa45;stop-opacity:1"/>
-      <stop offset="100%" style="stop-color:#3d6b30;stop-opacity:1"/>
-    </linearGradient>
+    <clipPath id="circle-clip">
+      <circle cx="100" cy="100" r="100"/>
+    </clipPath>
   </defs>
 
+  <!-- Red background circle -->
+  <circle cx="100" cy="100" r="100" fill="#C8102E"/>
+
+  <!-- ── PANDA FACE ── -->
+
+  <!-- Black ears (behind head) -->
+  <ellipse cx="62" cy="52" rx="18" ry="16" fill="#1a1a1a"/>
+  <ellipse cx="138" cy="52" rx="18" ry="16" fill="#1a1a1a"/>
+
+  <!-- White ear inner -->
+  <ellipse cx="62" cy="53" rx="10" ry="9" fill="#e8e8e8"/>
+  <ellipse cx="138" cy="53" rx="10" ry="9" fill="#e8e8e8"/>
+
+  <!-- White face / head -->
+  <ellipse cx="100" cy="95" rx="46" ry="44" fill="#FFFFFF"/>
+
+  <!-- Black eye patches (large teardrop / oval shaped - classic PE style) -->
+  <!-- Left eye patch -->
+  <ellipse cx="82" cy="88" rx="16" ry="14" fill="#1a1a1a" transform="rotate(-15 82 88)"/>
+  <!-- Right eye patch -->
+  <ellipse cx="118" cy="88" rx="16" ry="14" fill="#1a1a1a" transform="rotate(15 118 88)"/>
+
+  <!-- Eyes (white highlights inside patches) -->
+  <ellipse cx="82" cy="88" rx="7" ry="7" fill="#FFFFFF"/>
+  <ellipse cx="118" cy="88" rx="7" ry="7" fill="#FFFFFF"/>
+
+  <!-- Pupils -->
+  <circle cx="83" cy="89" r="4.5" fill="#1a1a1a"/>
+  <circle cx="119" cy="89" r="4.5" fill="#1a1a1a"/>
+
+  <!-- Eye shine dots -->
+  <circle cx="84.5" cy="87" r="1.5" fill="#FFFFFF"/>
+  <circle cx="120.5" cy="87" r="1.5" fill="#FFFFFF"/>
+
+  <!-- Nose -->
+  <ellipse cx="100" cy="103" rx="5" ry="3.5" fill="#1a1a1a"/>
+
+  <!-- Mouth - subtle curved smile -->
+  <path d="M91 110 Q100 117 109 110" stroke="#1a1a1a" stroke-width="2" fill="none" stroke-linecap="round"/>
+
+  <!-- Cheek blush (subtle) -->
+  <ellipse cx="75" cy="108" rx="9" ry="5" fill="#e8b4b4" opacity="0.5"/>
+  <ellipse cx="125" cy="108" rx="9" ry="5" fill="#e8b4b4" opacity="0.5"/>
+
+  <!-- ── TEXT: PANDA EXPRESS ── -->
+  <!-- White text at bottom inside the circle -->
+  <text
+    x="100"
+    y="157"
+    text-anchor="middle"
+    font-family="Arial Black, Arial, sans-serif"
+    font-weight="900"
+    font-size="16"
+    letter-spacing="1.5"
+    fill="#FFFFFF"
+  >PANDA EXPRESS</text>
+
+  <!-- Thin white divider line above text -->
+  <line x1="38" y1="143" x2="162" y2="143" stroke="#FFFFFF" stroke-width="1" opacity="0.6"/>
 </svg>

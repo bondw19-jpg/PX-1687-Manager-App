@@ -79,7 +79,7 @@ export default function SideDrawer({ isOpen, onClose }) {
         {/* Header */}
         <div className="bg-primary p-4 flex items-center gap-3 pt-12">
           <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center">
-            <img src="/panda-icon.svg" alt="Panda" className="w-8 h-8" />
+            <img src="/panda-icon-192.png" alt="Panda Express" className="w-8 h-8 object-contain" />
           </div>
           <div className="flex-1 text-white">
             <div className="font-bold text-sm">{storeName}</div>

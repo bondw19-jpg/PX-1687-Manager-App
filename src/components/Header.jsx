@@ -27,7 +27,7 @@ export default function Header({ title, subtitle, showAdd = false, onAdd, rightI
 
           <div className="flex-1 mx-3 text-white">
             <div className="text-[10px] font-medium opacity-80 flex items-center gap-1">
-              <img src="/panda-icon.svg" alt="" className="w-4 h-4" />
+              <img src="/panda-icon-192.png" alt="" className="w-4 h-4" />
               {storeName}
             </div>
             <div className="font-bold text-base leading-tight">{title || subtitle}</div>
