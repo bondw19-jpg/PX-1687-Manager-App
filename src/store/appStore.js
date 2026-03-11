@@ -1,110 +1,52 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import {
+  subscribeCollection,
+  addItem, setItem, updateItem, deleteItem,
+  saveChecklist as fsSaveChecklist,
+  fetchChecklist as fsFetchChecklist,
+  saveWorkFile as fsSaveWorkFile,
+  batchImportToFirestore,
+} from '../lib/firestoreService';
 
-// ── AUTO-RECOVERY: Before the store loads, attempt to recover data
-// if the primary storage key is missing or corrupted.
-function recoverStorageIfNeeded() {
+// ── AUTO-RECOVERY: restore from backup if primary key is missing ─────────────
+(function recoverStorageIfNeeded() {
   try {
-    const PRIMARY_KEY = 'panda-manager-storage';
-    const BACKUP_KEY  = 'panda-manager-backup';
-
-    const primary = localStorage.getItem(PRIMARY_KEY);
-    if (!primary) {
-      // Primary is missing — try to restore from backup
-      const backup = localStorage.getItem(BACKUP_KEY);
+    const raw = localStorage.getItem('panda-manager-storage');
+    if (!raw) {
+      const backup = localStorage.getItem('panda-manager-backup');
       if (backup) {
-        console.log('[PandaStore] Primary storage missing — restoring from backup...');
-        localStorage.setItem(PRIMARY_KEY, backup);
+        console.log('[PandaStore] Restoring from backup...');
+        localStorage.setItem('panda-manager-storage', backup);
       }
     }
   } catch {}
-}
+})();
 
-recoverStorageIfNeeded();
-
-// ── BACKUP WRITER: Keep a rolling backup of store data every save ──
+// ── Custom storage: writes a rolling backup on every save ────────────────────
 function createBackupStorage() {
   return {
     getItem: (name) => {
-      try {
-        const raw = localStorage.getItem(name);
-        if (!raw) return null;
-        return JSON.parse(raw);
-      } catch {
-        return null;
-      }
+      try { const r = localStorage.getItem(name); return r ? JSON.parse(r) : null; }
+      catch { return null; }
     },
     setItem: (name, value) => {
       try {
-        const str = JSON.stringify(value);
-        localStorage.setItem(name, str);
-        // Also write a backup copy so we can recover if primary is lost
-        localStorage.setItem('panda-manager-backup', str);
-      } catch (e) {
-        console.warn('[PandaStore] Storage quota exceeded.', e);
-      }
+        const s = JSON.stringify(value);
+        localStorage.setItem(name, s);
+        localStorage.setItem('panda-manager-backup', s);
+      } catch (e) { console.warn('[PandaStore] Storage quota exceeded.', e); }
     },
-    removeItem: (name) => {
-      try { localStorage.removeItem(name); } catch {}
-    },
+    removeItem: (name) => { try { localStorage.removeItem(name); } catch {} },
   };
 }
 
-// Demo data for offline/demo mode
-const demoAssociates = [
-  {
-    id: 'assoc_1',
-    name: 'Bond',
-    employeeId: '447A736F',
-    position: 'FOH',
-    telephone: '',
-    birthday: '',
-    hireDate: '',
-    status: 'active',
-    cleanStatus: 'clean',
-    starRating: 0,
-    notes: '',
-    createdAt: new Date().toISOString(),
-  }
-];
-
-const demoContacts = [
-  {
-    id: 'contact_1',
-    name: 'District Manager',
-    role: 'District Manager',
-    phone: '',
-    email: '',
-    description: 'Add your DM contact info',
-    icon: 'building',
-  },
-  {
-    id: 'contact_2',
-    name: 'Health Department',
-    role: 'Health Department',
-    phone: '',
-    email: '',
-    description: 'Local health inspection contact',
-    icon: 'hospital',
-  },
-  {
-    id: 'contact_3',
-    name: 'Panda Corporate HR',
-    role: 'HR',
-    phone: '1-800-877-8988',
-    email: 'hr@pandaexpress.com',
-    description: 'Corporate HR line',
-    icon: 'hr',
-  },
-  {
-    id: 'contact_4',
-    name: 'IT Support',
-    role: 'IT Support',
-    phone: '',
-    email: '',
-    description: 'Add IT support contact info',
-    icon: 'computer',
-  },
+// ── Default data ─────────────────────────────────────────────────────────────
+const defaultContacts = [
+  { id: 'contact_1', name: 'District Manager',   role: 'District Manager',   phone: '', email: '', description: 'Add your DM contact info',         icon: 'building'  },
+  { id: 'contact_2', name: 'Health Department',   role: 'Health Department',  phone: '', email: '', description: 'Local health inspection contact',    icon: 'hospital'  },
+  { id: 'contact_3', name: 'Panda Corporate HR',  role: 'HR',                 phone: '1-800-877-8988', email: 'hr@pandaexpress.com', description: 'Corporate HR line', icon: 'hr' },
+  { id: 'contact_4', name: 'IT Support',           role: 'IT Support',        phone: '', email: '', description: 'Add IT support contact info',        icon: 'computer'  },
 ];
 
 const openingChecklist = [
@@ -121,10 +63,9 @@ const openingChecklist = [
   'Check online order tablets & kiosk operational',
   'Verify team assignments and positions',
   'Confirm uniform compliance for all associates',
-  'Brief team on daily specials and 86\'d items',
+  "Brief team on daily specials and 86'd items",
   'Confirm manager on duty contact info posted',
 ];
-
 const midChecklist = [
   'Check all food temperatures (hot & cold)',
   'Restock front line items as needed',
@@ -139,7 +80,6 @@ const midChecklist = [
   'Confirm all equipment functioning properly',
   'Address any customer complaints or issues',
 ];
-
 const closingChecklist = [
   'Count and verify cash drawer & safe',
   'Complete end-of-day sales report',
@@ -156,241 +96,310 @@ const closingChecklist = [
   'Submit daily report to district manager',
 ];
 
+// ── Firestore real-time listeners (unsubscribe handles) ──────────────────────
+const _unsubs = {};
+function unsub(key) { if (_unsubs[key]) { _unsubs[key](); delete _unsubs[key]; } }
+
+// ── Main Store ───────────────────────────────────────────────────────────────
 export const useAppStore = create(
   persist(
     (set, get) => ({
-      // Auth
-      user: null,
-      storeId: 'store_1687',
+
+      // ── Auth / Meta ──────────────────────────────────────────────────────
+      user:      null,
+      storeId:   'store_1687',
       storeName: 'PANDA EXPRESS 1687',
-      isOnline: true,
+      isOnline:  true,
+      dbReady:   false,   // true once Firestore listeners are attached
 
-      setUser: (user) => set({ user }),
-      setStoreId: (id) => set({ storeId: id }),
+      setUser:    (user)    => set({ user }),
+      setStoreId: (id)      => set({ storeId: id }),
+      setOnline:  (online)  => set({ isOnline: online }),
 
-      // Associates
-      associates: demoAssociates,
-      addAssociate: (assoc) => set(state => ({
-        associates: [...state.associates, { ...assoc, id: `assoc_${Date.now()}`, createdAt: new Date().toISOString() }]
-      })),
-      updateAssociate: (id, data) => set(state => ({
-        associates: state.associates.map(a => a.id === id ? { ...a, ...data } : a)
-      })),
-      deleteAssociate: (id) => set(state => ({
-        associates: state.associates.filter(a => a.id !== id)
-      })),
+      // ── Firestore: attach real-time listeners for all collections ────────
+      initFirestore: () => {
+        const existingUnsubs = Object.keys(_unsubs).length;
+        if (existingUnsubs > 0) return; // already listening
 
-      // Work Files
+        console.log('[PandaStore] Attaching Firestore listeners...');
+
+        const listen = (collName, stateKey) => {
+          unsub(collName);
+          _unsubs[collName] = subscribeCollection(collName, (items) => {
+            set({ [stateKey]: items });
+          });
+        };
+
+        listen('associates',    'associates');
+        listen('callIns',       'callIns');
+        listen('teamEvents',    'teamEvents');
+        listen('myEvents',      'myEvents');
+        listen('teamNotes',     'teamNotes');
+        listen('myNotes',       'myNotes');
+        listen('reviews',       'reviews');
+        listen('tasks',         'tasks');
+        listen('contacts',      'contacts');
+        listen('announcements', 'announcements');
+
+        set({ dbReady: true });
+        console.log('[PandaStore] ✅ Firestore live sync active.');
+      },
+
+      // ── Migrate localStorage → Firestore (run once on first connect) ─────
+      migrateLocalToFirestore: async () => {
+        const MIGRATED_KEY = 'panda-fs-migrated-v1';
+        if (localStorage.getItem(MIGRATED_KEY)) return;
+
+        try {
+          const raw = localStorage.getItem('panda-manager-storage');
+          if (!raw) return;
+          const parsed  = JSON.parse(raw);
+          const data    = parsed?.state || parsed;
+
+          const hasData = [
+            data.associates, data.callIns, data.teamNotes, data.myNotes,
+            data.reviews, data.tasks, data.teamEvents, data.myEvents,
+            data.contacts, data.announcements,
+          ].some(arr => Array.isArray(arr) && arr.length > 0);
+
+          if (!hasData) return;
+
+          console.log('[PandaStore] Migrating localStorage → Firestore...');
+          const count = await batchImportToFirestore(data);
+          localStorage.setItem(MIGRATED_KEY, '1');
+          console.log(`[PandaStore] ✅ Migrated ${count} records to Firestore.`);
+        } catch (e) {
+          console.error('[PandaStore] Migration error:', e);
+        }
+      },
+
+      // ── Associates ───────────────────────────────────────────────────────
+      associates: [],
+      addAssociate: async (assoc) => {
+        const id  = `assoc_${Date.now()}`;
+        const doc = { ...assoc, id, createdAt: new Date().toISOString() };
+        set(s => ({ associates: [...s.associates, doc] }));          // optimistic
+        await setItem('associates', id, doc);
+      },
+      updateAssociate: async (id, data) => {
+        set(s => ({ associates: s.associates.map(a => a.id === id ? { ...a, ...data } : a) }));
+        await updateItem('associates', id, data);
+      },
+      deleteAssociate: async (id) => {
+        set(s => ({ associates: s.associates.filter(a => a.id !== id) }));
+        await deleteItem('associates', id);
+      },
+
+      // ── Work Files ───────────────────────────────────────────────────────
       workFiles: {},
-      saveWorkFile: (associateId, fileData) => set(state => ({
-        workFiles: { ...state.workFiles, [associateId]: fileData }
-      })),
+      saveWorkFile: async (associateId, fileData) => {
+        set(s => ({ workFiles: { ...s.workFiles, [associateId]: fileData } }));
+        await fsSaveWorkFile(associateId, fileData);
+      },
 
-      // Call-Ins
+      // ── Call-Ins ─────────────────────────────────────────────────────────
       callIns: [],
-      addCallIn: (callIn) => set(state => ({
-        callIns: [{ ...callIn, id: `callin_${Date.now()}`, createdAt: new Date().toISOString() }, ...state.callIns]
-      })),
-      deleteCallIn: (id) => set(state => ({
-        callIns: state.callIns.filter(c => c.id !== id)
-      })),
+      addCallIn: async (callIn) => {
+        const id  = `callin_${Date.now()}`;
+        const doc = { ...callIn, id, createdAt: new Date().toISOString() };
+        set(s => ({ callIns: [doc, ...s.callIns] }));
+        await setItem('callIns', id, doc);
+      },
+      deleteCallIn: async (id) => {
+        set(s => ({ callIns: s.callIns.filter(c => c.id !== id) }));
+        await deleteItem('callIns', id);
+      },
 
-      // Calendar Events
+      // ── Calendar Events ──────────────────────────────────────────────────
       teamEvents: [],
-      myEvents: [],
-      addTeamEvent: (event) => set(state => ({
-        teamEvents: [...state.teamEvents, { ...event, id: `event_${Date.now()}`, createdAt: new Date().toISOString() }]
-      })),
-      updateTeamEvent: (id, data) => set(state => ({
-        teamEvents: state.teamEvents.map(e => e.id === id ? { ...e, ...data } : e)
-      })),
-      deleteTeamEvent: (id) => set(state => ({
-        teamEvents: state.teamEvents.filter(e => e.id !== id)
-      })),
-      addMyEvent: (event) => set(state => ({
-        myEvents: [...state.myEvents, { ...event, id: `myevent_${Date.now()}`, createdAt: new Date().toISOString() }]
-      })),
-      deleteMyEvent: (id) => set(state => ({
-        myEvents: state.myEvents.filter(e => e.id !== id)
-      })),
+      myEvents:   [],
+      addTeamEvent: async (event) => {
+        const id  = `event_${Date.now()}`;
+        const doc = { ...event, id, createdAt: new Date().toISOString() };
+        set(s => ({ teamEvents: [...s.teamEvents, doc] }));
+        await setItem('teamEvents', id, doc);
+      },
+      updateTeamEvent: async (id, data) => {
+        set(s => ({ teamEvents: s.teamEvents.map(e => e.id === id ? { ...e, ...data } : e) }));
+        await updateItem('teamEvents', id, data);
+      },
+      deleteTeamEvent: async (id) => {
+        set(s => ({ teamEvents: s.teamEvents.filter(e => e.id !== id) }));
+        await deleteItem('teamEvents', id);
+      },
+      addMyEvent: async (event) => {
+        const id  = `myevent_${Date.now()}`;
+        const doc = { ...event, id, createdAt: new Date().toISOString() };
+        set(s => ({ myEvents: [...s.myEvents, doc] }));
+        await setItem('myEvents', id, doc);
+      },
+      deleteMyEvent: async (id) => {
+        set(s => ({ myEvents: s.myEvents.filter(e => e.id !== id) }));
+        await deleteItem('myEvents', id);
+      },
 
-      // Checklists
+      // ── Checklists ───────────────────────────────────────────────────────
       checklists: {},
+      checklistDefaults: { opening: openingChecklist, mid: midChecklist, closing: closingChecklist },
       getChecklist: (date, shift) => {
         const state = get();
-        const key = `${date}_${shift}`;
+        const key   = `${date}_${shift}`;
         if (state.checklists[key]) return state.checklists[key];
-        const defaultItems = shift === 'opening' ? openingChecklist :
-                             shift === 'mid' ? midChecklist : closingChecklist;
-        return defaultItems.map((text, i) => ({ id: i, text, checked: false }));
+        const defaults = shift === 'opening' ? openingChecklist
+                       : shift === 'mid'     ? midChecklist
+                       :                       closingChecklist;
+        return defaults.map((text, i) => ({ id: i, text, checked: false }));
       },
-      saveChecklist: (date, shift, items) => set(state => ({
-        checklists: { ...state.checklists, [`${date}_${shift}`]: items }
-      })),
-      checklistDefaults: { opening: openingChecklist, mid: midChecklist, closing: closingChecklist },
+      saveChecklist: async (date, shift, items) => {
+        const key = `${date}_${shift}`;
+        set(s => ({ checklists: { ...s.checklists, [key]: items } }));
+        await fsSaveChecklist(date, shift, items);
+      },
 
-      // Notes
+      // ── Notes ────────────────────────────────────────────────────────────
       teamNotes: [],
-      myNotes: [],
-      addTeamNote: (note) => set(state => ({
-        teamNotes: [{ ...note, id: `note_${Date.now()}`, createdAt: new Date().toISOString(), pinned: false }, ...state.teamNotes]
-      })),
-      updateTeamNote: (id, data) => set(state => ({
-        teamNotes: state.teamNotes.map(n => n.id === id ? { ...n, ...data } : n)
-      })),
-      deleteTeamNote: (id) => set(state => ({
-        teamNotes: state.teamNotes.filter(n => n.id !== id)
-      })),
-      addMyNote: (note) => set(state => ({
-        myNotes: [{ ...note, id: `mynote_${Date.now()}`, createdAt: new Date().toISOString(), pinned: false }, ...state.myNotes]
-      })),
-      updateMyNote: (id, data) => set(state => ({
-        myNotes: state.myNotes.map(n => n.id === id ? { ...n, ...data } : n)
-      })),
-      deleteMyNote: (id) => set(state => ({
-        myNotes: state.myNotes.filter(n => n.id !== id)
-      })),
+      myNotes:   [],
+      addTeamNote: async (note) => {
+        const id  = `note_${Date.now()}`;
+        const doc = { ...note, id, createdAt: new Date().toISOString(), pinned: false, attachments: note.attachments || [] };
+        set(s => ({ teamNotes: [doc, ...s.teamNotes] }));
+        await setItem('teamNotes', id, doc);
+      },
+      updateTeamNote: async (id, data) => {
+        set(s => ({ teamNotes: s.teamNotes.map(n => n.id === id ? { ...n, ...data } : n) }));
+        await updateItem('teamNotes', id, data);
+      },
+      deleteTeamNote: async (id) => {
+        set(s => ({ teamNotes: s.teamNotes.filter(n => n.id !== id) }));
+        await deleteItem('teamNotes', id);
+      },
+      addMyNote: async (note) => {
+        const id  = `mynote_${Date.now()}`;
+        const doc = { ...note, id, createdAt: new Date().toISOString(), pinned: false, attachments: note.attachments || [] };
+        set(s => ({ myNotes: [doc, ...s.myNotes] }));
+        await setItem('myNotes', id, doc);
+      },
+      updateMyNote: async (id, data) => {
+        set(s => ({ myNotes: s.myNotes.map(n => n.id === id ? { ...n, ...data } : n) }));
+        await updateItem('myNotes', id, data);
+      },
+      deleteMyNote: async (id) => {
+        set(s => ({ myNotes: s.myNotes.filter(n => n.id !== id) }));
+        await deleteItem('myNotes', id);
+      },
 
-      // Performance Reviews
+      // ── Performance Reviews ──────────────────────────────────────────────
       reviews: [],
-      addReview: (review) => set(state => ({
-        reviews: [{ ...review, id: `review_${Date.now()}`, createdAt: new Date().toISOString() }, ...state.reviews]
-      })),
-      updateReview: (id, data) => set(state => ({
-        reviews: state.reviews.map(r => r.id === id ? { ...r, ...data } : r)
-      })),
-      deleteReview: (id) => set(state => ({
-        reviews: state.reviews.filter(r => r.id !== id)
-      })),
+      addReview: async (review) => {
+        const id  = `review_${Date.now()}`;
+        const doc = { ...review, id, createdAt: new Date().toISOString() };
+        set(s => ({ reviews: [doc, ...s.reviews] }));
+        await setItem('reviews', id, doc);
+      },
+      updateReview: async (id, data) => {
+        set(s => ({ reviews: s.reviews.map(r => r.id === id ? { ...r, ...data } : r) }));
+        await updateItem('reviews', id, data);
+      },
+      deleteReview: async (id) => {
+        set(s => ({ reviews: s.reviews.filter(r => r.id !== id) }));
+        await deleteItem('reviews', id);
+      },
 
-      // Tasks
+      // ── Tasks ────────────────────────────────────────────────────────────
       tasks: [],
-      addTask: (task) => set(state => ({
-        tasks: [{ ...task, id: `task_${Date.now()}`, createdAt: new Date().toISOString() }, ...state.tasks]
-      })),
-      updateTask: (id, data) => set(state => ({
-        tasks: state.tasks.map(t => t.id === id ? { ...t, ...data } : t)
-      })),
-      deleteTask: (id) => set(state => ({
-        tasks: state.tasks.filter(t => t.id !== id)
-      })),
+      addTask: async (task) => {
+        const id  = `task_${Date.now()}`;
+        const doc = { ...task, id, createdAt: new Date().toISOString() };
+        set(s => ({ tasks: [doc, ...s.tasks] }));
+        await setItem('tasks', id, doc);
+      },
+      updateTask: async (id, data) => {
+        set(s => ({ tasks: s.tasks.map(t => t.id === id ? { ...t, ...data } : t) }));
+        await updateItem('tasks', id, data);
+      },
+      deleteTask: async (id) => {
+        set(s => ({ tasks: s.tasks.filter(t => t.id !== id) }));
+        await deleteItem('tasks', id);
+      },
 
-      // Contacts
-      contacts: demoContacts,
-      addContact: (contact) => set(state => ({
-        contacts: [...state.contacts, { ...contact, id: `contact_${Date.now()}` }]
-      })),
-      updateContact: (id, data) => set(state => ({
-        contacts: state.contacts.map(c => c.id === id ? { ...c, ...data } : c)
-      })),
-      deleteContact: (id) => set(state => ({
-        contacts: state.contacts.filter(c => c.id !== id)
-      })),
+      // ── Contacts ─────────────────────────────────────────────────────────
+      contacts: defaultContacts,
+      addContact: async (contact) => {
+        const id  = `contact_${Date.now()}`;
+        const doc = { ...contact, id };
+        set(s => ({ contacts: [...s.contacts, doc] }));
+        await setItem('contacts', id, doc);
+      },
+      updateContact: async (id, data) => {
+        set(s => ({ contacts: s.contacts.map(c => c.id === id ? { ...c, ...data } : c) }));
+        await updateItem('contacts', id, data);
+      },
+      deleteContact: async (id) => {
+        set(s => ({ contacts: s.contacts.filter(c => c.id !== id) }));
+        await deleteItem('contacts', id);
+      },
 
-      // Announcements
+      // ── Announcements ────────────────────────────────────────────────────
       announcements: [],
-      addAnnouncement: (ann) => set(state => ({
-        announcements: [{ ...ann, id: `ann_${Date.now()}`, createdAt: new Date().toISOString() }, ...state.announcements]
-      })),
-      deleteAnnouncement: (id) => set(state => ({
-        announcements: state.announcements.filter(a => a.id !== id)
-      })),
+      addAnnouncement: async (ann) => {
+        const id  = `ann_${Date.now()}`;
+        const doc = { ...ann, id, createdAt: new Date().toISOString() };
+        set(s => ({ announcements: [doc, ...s.announcements] }));
+        await setItem('announcements', id, doc);
+      },
+      deleteAnnouncement: async (id) => {
+        set(s => ({ announcements: s.announcements.filter(a => a.id !== id) }));
+        await deleteItem('announcements', id);
+      },
     }),
+
+    // ── Persist config (localStorage cache) ─────────────────────────────────
     {
-      name: 'panda-manager-storage',
-      // ── SAFE STORAGE: custom wrapper that NEVER wipes existing data ──
-      // Instead of using the default storage which can lose data on version
-      // mismatches, we manually merge persisted data with defaults.
+      name:    'panda-manager-storage',
       storage: createBackupStorage(),
-      // ── Version: bump this number whenever the state shape changes ──
-      // IMPORTANT: migrate() must ALWAYS return a valid state object.
-      version: 3,
+      version: 4,
       migrate: (persistedState, fromVersion) => {
-        // Safety net: if persistedState is null/undefined, return empty object
-        // so Zustand merges with initial state (never wipes).
         const state = { ...(persistedState || {}) };
-
-        // v0 → v1: positions renamed (Team Member/Crew/Other → FOH/BOH/Cook/…)
         if ((fromVersion ?? -1) < 1) {
-          const posMap = {
-            'Team Member': 'FOH',
-            'Crew':        'BOH',
-            'Other':       'FOH',
-          };
-          if (Array.isArray(state.associates)) {
-            state.associates = state.associates.map(a => ({
-              ...a,
-              position: posMap[a.position] || a.position,
-            }));
-          }
+          const posMap = { 'Team Member': 'FOH', 'Crew': 'BOH', 'Other': 'FOH' };
+          if (Array.isArray(state.associates))
+            state.associates = state.associates.map(a => ({ ...a, position: posMap[a.position] || a.position }));
         }
-
-        // v1 → v2: notes gain attachments array (back-fill missing field)
         if ((fromVersion ?? -1) < 2) {
-          const addAttachments = (notes) =>
-            Array.isArray(notes)
-              ? notes.map(n => ({ attachments: [], ...n }))
-              : notes ?? [];
-          state.teamNotes = addAttachments(state.teamNotes);
-          state.myNotes   = addAttachments(state.myNotes);
+          const addAtt = (notes) => Array.isArray(notes) ? notes.map(n => ({ attachments: [], ...n })) : notes ?? [];
+          state.teamNotes = addAtt(state.teamNotes);
+          state.myNotes   = addAtt(state.myNotes);
         }
-
-        // v2 → v3: ensure all arrays are initialized (back-fill missing arrays)
         if ((fromVersion ?? -1) < 3) {
-          if (!Array.isArray(state.associates))   state.associates   = [];
-          if (!Array.isArray(state.callIns))       state.callIns       = [];
-          if (!Array.isArray(state.teamEvents))    state.teamEvents    = [];
-          if (!Array.isArray(state.myEvents))      state.myEvents      = [];
-          if (!Array.isArray(state.teamNotes))     state.teamNotes     = [];
-          if (!Array.isArray(state.myNotes))       state.myNotes       = [];
-          if (!Array.isArray(state.reviews))       state.reviews       = [];
-          if (!Array.isArray(state.tasks))         state.tasks         = [];
-          if (!Array.isArray(state.contacts))      state.contacts      = [];
-          if (!Array.isArray(state.announcements)) state.announcements = [];
+          ['associates','callIns','teamEvents','myEvents','teamNotes','myNotes','reviews','tasks','contacts','announcements']
+            .forEach(k => { if (!Array.isArray(state[k])) state[k] = []; });
           if (!state.checklists || typeof state.checklists !== 'object') state.checklists = {};
           if (!state.workFiles  || typeof state.workFiles  !== 'object') state.workFiles  = {};
         }
-
         return state;
       },
-      // merge: instead of replacing state, MERGE persisted data with defaults
-      // This is the key fix — even if migration fails, existing data is kept
-      merge: (persistedState, currentState) => {
-        // Deep merge: persisted values override defaults, but missing keys
-        // fall back to currentState (initial values) rather than being lost
-        return {
-          ...currentState,
-          ...persistedState,
-          // Always ensure arrays are arrays (never undefined/null)
-          associates:   Array.isArray(persistedState?.associates)   ? persistedState.associates   : currentState.associates,
-          callIns:      Array.isArray(persistedState?.callIns)       ? persistedState.callIns       : currentState.callIns,
-          teamEvents:   Array.isArray(persistedState?.teamEvents)    ? persistedState.teamEvents    : currentState.teamEvents,
-          myEvents:     Array.isArray(persistedState?.myEvents)      ? persistedState.myEvents      : currentState.myEvents,
-          teamNotes:    Array.isArray(persistedState?.teamNotes)     ? persistedState.teamNotes     : currentState.teamNotes,
-          myNotes:      Array.isArray(persistedState?.myNotes)       ? persistedState.myNotes       : currentState.myNotes,
-          reviews:      Array.isArray(persistedState?.reviews)       ? persistedState.reviews       : currentState.reviews,
-          tasks:        Array.isArray(persistedState?.tasks)         ? persistedState.tasks         : currentState.tasks,
-          contacts:     Array.isArray(persistedState?.contacts)      ? persistedState.contacts      : currentState.contacts,
-          announcements:Array.isArray(persistedState?.announcements) ? persistedState.announcements : currentState.announcements,
-          checklists:   (persistedState?.checklists && typeof persistedState.checklists === 'object') ? persistedState.checklists : currentState.checklists,
-          workFiles:    (persistedState?.workFiles  && typeof persistedState.workFiles  === 'object') ? persistedState.workFiles  : currentState.workFiles,
-        };
-      },
+      merge: (persisted, current) => ({
+        ...current,
+        ...persisted,
+        associates:    Array.isArray(persisted?.associates)    ? persisted.associates    : current.associates,
+        callIns:       Array.isArray(persisted?.callIns)       ? persisted.callIns       : current.callIns,
+        teamEvents:    Array.isArray(persisted?.teamEvents)    ? persisted.teamEvents    : current.teamEvents,
+        myEvents:      Array.isArray(persisted?.myEvents)      ? persisted.myEvents      : current.myEvents,
+        teamNotes:     Array.isArray(persisted?.teamNotes)     ? persisted.teamNotes     : current.teamNotes,
+        myNotes:       Array.isArray(persisted?.myNotes)       ? persisted.myNotes       : current.myNotes,
+        reviews:       Array.isArray(persisted?.reviews)       ? persisted.reviews       : current.reviews,
+        tasks:         Array.isArray(persisted?.tasks)         ? persisted.tasks         : current.tasks,
+        contacts:      Array.isArray(persisted?.contacts)      ? persisted.contacts      : current.contacts,
+        announcements: Array.isArray(persisted?.announcements) ? persisted.announcements : current.announcements,
+        checklists:    (persisted?.checklists && typeof persisted.checklists === 'object') ? persisted.checklists : current.checklists,
+        workFiles:     (persisted?.workFiles  && typeof persisted.workFiles  === 'object') ? persisted.workFiles  : current.workFiles,
+      }),
       partialize: (state) => ({
-        user:          state.user,
-        storeId:       state.storeId,
-        storeName:     state.storeName,
-        associates:    state.associates,
-        workFiles:     state.workFiles,
-        callIns:       state.callIns,
-        teamEvents:    state.teamEvents,
-        myEvents:      state.myEvents,
-        checklists:    state.checklists,
-        teamNotes:     state.teamNotes,
-        myNotes:       state.myNotes,
-        reviews:       state.reviews,
-        tasks:         state.tasks,
-        contacts:      state.contacts,
+        user: state.user, storeId: state.storeId, storeName: state.storeName,
+        associates: state.associates, workFiles: state.workFiles,
+        callIns: state.callIns, teamEvents: state.teamEvents, myEvents: state.myEvents,
+        checklists: state.checklists, teamNotes: state.teamNotes, myNotes: state.myNotes,
+        reviews: state.reviews, tasks: state.tasks, contacts: state.contacts,
         announcements: state.announcements,
       }),
     }
