@@ -1,16 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Lock, Mail, UserPlus } from 'lucide-react';
-import {
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
-} from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 
 export default function Login() {
-  const navigate  = useNavigate();
+  const navigate    = useNavigate();
   const { setUser } = useAppStore();
 
   const [mode, setMode]         = useState('login'); // 'login' | 'register'
@@ -24,24 +18,35 @@ export default function Login() {
 
   const friendlyError = (code) => {
     switch (code) {
-      case 'auth/user-not-found':       return 'No account found with this email.';
-      case 'auth/wrong-password':       return 'Incorrect password. Try again.';
+      case 'auth/user-not-found':
+      case 'auth/wrong-password':
       case 'auth/invalid-credential':   return 'Invalid email or password.';
       case 'auth/email-already-in-use': return 'This email is already registered. Sign in instead.';
       case 'auth/weak-password':        return 'Password must be at least 6 characters.';
       case 'auth/invalid-email':        return 'Please enter a valid email address.';
-      case 'auth/too-many-requests':    return 'Too many attempts. Please wait a moment and try again.';
-      default: return 'Something went wrong. Please try again.';
+      case 'auth/too-many-requests':    return 'Too many attempts. Please wait a moment.';
+      case 'auth/not-configured':       return 'Firebase Auth not set up yet. Use Demo Login below.';
+      case 'auth/network-request-failed': return 'No internet connection. Use Demo Login.';
+      default: return 'Sign in failed. Use Demo Login to continue without an account.';
     }
   };
 
-  // ── Sign In ──────────────────────────────────────────────────────────────
+  // ── Lazy Firebase Auth ────────────────────────────────────────────────────
+  const getAuth = async () => {
+    const { getFirebaseModules } = await import('../lib/firebase');
+    const { auth } = await getFirebaseModules();
+    return auth;
+  };
+
+  // ── Sign In ───────────────────────────────────────────────────────────────
   const handleLogin = async (e) => {
     e.preventDefault();
     setError(''); setInfo('');
     if (!email || !password) { setError('Please enter email and password.'); return; }
     setLoading(true);
     try {
+      const { signInWithEmailAndPassword } = await import('firebase/auth');
+      const auth = await getAuth();
       const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
       const u    = cred.user;
       setUser({
@@ -53,19 +58,21 @@ export default function Login() {
       });
       navigate('/');
     } catch (err) {
-      setError(friendlyError(err.code));
+      setError(friendlyError(err.code || err.message));
     } finally {
       setLoading(false);
     }
   };
 
-  // ── Register ─────────────────────────────────────────────────────────────
+  // ── Register ──────────────────────────────────────────────────────────────
   const handleRegister = async (e) => {
     e.preventDefault();
     setError(''); setInfo('');
     if (!email || !password || !name) { setError('Please fill in all fields.'); return; }
     setLoading(true);
     try {
+      const { createUserWithEmailAndPassword } = await import('firebase/auth');
+      const auth = await getAuth();
       const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
       const u    = cred.user;
       setUser({
@@ -77,7 +84,7 @@ export default function Login() {
       });
       navigate('/');
     } catch (err) {
-      setError(friendlyError(err.code));
+      setError(friendlyError(err.code || err.message));
     } finally {
       setLoading(false);
     }
@@ -88,14 +95,16 @@ export default function Login() {
     setError(''); setInfo('');
     if (!email) { setError('Enter your email first, then tap Forgot Password.'); return; }
     try {
+      const { sendPasswordResetEmail } = await import('firebase/auth');
+      const auth = await getAuth();
       await sendPasswordResetEmail(auth, email.trim());
       setInfo('Password reset email sent! Check your inbox.');
     } catch (err) {
-      setError(friendlyError(err.code));
+      setError(friendlyError(err.code || err.message));
     }
   };
 
-  // ── Demo Login (no account needed) ───────────────────────────────────────
+  // ── Demo Login (no account needed) ────────────────────────────────────────
   const handleDemoLogin = () => {
     setUser({ uid: 'demo_user', email: 'demo@px1687.com', name: 'Bond', role: 'manager', storeId: 'store_1687' });
     navigate('/');

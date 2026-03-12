@@ -1,361 +1,250 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import {
-  subscribeCollection,
-  addItem, setItem, updateItem, deleteItem,
-  saveChecklist as fsSaveChecklist,
-  fetchChecklist as fsFetchChecklist,
-  saveWorkFile as fsSaveWorkFile,
-  batchImportToFirestore,
-} from '../lib/firestoreService';
 
-// ── AUTO-RECOVERY: restore from backup if primary key is missing ─────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTO-RECOVERY: if primary storage is missing, restore from rolling backup
+// ─────────────────────────────────────────────────────────────────────────────
 (function recoverStorageIfNeeded() {
   try {
-    const raw = localStorage.getItem('panda-manager-storage');
-    if (!raw) {
+    if (!localStorage.getItem('panda-manager-storage')) {
       const backup = localStorage.getItem('panda-manager-backup');
       if (backup) {
-        console.log('[PandaStore] Restoring from backup...');
+        console.log('[PandaStore] 🔄 Restoring from backup...');
         localStorage.setItem('panda-manager-storage', backup);
       }
     }
   } catch {}
 })();
 
-// ── Custom storage: writes a rolling backup on every save ────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// SAFE STORAGE: writes to both primary key and a rolling backup key
+// ─────────────────────────────────────────────────────────────────────────────
 function createBackupStorage() {
   return {
     getItem: (name) => {
-      try { const r = localStorage.getItem(name); return r ? JSON.parse(r) : null; }
-      catch { return null; }
+      try {
+        const raw = localStorage.getItem(name);
+        return raw ? JSON.parse(raw) : null;
+      } catch { return null; }
     },
     setItem: (name, value) => {
       try {
         const s = JSON.stringify(value);
         localStorage.setItem(name, s);
-        localStorage.setItem('panda-manager-backup', s);
-      } catch (e) { console.warn('[PandaStore] Storage quota exceeded.', e); }
+        localStorage.setItem('panda-manager-backup', s); // rolling backup
+      } catch (e) {
+        console.warn('[PandaStore] Storage quota warning:', e?.message);
+      }
     },
-    removeItem: (name) => { try { localStorage.removeItem(name); } catch {} },
+    removeItem: (name) => {
+      try { localStorage.removeItem(name); } catch {}
+    },
   };
 }
 
-// ── Default data ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// DEFAULT SEED DATA
+// ─────────────────────────────────────────────────────────────────────────────
 const defaultContacts = [
-  { id: 'contact_1', name: 'District Manager',   role: 'District Manager',   phone: '', email: '', description: 'Add your DM contact info',         icon: 'building'  },
-  { id: 'contact_2', name: 'Health Department',   role: 'Health Department',  phone: '', email: '', description: 'Local health inspection contact',    icon: 'hospital'  },
-  { id: 'contact_3', name: 'Panda Corporate HR',  role: 'HR',                 phone: '1-800-877-8988', email: 'hr@pandaexpress.com', description: 'Corporate HR line', icon: 'hr' },
-  { id: 'contact_4', name: 'IT Support',           role: 'IT Support',        phone: '', email: '', description: 'Add IT support contact info',        icon: 'computer'  },
+  { id: 'contact_1', name: 'District Manager',  role: 'District Manager',  phone: '', email: '', description: 'Add your DM contact info',        icon: 'building' },
+  { id: 'contact_2', name: 'Health Department',  role: 'Health Department', phone: '', email: '', description: 'Local health inspection contact',   icon: 'hospital' },
+  { id: 'contact_3', name: 'Panda Corporate HR', role: 'HR',               phone: '1-800-877-8988', email: 'hr@pandaexpress.com', description: 'Corporate HR line', icon: 'hr' },
+  { id: 'contact_4', name: 'IT Support',         role: 'IT Support',       phone: '', email: '', description: 'Add IT support contact info',       icon: 'computer' },
 ];
 
 const openingChecklist = [
-  'Unlock & secure building, check exterior',
-  'Check alarm and security system',
-  'Turn on all equipment (woks, fryers, steam tables)',
-  'Complete food safety temperature log',
-  'Prep all required menu items per par levels',
-  'Set up front line with hot & cold food',
-  'Stock serving utensils, trays, napkins, chopsticks',
-  'Set up drinks station (fountain, cups, lids, straws)',
-  'Sanitize prep surfaces, line, and register area',
-  'Count and verify cash drawer',
-  'Check online order tablets & kiosk operational',
-  'Verify team assignments and positions',
-  'Confirm uniform compliance for all associates',
-  "Brief team on daily specials and 86'd items",
+  'Unlock & secure building, check exterior', 'Check alarm and security system',
+  'Turn on all equipment (woks, fryers, steam tables)', 'Complete food safety temperature log',
+  'Prep all required menu items per par levels', 'Set up front line with hot & cold food',
+  'Stock serving utensils, trays, napkins, chopsticks', 'Set up drinks station (fountain, cups, lids, straws)',
+  'Sanitize prep surfaces, line, and register area', 'Count and verify cash drawer',
+  'Check online order tablets & kiosk operational', 'Verify team assignments and positions',
+  'Confirm uniform compliance for all associates', "Brief team on daily specials and 86'd items",
   'Confirm manager on duty contact info posted',
 ];
 const midChecklist = [
-  'Check all food temperatures (hot & cold)',
-  'Restock front line items as needed',
-  'Verify drink station supplies (cups, lids, straws)',
-  'Review and enforce break schedule',
-  'Check dining room cleanliness',
-  'Restock napkins, utensils, chopsticks',
-  'Monitor online order queue and tablets',
-  'Check restroom cleanliness and supplies',
-  'Review labor and sales performance',
-  'Conduct mid-shift food safety check',
-  'Confirm all equipment functioning properly',
-  'Address any customer complaints or issues',
+  'Check all food temperatures (hot & cold)', 'Restock front line items as needed',
+  'Verify drink station supplies (cups, lids, straws)', 'Review and enforce break schedule',
+  'Check dining room cleanliness', 'Restock napkins, utensils, chopsticks',
+  'Monitor online order queue and tablets', 'Check restroom cleanliness and supplies',
+  'Review labor and sales performance', 'Conduct mid-shift food safety check',
+  'Confirm all equipment functioning properly', 'Address any customer complaints or issues',
 ];
 const closingChecklist = [
-  'Count and verify cash drawer & safe',
-  'Complete end-of-day sales report',
-  'Shut down all cooking equipment safely',
-  'Cool and properly store all food items',
-  'Complete thorough kitchen cleaning',
-  'Mop all floor areas',
-  'Empty and clean all trash cans',
-  'Sanitize all prep surfaces and equipment',
-  'Secure all doors and windows',
-  'Set alarm system',
-  'Complete closing manager log',
-  'Verify all team members have clocked out',
+  'Count and verify cash drawer & safe', 'Complete end-of-day sales report',
+  'Shut down all cooking equipment safely', 'Cool and properly store all food items',
+  'Complete thorough kitchen cleaning', 'Mop all floor areas',
+  'Empty and clean all trash cans', 'Sanitize all prep surfaces and equipment',
+  'Secure all doors and windows', 'Set alarm system',
+  'Complete closing manager log', 'Verify all team members have clocked out',
   'Submit daily report to district manager',
 ];
 
-// ── Firestore real-time listeners (unsubscribe handles) ──────────────────────
-const _unsubs = {};
-function unsub(key) { if (_unsubs[key]) { _unsubs[key](); delete _unsubs[key]; } }
-
-// ── Main Store ───────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// STORE
+// ─────────────────────────────────────────────────────────────────────────────
 export const useAppStore = create(
   persist(
     (set, get) => ({
-
-      // ── Auth / Meta ──────────────────────────────────────────────────────
-      user:      null,
-      storeId:   'store_1687',
+      // ── Auth / Store Info ─────────────────────────────────────────────────
+      user: null,
+      storeId: 'store_1687',
       storeName: 'PANDA EXPRESS 1687',
-      isOnline:  true,
-      dbReady:   false,   // true once Firestore listeners are attached
+      isOnline: true,
+      setUser:    (user) => set({ user }),
+      setStoreId: (id)   => set({ storeId: id }),
+      setOnline:  (v)    => set({ isOnline: v }),
 
-      setUser:    (user)    => set({ user }),
-      setStoreId: (id)      => set({ storeId: id }),
-      setOnline:  (online)  => set({ isOnline: online }),
-
-      // ── Firestore: attach real-time listeners for all collections ────────
-      initFirestore: () => {
-        const existingUnsubs = Object.keys(_unsubs).length;
-        if (existingUnsubs > 0) return; // already listening
-
-        console.log('[PandaStore] Attaching Firestore listeners...');
-
-        const listen = (collName, stateKey) => {
-          unsub(collName);
-          _unsubs[collName] = subscribeCollection(collName, (items) => {
-            set({ [stateKey]: items });
-          });
-        };
-
-        listen('associates',    'associates');
-        listen('callIns',       'callIns');
-        listen('teamEvents',    'teamEvents');
-        listen('myEvents',      'myEvents');
-        listen('teamNotes',     'teamNotes');
-        listen('myNotes',       'myNotes');
-        listen('reviews',       'reviews');
-        listen('tasks',         'tasks');
-        listen('contacts',      'contacts');
-        listen('announcements', 'announcements');
-
-        set({ dbReady: true });
-        console.log('[PandaStore] ✅ Firestore live sync active.');
-      },
-
-      // ── Migrate localStorage → Firestore (run once on first connect) ─────
-      migrateLocalToFirestore: async () => {
-        const MIGRATED_KEY = 'panda-fs-migrated-v1';
-        if (localStorage.getItem(MIGRATED_KEY)) return;
-
-        try {
-          const raw = localStorage.getItem('panda-manager-storage');
-          if (!raw) return;
-          const parsed  = JSON.parse(raw);
-          const data    = parsed?.state || parsed;
-
-          const hasData = [
-            data.associates, data.callIns, data.teamNotes, data.myNotes,
-            data.reviews, data.tasks, data.teamEvents, data.myEvents,
-            data.contacts, data.announcements,
-          ].some(arr => Array.isArray(arr) && arr.length > 0);
-
-          if (!hasData) return;
-
-          console.log('[PandaStore] Migrating localStorage → Firestore...');
-          const count = await batchImportToFirestore(data);
-          localStorage.setItem(MIGRATED_KEY, '1');
-          console.log(`[PandaStore] ✅ Migrated ${count} records to Firestore.`);
-        } catch (e) {
-          console.error('[PandaStore] Migration error:', e);
-        }
-      },
-
-      // ── Associates ───────────────────────────────────────────────────────
+      // ── Associates ────────────────────────────────────────────────────────
       associates: [],
-      addAssociate: async (assoc) => {
-        const id  = `assoc_${Date.now()}`;
-        const doc = { ...assoc, id, createdAt: new Date().toISOString() };
-        set(s => ({ associates: [...s.associates, doc] }));          // optimistic
-        await setItem('associates', id, doc);
+      addAssociate: (a) => {
+        const doc = { ...a, id: `assoc_${Date.now()}`, createdAt: new Date().toISOString() };
+        set(s => ({ associates: [...s.associates, doc] }));
       },
-      updateAssociate: async (id, data) => {
-        set(s => ({ associates: s.associates.map(a => a.id === id ? { ...a, ...data } : a) }));
-        await updateItem('associates', id, data);
+      updateAssociate: (id, d) => {
+        set(s => ({ associates: s.associates.map(a => a.id === id ? { ...a, ...d } : a) }));
       },
-      deleteAssociate: async (id) => {
+      deleteAssociate: (id) => {
         set(s => ({ associates: s.associates.filter(a => a.id !== id) }));
-        await deleteItem('associates', id);
       },
 
-      // ── Work Files ───────────────────────────────────────────────────────
+      // ── Work Files ────────────────────────────────────────────────────────
       workFiles: {},
-      saveWorkFile: async (associateId, fileData) => {
+      saveWorkFile: (associateId, fileData) => {
         set(s => ({ workFiles: { ...s.workFiles, [associateId]: fileData } }));
-        await fsSaveWorkFile(associateId, fileData);
       },
 
-      // ── Call-Ins ─────────────────────────────────────────────────────────
+      // ── Call-Ins ──────────────────────────────────────────────────────────
       callIns: [],
-      addCallIn: async (callIn) => {
-        const id  = `callin_${Date.now()}`;
-        const doc = { ...callIn, id, createdAt: new Date().toISOString() };
+      addCallIn: (c) => {
+        const doc = { ...c, id: `callin_${Date.now()}`, createdAt: new Date().toISOString() };
         set(s => ({ callIns: [doc, ...s.callIns] }));
-        await setItem('callIns', id, doc);
       },
-      deleteCallIn: async (id) => {
+      deleteCallIn: (id) => {
         set(s => ({ callIns: s.callIns.filter(c => c.id !== id) }));
-        await deleteItem('callIns', id);
       },
 
-      // ── Calendar Events ──────────────────────────────────────────────────
-      teamEvents: [],
-      myEvents:   [],
-      addTeamEvent: async (event) => {
-        const id  = `event_${Date.now()}`;
-        const doc = { ...event, id, createdAt: new Date().toISOString() };
+      // ── Calendar ──────────────────────────────────────────────────────────
+      teamEvents: [], myEvents: [],
+      addTeamEvent: (e) => {
+        const doc = { ...e, id: `event_${Date.now()}`, createdAt: new Date().toISOString() };
         set(s => ({ teamEvents: [...s.teamEvents, doc] }));
-        await setItem('teamEvents', id, doc);
       },
-      updateTeamEvent: async (id, data) => {
-        set(s => ({ teamEvents: s.teamEvents.map(e => e.id === id ? { ...e, ...data } : e) }));
-        await updateItem('teamEvents', id, data);
+      updateTeamEvent: (id, d) => {
+        set(s => ({ teamEvents: s.teamEvents.map(e => e.id === id ? { ...e, ...d } : e) }));
       },
-      deleteTeamEvent: async (id) => {
+      deleteTeamEvent: (id) => {
         set(s => ({ teamEvents: s.teamEvents.filter(e => e.id !== id) }));
-        await deleteItem('teamEvents', id);
       },
-      addMyEvent: async (event) => {
-        const id  = `myevent_${Date.now()}`;
-        const doc = { ...event, id, createdAt: new Date().toISOString() };
+      addMyEvent: (e) => {
+        const doc = { ...e, id: `myevent_${Date.now()}`, createdAt: new Date().toISOString() };
         set(s => ({ myEvents: [...s.myEvents, doc] }));
-        await setItem('myEvents', id, doc);
       },
-      deleteMyEvent: async (id) => {
+      deleteMyEvent: (id) => {
         set(s => ({ myEvents: s.myEvents.filter(e => e.id !== id) }));
-        await deleteItem('myEvents', id);
       },
 
-      // ── Checklists ───────────────────────────────────────────────────────
+      // ── Checklists ────────────────────────────────────────────────────────
       checklists: {},
       checklistDefaults: { opening: openingChecklist, mid: midChecklist, closing: closingChecklist },
       getChecklist: (date, shift) => {
-        const state = get();
-        const key   = `${date}_${shift}`;
-        if (state.checklists[key]) return state.checklists[key];
-        const defaults = shift === 'opening' ? openingChecklist
-                       : shift === 'mid'     ? midChecklist
-                       :                       closingChecklist;
+        const key = `${date}_${shift}`;
+        if (get().checklists[key]) return get().checklists[key];
+        const defaults = shift === 'opening' ? openingChecklist : shift === 'mid' ? midChecklist : closingChecklist;
         return defaults.map((text, i) => ({ id: i, text, checked: false }));
       },
-      saveChecklist: async (date, shift, items) => {
-        const key = `${date}_${shift}`;
-        set(s => ({ checklists: { ...s.checklists, [key]: items } }));
-        await fsSaveChecklist(date, shift, items);
+      saveChecklist: (date, shift, items) => {
+        set(s => ({ checklists: { ...s.checklists, [`${date}_${shift}`]: items } }));
       },
 
-      // ── Notes ────────────────────────────────────────────────────────────
-      teamNotes: [],
-      myNotes:   [],
-      addTeamNote: async (note) => {
-        const id  = `note_${Date.now()}`;
-        const doc = { ...note, id, createdAt: new Date().toISOString(), pinned: false, attachments: note.attachments || [] };
+      // ── Notes ─────────────────────────────────────────────────────────────
+      teamNotes: [], myNotes: [],
+      addTeamNote: (n) => {
+        const doc = { ...n, id: `note_${Date.now()}`, createdAt: new Date().toISOString(), pinned: false, attachments: n.attachments || [] };
         set(s => ({ teamNotes: [doc, ...s.teamNotes] }));
-        await setItem('teamNotes', id, doc);
       },
-      updateTeamNote: async (id, data) => {
-        set(s => ({ teamNotes: s.teamNotes.map(n => n.id === id ? { ...n, ...data } : n) }));
-        await updateItem('teamNotes', id, data);
+      updateTeamNote: (id, d) => {
+        set(s => ({ teamNotes: s.teamNotes.map(n => n.id === id ? { ...n, ...d } : n) }));
       },
-      deleteTeamNote: async (id) => {
+      deleteTeamNote: (id) => {
         set(s => ({ teamNotes: s.teamNotes.filter(n => n.id !== id) }));
-        await deleteItem('teamNotes', id);
       },
-      addMyNote: async (note) => {
-        const id  = `mynote_${Date.now()}`;
-        const doc = { ...note, id, createdAt: new Date().toISOString(), pinned: false, attachments: note.attachments || [] };
+      addMyNote: (n) => {
+        const doc = { ...n, id: `mynote_${Date.now()}`, createdAt: new Date().toISOString(), pinned: false, attachments: n.attachments || [] };
         set(s => ({ myNotes: [doc, ...s.myNotes] }));
-        await setItem('myNotes', id, doc);
       },
-      updateMyNote: async (id, data) => {
-        set(s => ({ myNotes: s.myNotes.map(n => n.id === id ? { ...n, ...data } : n) }));
-        await updateItem('myNotes', id, data);
+      updateMyNote: (id, d) => {
+        set(s => ({ myNotes: s.myNotes.map(n => n.id === id ? { ...n, ...d } : n) }));
       },
-      deleteMyNote: async (id) => {
+      deleteMyNote: (id) => {
         set(s => ({ myNotes: s.myNotes.filter(n => n.id !== id) }));
-        await deleteItem('myNotes', id);
       },
 
-      // ── Performance Reviews ──────────────────────────────────────────────
+      // ── Reviews ───────────────────────────────────────────────────────────
       reviews: [],
-      addReview: async (review) => {
-        const id  = `review_${Date.now()}`;
-        const doc = { ...review, id, createdAt: new Date().toISOString() };
+      addReview: (r) => {
+        const doc = { ...r, id: `review_${Date.now()}`, createdAt: new Date().toISOString() };
         set(s => ({ reviews: [doc, ...s.reviews] }));
-        await setItem('reviews', id, doc);
       },
-      updateReview: async (id, data) => {
-        set(s => ({ reviews: s.reviews.map(r => r.id === id ? { ...r, ...data } : r) }));
-        await updateItem('reviews', id, data);
+      updateReview: (id, d) => {
+        set(s => ({ reviews: s.reviews.map(r => r.id === id ? { ...r, ...d } : r) }));
       },
-      deleteReview: async (id) => {
+      deleteReview: (id) => {
         set(s => ({ reviews: s.reviews.filter(r => r.id !== id) }));
-        await deleteItem('reviews', id);
       },
 
-      // ── Tasks ────────────────────────────────────────────────────────────
+      // ── Tasks ─────────────────────────────────────────────────────────────
       tasks: [],
-      addTask: async (task) => {
-        const id  = `task_${Date.now()}`;
-        const doc = { ...task, id, createdAt: new Date().toISOString() };
+      addTask: (t) => {
+        const doc = { ...t, id: `task_${Date.now()}`, createdAt: new Date().toISOString() };
         set(s => ({ tasks: [doc, ...s.tasks] }));
-        await setItem('tasks', id, doc);
       },
-      updateTask: async (id, data) => {
-        set(s => ({ tasks: s.tasks.map(t => t.id === id ? { ...t, ...data } : t) }));
-        await updateItem('tasks', id, data);
+      updateTask: (id, d) => {
+        set(s => ({ tasks: s.tasks.map(t => t.id === id ? { ...t, ...d } : t) }));
       },
-      deleteTask: async (id) => {
+      deleteTask: (id) => {
         set(s => ({ tasks: s.tasks.filter(t => t.id !== id) }));
-        await deleteItem('tasks', id);
       },
 
-      // ── Contacts ─────────────────────────────────────────────────────────
+      // ── Contacts ──────────────────────────────────────────────────────────
       contacts: defaultContacts,
-      addContact: async (contact) => {
-        const id  = `contact_${Date.now()}`;
-        const doc = { ...contact, id };
+      addContact: (c) => {
+        const doc = { ...c, id: `contact_${Date.now()}` };
         set(s => ({ contacts: [...s.contacts, doc] }));
-        await setItem('contacts', id, doc);
       },
-      updateContact: async (id, data) => {
-        set(s => ({ contacts: s.contacts.map(c => c.id === id ? { ...c, ...data } : c) }));
-        await updateItem('contacts', id, data);
+      updateContact: (id, d) => {
+        set(s => ({ contacts: s.contacts.map(c => c.id === id ? { ...c, ...d } : c) }));
       },
-      deleteContact: async (id) => {
+      deleteContact: (id) => {
         set(s => ({ contacts: s.contacts.filter(c => c.id !== id) }));
-        await deleteItem('contacts', id);
       },
 
-      // ── Announcements ────────────────────────────────────────────────────
+      // ── Announcements ─────────────────────────────────────────────────────
       announcements: [],
-      addAnnouncement: async (ann) => {
-        const id  = `ann_${Date.now()}`;
-        const doc = { ...ann, id, createdAt: new Date().toISOString() };
+      addAnnouncement: (a) => {
+        const doc = { ...a, id: `ann_${Date.now()}`, createdAt: new Date().toISOString() };
         set(s => ({ announcements: [doc, ...s.announcements] }));
-        await setItem('announcements', id, doc);
       },
-      deleteAnnouncement: async (id) => {
+      deleteAnnouncement: (id) => {
         set(s => ({ announcements: s.announcements.filter(a => a.id !== id) }));
-        await deleteItem('announcements', id);
+      },
+
+      // ── Firebase sync status (UI indicator only — no auto-connect) ────────
+      dbReady: false,
+      dbMode: 'local', // 'local' | 'firestore'
+
+      // Called explicitly from BackupManager when user sets up Firestore
+      connectFirestore: async () => {
+        try {
+          const { initFirestoreSync } = await import('../lib/firestoreSync');
+          await initFirestoreSync(set, get);
+        } catch (e) {
+          console.warn('[PandaStore] Firestore connect failed:', e?.message);
+        }
       },
     }),
-
-    // ── Persist config (localStorage cache) ─────────────────────────────────
     {
-      name:    'panda-manager-storage',
+      name: 'panda-manager-storage',
       storage: createBackupStorage(),
       version: 4,
       migrate: (persistedState, fromVersion) => {
@@ -366,7 +255,7 @@ export const useAppStore = create(
             state.associates = state.associates.map(a => ({ ...a, position: posMap[a.position] || a.position }));
         }
         if ((fromVersion ?? -1) < 2) {
-          const addAtt = (notes) => Array.isArray(notes) ? notes.map(n => ({ attachments: [], ...n })) : notes ?? [];
+          const addAtt = (notes) => Array.isArray(notes) ? notes.map(n => ({ attachments: [], ...n })) : [];
           state.teamNotes = addAtt(state.teamNotes);
           state.myNotes   = addAtt(state.myNotes);
         }
@@ -395,11 +284,20 @@ export const useAppStore = create(
         workFiles:     (persisted?.workFiles  && typeof persisted.workFiles  === 'object') ? persisted.workFiles  : current.workFiles,
       }),
       partialize: (state) => ({
-        user: state.user, storeId: state.storeId, storeName: state.storeName,
-        associates: state.associates, workFiles: state.workFiles,
-        callIns: state.callIns, teamEvents: state.teamEvents, myEvents: state.myEvents,
-        checklists: state.checklists, teamNotes: state.teamNotes, myNotes: state.myNotes,
-        reviews: state.reviews, tasks: state.tasks, contacts: state.contacts,
+        user:          state.user,
+        storeId:       state.storeId,
+        storeName:     state.storeName,
+        associates:    state.associates,
+        workFiles:     state.workFiles,
+        callIns:       state.callIns,
+        teamEvents:    state.teamEvents,
+        myEvents:      state.myEvents,
+        checklists:    state.checklists,
+        teamNotes:     state.teamNotes,
+        myNotes:       state.myNotes,
+        reviews:       state.reviews,
+        tasks:         state.tasks,
+        contacts:      state.contacts,
         announcements: state.announcements,
       }),
     }

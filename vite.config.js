@@ -18,12 +18,23 @@ export default defineConfig({
   preview: {
     host: '0.0.0.0',
     port: parseInt(process.env.PORT || '4173', 10),
-    allowedHosts: 'all',
+    allowedHosts: true,
   },
   build: {
-    // Ensure sourcemaps are off in production for smaller bundles
     sourcemap: false,
-    // Raise chunk size warning limit slightly
     chunkSizeWarningLimit: 600,
+    // Disable modulePreload polyfill injection — prevents Firebase SDK chunks
+    // from being speculatively fetched before the user actually needs them.
+    modulePreload: false,
+    rollupOptions: {
+      output: {
+        // Keep Firebase chunks in a separate group so they are never eagerly loaded
+        manualChunks(id) {
+          if (id.includes('firebase') || id.includes('firestoreSync') || id.includes('firestoreService')) {
+            return 'firebase-lazy';
+          }
+        },
+      },
+    },
   },
 })

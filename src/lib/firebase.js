@@ -1,9 +1,11 @@
-// Firebase configuration — PX-1687 Manager App
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
-import { getAnalytics, isSupported } from 'firebase/analytics';
+// firebase.js — lazy-initialised so it never blocks app startup
+// getFirebaseModules() returns a promise; call it only after the UI renders.
+
+let _app     = null;
+let _auth    = null;
+let _db      = null;
+let _storage = null;
+let _initPromise = null;
 
 const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
@@ -15,13 +17,29 @@ const firebaseConfig = {
   measurementId:     import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-const app = initializeApp(firebaseConfig);
+export async function getFirebaseModules() {
+  if (_db) return { app: _app, auth: _auth, db: _db, storage: _storage };
+  if (_initPromise) return _initPromise;
 
-export const auth    = getAuth(app);
-export const db      = getFirestore(app);
-export const storage = getStorage(app);
+  _initPromise = (async () => {
+    const { initializeApp, getApps } = await import('firebase/app');
+    const { getAuth }    = await import('firebase/auth');
+    const { getFirestore } = await import('firebase/firestore');
+    const { getStorage } = await import('firebase/storage');
 
-// Analytics only in browsers that support it (not SSR/Node)
-export const analytics = isSupported().then(yes => yes ? getAnalytics(app) : null);
+    _app     = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+    _auth    = getAuth(_app);
+    _db      = getFirestore(_app);
+    _storage = getStorage(_app);
 
-export default app;
+    console.log('[Firebase] ✅ Initialized.');
+    return { app: _app, auth: _auth, db: _db, storage: _storage };
+  })();
+
+  return _initPromise;
+}
+
+// Synchronous accessors — only valid AFTER getFirebaseModules() resolves
+export const getDb      = () => _db;
+export const getAuth_   = () => _auth;
+export const getStorage_ = () => _storage;
