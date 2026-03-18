@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, PhoneMissed, Calendar, Pin, UserCheck, ChevronRight, Phone } from 'lucide-react';
+import { Users, PhoneMissed, Calendar, Pin, UserCheck, ChevronRight, Phone, Cloud, CloudOff } from 'lucide-react';
 import { format } from 'date-fns';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
@@ -25,7 +25,7 @@ function StatCard({ icon, count, label, color, bgColor }) {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { associates, callIns, teamEvents, teamNotes, myEvents } = useAppStore();
+  const { associates, callIns, teamEvents, teamNotes, myEvents, dbReady, dbMode, user } = useAppStore();
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const currentMonth = format(new Date(), 'yyyy-MM');
@@ -53,6 +53,19 @@ export default function Dashboard() {
       <DesktopPageHeader title="Dashboard" />
 
       <PreviewUpdateBanner previewUrl={PREVIEW_URL} />
+
+      {/* Cloud Sync Status Banner */}
+      {dbReady && dbMode === 'firestore' ? (
+        <div className="mx-4 mt-3 flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-xs text-green-700">
+          <Cloud size={13} className="flex-shrink-0" />
+          <span><strong>Cloud Sync Active</strong> · Real-time sync with Firebase</span>
+        </div>
+      ) : user && user.uid !== 'demo_user' ? (
+        <div className="mx-4 mt-3 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-700">
+          <CloudOff size={13} className="flex-shrink-0" />
+          <span>Local mode · <a href="/backup" className="underline font-semibold">Connect cloud sync</a> in Backup &amp; Restore</span>
+        </div>
+      ) : null}
 
       <div className="p-4 space-y-4">
         {/* Stats Grid */}

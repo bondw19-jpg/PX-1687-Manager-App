@@ -4,8 +4,8 @@ import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 
 export default function Login() {
-  const navigate    = useNavigate();
-  const { setUser } = useAppStore();
+  const navigate = useNavigate();
+  const { setUser, connectFirestore } = useAppStore();
 
   const [mode, setMode]         = useState('login'); // 'login' | 'register'
   const [email, setEmail]       = useState('');
@@ -56,6 +56,8 @@ export default function Login() {
         role:    'manager',
         storeId: 'store_1687',
       });
+      // Auto-connect Firestore sync after sign-in
+      connectFirestore().catch(() => {});
       navigate('/');
     } catch (err) {
       setError(friendlyError(err.code || err.message));
@@ -82,6 +84,8 @@ export default function Login() {
         role:    'manager',
         storeId: 'store_1687',
       });
+      // Auto-connect Firestore sync after registration
+      connectFirestore().catch(() => {});
       navigate('/');
     } catch (err) {
       setError(friendlyError(err.code || err.message));

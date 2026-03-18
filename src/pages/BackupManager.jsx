@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import {
   Download, Upload, RotateCcw, Trash2, CheckCircle2, AlertCircle,
   Clock, Database, Shield, ChevronDown, ChevronUp, X, HardDrive,
-  FileArchive, RefreshCw, Info
+  FileArchive, RefreshCw, Info, Cloud, CloudOff, Wifi, WifiOff, Zap, LogIn
 } from 'lucide-react';
 import { format } from 'date-fns';
 import Header from '../components/Header';
@@ -183,9 +183,80 @@ function BackupCard({ backup, onRestore, onDelete }) {
   );
 }
 
+// ── Firebase Sync Card ───────────────────────────────────────────────────────
+function FirebaseSyncCard({ dbReady, dbMode, user, onConnect, onSignIn, connecting }) {
+  const isCloud = dbReady && dbMode === 'firestore';
+  const hasAccount = user && user.uid && user.uid !== 'demo_user';
+
+  return (
+    <div className={`rounded-xl shadow-sm p-4 border ${
+      isCloud ? 'bg-green-50 border-green-200' : 'bg-white border-gray-100'
+    }`}>
+      <div className="flex items-center gap-3 mb-3">
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+          isCloud ? 'bg-green-100' : 'bg-gray-100'
+        }`}>
+          {isCloud ? <Cloud size={20} className="text-green-600" /> : <CloudOff size={20} className="text-gray-400" />}
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <h2 className="font-bold text-gray-800 text-sm">Cloud Sync</h2>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+              isCloud ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+            }`}>
+              {isCloud ? '● Live' : '○ Local Only'}
+            </span>
+          </div>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {isCloud
+              ? `Syncing to Firebase · ${user?.email || ''}`
+              : 'Data stored on this device only'}
+          </p>
+        </div>
+      </div>
+
+      {isCloud ? (
+        <div className="bg-green-100 rounded-xl p-3 flex items-center gap-2 text-xs text-green-800">
+          <CheckCircle2 size={14} className="flex-shrink-0" />
+          <span><strong>Connected!</strong> All data syncs in real-time across devices. Team members can access the app by signing in at the same URL.</span>
+        </div>
+      ) : !hasAccount ? (
+        <div className="space-y-3">
+          <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-xs text-amber-700">
+            <strong>Sign in to enable cloud sync.</strong> Create an account or sign in with your Firebase credentials to sync data across all team devices.
+          </div>
+          <button
+            onClick={onSignIn}
+            className="w-full flex items-center justify-center gap-2 bg-primary text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-primary-dark transition-colors"
+          >
+            <LogIn size={16} /> Sign In / Create Account
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-700">
+            <strong>Signed in as {user.name || user.email}.</strong> Connect to Firebase to enable real-time sync across all team devices.
+          </div>
+          <button
+            onClick={onConnect}
+            disabled={connecting}
+            className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 transition-colors"
+          >
+            {connecting
+              ? <><RefreshCw size={16} className="animate-spin" /> Connecting…</>
+              : <><Zap size={16} /> Connect to Cloud Sync</>
+            }
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function BackupManager() {
   const store = useAppStore();
+  const { dbReady, dbMode, user, connectFirestore } = useAppStore();
   const fileInputRef = useRef(null);
 
   const [backups, setBackups]       = useState(loadBackupList);
@@ -193,6 +264,7 @@ export default function BackupManager() {
   const [confirm, setConfirm]       = useState(null);
   const [creating, setCreating]     = useState(false);
   const [restoring, setRestoring]   = useState(false);
+  const [connecting, setConnecting] = useState(false);
 
   // ── Emergency recovery from auto-backup ──────────────────────────────────
   const emergencyData = (() => {
@@ -233,6 +305,23 @@ export default function BackupManager() {
   };
 
   const showToast = (message, type = 'success') => setToast({ message, type });
+
+  // ── Connect to Firebase Firestore ─────────────────────────────────────────
+  const handleConnectFirestore = async () => {
+    setConnecting(true);
+    try {
+      await connectFirestore();
+      showToast('✅ Cloud sync connected!');
+    } catch (e) {
+      showToast('Connection failed. Check Firebase setup.', 'error');
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const handleSignIn = () => {
+    window.location.href = '/login';
+  };
 
   // ── Create manual backup ──────────────────────────────────────────────────
   const handleCreateBackup = () => {
@@ -409,6 +498,16 @@ export default function BackupManager() {
       <DesktopPageHeader title="Backup & Restore" />
 
       <div className="p-4 space-y-4 max-w-2xl mx-auto">
+
+        {/* Firebase Sync Card */}
+        <FirebaseSyncCard
+          dbReady={dbReady}
+          dbMode={dbMode}
+          user={user}
+          onConnect={handleConnectFirestore}
+          onSignIn={handleSignIn}
+          connecting={connecting}
+        />
 
         {/* Current Data Card */}
         <div className="bg-white rounded-xl shadow-sm p-4">
