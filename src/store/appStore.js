@@ -85,7 +85,31 @@ const closingChecklist = [
 // ─────────────────────────────────────────────────────────────────────────────
 export const useAppStore = create(
   persist(
-    (set, get) => ({
+    (set, get) => {
+
+      // ── Firestore write helpers ─────────────────────────────────────────────
+      // Each helper checks dbMode first — if not 'firestore', it's a no-op.
+      // The dynamic import is cached by the browser after the first call.
+      const fsWrite = (coll, id, data) => {
+        if (get().dbMode !== 'firestore') return;
+        import('../lib/firestoreSync')
+          .then(({ fsSetItem }) => fsSetItem(coll, id, data))
+          .catch(() => {});
+      };
+      const fsUpdate = (coll, id, data) => {
+        if (get().dbMode !== 'firestore') return;
+        import('../lib/firestoreSync')
+          .then(({ fsUpdateItem }) => fsUpdateItem(coll, id, data))
+          .catch(() => {});
+      };
+      const fsDel = (coll, id) => {
+        if (get().dbMode !== 'firestore') return;
+        import('../lib/firestoreSync')
+          .then(({ fsDeleteItem }) => fsDeleteItem(coll, id))
+          .catch(() => {});
+      };
+
+      return {
       // ── Auth / Store Info ─────────────────────────────────────────────────
       user: null,
       storeId: 'store_1687',
@@ -100,23 +124,25 @@ export const useAppStore = create(
       addAssociate: (a) => {
         const doc = { ...a, id: `assoc_${Date.now()}`, createdAt: new Date().toISOString() };
         set(s => ({ associates: [...s.associates, doc] }));
+        fsWrite('associates', doc.id, doc);
       },
       updateAssociate: (id, d) => {
         set(s => ({ associates: s.associates.map(a => a.id === id ? { ...a, ...d } : a) }));
+        fsUpdate('associates', id, d);
       },
       deleteAssociate: (id) => {
         set(s => ({ associates: s.associates.filter(a => a.id !== id) }));
+        fsDel('associates', id);
       },
 
       // ── Work Files (SHARED — synced to Firestore when connected) ─────────
       workFiles: {},
       saveWorkFile: (associateId, fileData) => {
         set(s => ({ workFiles: { ...s.workFiles, [associateId]: fileData } }));
-        // Push to Firestore if sync is active
         if (get().dbMode === 'firestore') {
-          import('../lib/firestoreSync').then(({ fsSaveWorkFile }) => {
-            fsSaveWorkFile(associateId, fileData);
-          }).catch(() => {});
+          import('../lib/firestoreSync')
+            .then(({ fsSaveWorkFile }) => fsSaveWorkFile(associateId, fileData))
+            .catch(() => {});
         }
       },
 
@@ -125,23 +151,30 @@ export const useAppStore = create(
       addCallIn: (c) => {
         const doc = { ...c, id: `callin_${Date.now()}`, createdAt: new Date().toISOString() };
         set(s => ({ callIns: [doc, ...s.callIns] }));
+        fsWrite('callIns', doc.id, doc);
       },
       deleteCallIn: (id) => {
         set(s => ({ callIns: s.callIns.filter(c => c.id !== id) }));
+        fsDel('callIns', id);
       },
 
       // ── Calendar ──────────────────────────────────────────────────────────
+      // teamEvents = SHARED; myEvents = PRIVATE (local only, never synced)
       teamEvents: [], myEvents: [],
       addTeamEvent: (e) => {
         const doc = { ...e, id: `event_${Date.now()}`, createdAt: new Date().toISOString() };
         set(s => ({ teamEvents: [...s.teamEvents, doc] }));
+        fsWrite('teamEvents', doc.id, doc);
       },
       updateTeamEvent: (id, d) => {
         set(s => ({ teamEvents: s.teamEvents.map(e => e.id === id ? { ...e, ...d } : e) }));
+        fsUpdate('teamEvents', id, d);
       },
       deleteTeamEvent: (id) => {
         set(s => ({ teamEvents: s.teamEvents.filter(e => e.id !== id) }));
+        fsDel('teamEvents', id);
       },
+      // myEvents — local only, no Firestore calls
       addMyEvent: (e) => {
         const doc = { ...e, id: `myevent_${Date.now()}`, createdAt: new Date().toISOString() };
         set(s => ({ myEvents: [...s.myEvents, doc] }));
@@ -150,7 +183,7 @@ export const useAppStore = create(
         set(s => ({ myEvents: s.myEvents.filter(e => e.id !== id) }));
       },
 
-      // ── Checklists ────────────────────────────────────────────────────────
+      // ── Checklists (SHARED) ───────────────────────────────────────────────
       checklists: {},
       checklistDefaults: { opening: openingChecklist, mid: midChecklist, closing: closingChecklist },
       getChecklist: (date, shift) => {
@@ -161,20 +194,30 @@ export const useAppStore = create(
       },
       saveChecklist: (date, shift, items) => {
         set(s => ({ checklists: { ...s.checklists, [`${date}_${shift}`]: items } }));
+        if (get().dbMode === 'firestore') {
+          import('../lib/firestoreSync')
+            .then(({ fsSaveChecklist }) => fsSaveChecklist(date, shift, items))
+            .catch(() => {});
+        }
       },
 
       // ── Notes ─────────────────────────────────────────────────────────────
+      // teamNotes = SHARED; myNotes = PRIVATE (local only, never synced)
       teamNotes: [], myNotes: [],
       addTeamNote: (n) => {
         const doc = { ...n, id: `note_${Date.now()}`, createdAt: new Date().toISOString(), pinned: false, attachments: n.attachments || [] };
         set(s => ({ teamNotes: [doc, ...s.teamNotes] }));
+        fsWrite('teamNotes', doc.id, doc);
       },
       updateTeamNote: (id, d) => {
         set(s => ({ teamNotes: s.teamNotes.map(n => n.id === id ? { ...n, ...d } : n) }));
+        fsUpdate('teamNotes', id, d);
       },
       deleteTeamNote: (id) => {
         set(s => ({ teamNotes: s.teamNotes.filter(n => n.id !== id) }));
+        fsDel('teamNotes', id);
       },
+      // myNotes — local only, no Firestore calls
       addMyNote: (n) => {
         const doc = { ...n, id: `mynote_${Date.now()}`, createdAt: new Date().toISOString(), pinned: false, attachments: n.attachments || [] };
         set(s => ({ myNotes: [doc, ...s.myNotes] }));
@@ -191,12 +234,15 @@ export const useAppStore = create(
       addReview: (r) => {
         const doc = { ...r, id: `review_${Date.now()}`, createdAt: new Date().toISOString() };
         set(s => ({ reviews: [doc, ...s.reviews] }));
+        fsWrite('reviews', doc.id, doc);
       },
       updateReview: (id, d) => {
         set(s => ({ reviews: s.reviews.map(r => r.id === id ? { ...r, ...d } : r) }));
+        fsUpdate('reviews', id, d);
       },
       deleteReview: (id) => {
         set(s => ({ reviews: s.reviews.filter(r => r.id !== id) }));
+        fsDel('reviews', id);
       },
 
       // ── Tasks ─────────────────────────────────────────────────────────────
@@ -204,12 +250,15 @@ export const useAppStore = create(
       addTask: (t) => {
         const doc = { ...t, id: `task_${Date.now()}`, createdAt: new Date().toISOString() };
         set(s => ({ tasks: [doc, ...s.tasks] }));
+        fsWrite('tasks', doc.id, doc);
       },
       updateTask: (id, d) => {
         set(s => ({ tasks: s.tasks.map(t => t.id === id ? { ...t, ...d } : t) }));
+        fsUpdate('tasks', id, d);
       },
       deleteTask: (id) => {
         set(s => ({ tasks: s.tasks.filter(t => t.id !== id) }));
+        fsDel('tasks', id);
       },
 
       // ── Contacts ──────────────────────────────────────────────────────────
@@ -217,12 +266,15 @@ export const useAppStore = create(
       addContact: (c) => {
         const doc = { ...c, id: `contact_${Date.now()}` };
         set(s => ({ contacts: [...s.contacts, doc] }));
+        fsWrite('contacts', doc.id, doc);
       },
       updateContact: (id, d) => {
         set(s => ({ contacts: s.contacts.map(c => c.id === id ? { ...c, ...d } : c) }));
+        fsUpdate('contacts', id, d);
       },
       deleteContact: (id) => {
         set(s => ({ contacts: s.contacts.filter(c => c.id !== id) }));
+        fsDel('contacts', id);
       },
 
       // ── Announcements ─────────────────────────────────────────────────────
@@ -230,16 +282,17 @@ export const useAppStore = create(
       addAnnouncement: (a) => {
         const doc = { ...a, id: `ann_${Date.now()}`, createdAt: new Date().toISOString() };
         set(s => ({ announcements: [doc, ...s.announcements] }));
+        fsWrite('announcements', doc.id, doc);
       },
       deleteAnnouncement: (id) => {
         set(s => ({ announcements: s.announcements.filter(a => a.id !== id) }));
+        fsDel('announcements', id);
       },
 
-      // ── Firebase sync status (UI indicator only — no auto-connect) ────────
+      // ── Firebase sync status ──────────────────────────────────────────────
       dbReady: false,
       dbMode: 'local', // 'local' | 'firestore'
 
-      // Called explicitly from BackupManager when user sets up Firestore
       connectFirestore: async () => {
         try {
           const { initFirestoreSync } = await import('../lib/firestoreSync');
@@ -248,7 +301,8 @@ export const useAppStore = create(
           console.warn('[PandaStore] Firestore connect failed:', e?.message);
         }
       },
-    }),
+    };
+    },
     {
       name: 'panda-manager-storage',
       storage: createBackupStorage(),
