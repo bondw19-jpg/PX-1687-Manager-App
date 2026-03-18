@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { X, Plus, Trash2, RefreshCw, Printer } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 
@@ -17,6 +17,31 @@ const KEY_LEGEND = [
 
 function emptyRow() {
   return { id: Date.now() + Math.random(), date: '', key: '', details: '' };
+}
+
+// Auto-expanding textarea — grows with content, never shows scrollbar
+function AutoTextarea({ value, onChange, placeholder, className }) {
+  const ref = useRef(null);
+
+  // Resize whenever value changes
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      className={className}
+      style={{ overflow: 'hidden', minHeight: '28px' }}
+    />
+  );
 }
 
 export default function WorkFileModal({ associate, onClose }) {
@@ -169,36 +194,39 @@ export default function WorkFileModal({ associate, onClose }) {
 
               {/* Rows */}
               {rows.map((row, idx) => (
-                <div key={row.id} className={`grid grid-cols-[90px_50px_1fr] border-t border-gray-100 group ${
+                <div key={row.id} className={`grid grid-cols-[90px_50px_1fr] border-t border-gray-100 group items-start ${
                   idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'
                 }`}>
-                  <div className="border-r border-gray-100">
+                  {/* DATE */}
+                  <div className="border-r border-gray-100 self-stretch">
                     <input
-                      className="w-full px-2 py-1.5 text-xs bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-primary"
+                      className="w-full h-full px-2 py-1.5 text-xs bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-primary"
                       placeholder="MM/DD/YY"
                       value={row.date}
                       onChange={e => updateRow(row.id, 'date', e.target.value)}
                     />
                   </div>
-                  <div className="border-r border-gray-100">
+                  {/* KEY */}
+                  <div className="border-r border-gray-100 self-stretch">
                     <input
-                      className="w-full px-2 py-1.5 text-xs bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-primary uppercase"
+                      className="w-full h-full px-2 py-1.5 text-xs bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-primary uppercase"
                       placeholder="A-J"
                       maxLength={2}
                       value={row.key}
                       onChange={e => updateRow(row.id, 'key', e.target.value.toUpperCase())}
                     />
                   </div>
-                  <div className="flex items-center">
-                    <input
-                      className="flex-1 px-2 py-1.5 text-xs bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-primary"
+                  {/* TOPICS & DETAILS — auto-expanding textarea */}
+                  <div className="flex items-start min-h-[32px]">
+                    <AutoTextarea
+                      className="flex-1 px-2 py-1.5 text-xs bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-primary resize-none leading-relaxed"
                       placeholder="Details..."
                       value={row.details}
                       onChange={e => updateRow(row.id, 'details', e.target.value)}
                     />
                     <button
                       onClick={() => removeRow(row.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-red-400 hover:text-red-600 transition-opacity mr-1"
+                      className="opacity-0 group-hover:opacity-100 p-1 mt-1 text-red-400 hover:text-red-600 transition-opacity mr-1 flex-shrink-0"
                     >
                       <Trash2 size={12} />
                     </button>
