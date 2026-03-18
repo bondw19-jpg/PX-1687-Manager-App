@@ -1,5 +1,6 @@
-import React, { Suspense, lazy, Component } from 'react';
+import React, { Suspense, lazy, Component, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useAppStore } from './store/appStore';
 import Layout from './components/Layout';
 
 // Lazy load pages
@@ -67,11 +68,35 @@ class ErrorBoundary extends Component {
   }
 }
 
+// ── Auto-connect Firestore on startup if user is already signed in ────────────
+// Runs once after mount. If a real (non-demo) user is persisted in localStorage,
+// silently connects Firestore so cloud sync is active without any button press.
+function AutoConnectFirestore() {
+  const { user, dbReady, connectFirestore } = useAppStore();
+
+  useEffect(() => {
+    // Only auto-connect if:
+    // 1. A real (non-demo) user is persisted
+    // 2. Firestore is not already connected
+    const isRealUser = user && user.uid && user.uid !== 'demo_user';
+    if (isRealUser && !dbReady) {
+      // Small delay so the UI renders first, then sync starts in background
+      const t = setTimeout(() => {
+        connectFirestore().catch(() => {});
+      }, 1000);
+      return () => clearTimeout(t);
+    }
+  }, [user, dbReady, connectFirestore]);
+
+  return null; // renders nothing — side-effect only
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
+        <AutoConnectFirestore />
         <Suspense fallback={<LoadingSpinner />}>
           <Routes>
             <Route path="/login"         element={<Login />} />
