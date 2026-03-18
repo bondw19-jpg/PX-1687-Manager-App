@@ -102,7 +102,8 @@ function AddEventModal({ selectedDate, onClose, onSave }) {
 }
 
 export default function CalendarPage() {
-  const { teamEvents, myEvents, addTeamEvent, deleteTeamEvent, addMyEvent, deleteMyEvent } = useAppStore();
+  const { teamEvents, myEvents, addTeamEvent, deleteTeamEvent, addMyEvent, deleteMyEvent, dbMode, dbReady } = useAppStore();
+  const isCloudSync = dbReady && dbMode === 'firestore';
   const [activeTab, setActiveTab] = useState('team');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
@@ -164,7 +165,10 @@ export default function CalendarPage() {
           <span>
             <strong>{activeTab === 'team' ? 'Team Calendar' : 'My Calendar'}</strong>
             {' — '}
-            {activeTab === 'team' ? 'events visible to all team members' : 'private to you only'}
+            {activeTab === 'team'
+              ? (isCloudSync ? '☁️ synced across all devices' : 'events visible to all team members')
+              : (isCloudSync ? '🔒 private · saved on this device only' : 'private to you only')
+            }
           </span>
         </div>
 

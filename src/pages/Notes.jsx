@@ -580,7 +580,9 @@ export default function Notes() {
     teamNotes, myNotes,
     addTeamNote, updateTeamNote, deleteTeamNote,
     addMyNote, updateMyNote, deleteMyNote,
+    dbMode, dbReady,
   } = useAppStore();
+  const isCloudSync = dbReady && dbMode === 'firestore';
 
   const [activeTab, setActiveTab]   = useState('team');
   const [search, setSearch]         = useState('');
@@ -645,7 +647,10 @@ export default function Notes() {
             <span>{activeTab === 'team' ? '👥' : '👤'}</span>
             <span>
               <strong>{activeTab === 'team' ? 'Team Notes' : 'My Notes'}</strong>
-              {' — '}{activeTab === 'team' ? 'shared with all team members' : 'private to you'}
+              {' — '}{activeTab === 'team'
+                ? (isCloudSync ? '☁️ synced across all devices' : 'shared with all team members')
+                : (isCloudSync ? '🔒 private · saved on this device only' : 'private to you')
+              }
             </span>
           </div>
           {pinnedCount > 0 && (

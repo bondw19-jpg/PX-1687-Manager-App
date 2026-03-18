@@ -108,10 +108,16 @@ export const useAppStore = create(
         set(s => ({ associates: s.associates.filter(a => a.id !== id) }));
       },
 
-      // ── Work Files ────────────────────────────────────────────────────────
+      // ── Work Files (SHARED — synced to Firestore when connected) ─────────
       workFiles: {},
       saveWorkFile: (associateId, fileData) => {
         set(s => ({ workFiles: { ...s.workFiles, [associateId]: fileData } }));
+        // Push to Firestore if sync is active
+        if (get().dbMode === 'firestore') {
+          import('../lib/firestoreSync').then(({ fsSaveWorkFile }) => {
+            fsSaveWorkFile(associateId, fileData);
+          }).catch(() => {});
+        }
       },
 
       // ── Call-Ins ──────────────────────────────────────────────────────────
