@@ -167,7 +167,7 @@ export default function CalendarPage() {
             {' — '}
             {activeTab === 'team'
               ? (isCloudSync ? '☁️ synced across all devices' : 'events visible to all team members')
-              : (isCloudSync ? '🔒 private · saved on this device only' : 'private to you only')
+              : (isCloudSync ? '🔒 private · backed up to your account' : 'private to you only')
             }
           </span>
         </div>

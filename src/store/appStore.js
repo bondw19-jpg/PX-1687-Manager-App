@@ -90,6 +90,7 @@ export const useAppStore = create(
       // ── Firestore write helpers ─────────────────────────────────────────────
       // Each helper checks dbMode first — if not 'firestore', it's a no-op.
       // The dynamic import is cached by the browser after the first call.
+      // Shared collection helpers (stores/store_1687/…)
       const fsWrite = (coll, id, data) => {
         if (get().dbMode !== 'firestore') return;
         import('../lib/firestoreSync')
@@ -106,6 +107,25 @@ export const useAppStore = create(
         if (get().dbMode !== 'firestore') return;
         import('../lib/firestoreSync')
           .then(({ fsDeleteItem }) => fsDeleteItem(coll, id))
+          .catch(() => {});
+      };
+      // Private user collection helpers (users/{uid}/…)
+      const fsWritePrivate = (coll, id, data) => {
+        if (get().dbMode !== 'firestore') return;
+        import('../lib/firestoreSync')
+          .then(({ fsSetPrivateItem }) => fsSetPrivateItem(coll, id, data))
+          .catch(() => {});
+      };
+      const fsUpdatePrivate = (coll, id, data) => {
+        if (get().dbMode !== 'firestore') return;
+        import('../lib/firestoreSync')
+          .then(({ fsUpdatePrivateItem }) => fsUpdatePrivateItem(coll, id, data))
+          .catch(() => {});
+      };
+      const fsDelPrivate = (coll, id) => {
+        if (get().dbMode !== 'firestore') return;
+        import('../lib/firestoreSync')
+          .then(({ fsDeletePrivateItem }) => fsDeletePrivateItem(coll, id))
           .catch(() => {});
       };
 
@@ -174,13 +194,15 @@ export const useAppStore = create(
         set(s => ({ teamEvents: s.teamEvents.filter(e => e.id !== id) }));
         fsDel('teamEvents', id);
       },
-      // myEvents — local only, no Firestore calls
+      // myEvents — PRIVATE cloud backup (users/{uid}/myEvents)
       addMyEvent: (e) => {
         const doc = { ...e, id: `myevent_${Date.now()}`, createdAt: new Date().toISOString() };
         set(s => ({ myEvents: [...s.myEvents, doc] }));
+        fsWritePrivate('myEvents', doc.id, doc);
       },
       deleteMyEvent: (id) => {
         set(s => ({ myEvents: s.myEvents.filter(e => e.id !== id) }));
+        fsDelPrivate('myEvents', id);
       },
 
       // ── Checklists (SHARED) ───────────────────────────────────────────────
@@ -217,16 +239,19 @@ export const useAppStore = create(
         set(s => ({ teamNotes: s.teamNotes.filter(n => n.id !== id) }));
         fsDel('teamNotes', id);
       },
-      // myNotes — local only, no Firestore calls
+      // myNotes — PRIVATE cloud backup (users/{uid}/myNotes)
       addMyNote: (n) => {
         const doc = { ...n, id: `mynote_${Date.now()}`, createdAt: new Date().toISOString(), pinned: false, attachments: n.attachments || [] };
         set(s => ({ myNotes: [doc, ...s.myNotes] }));
+        fsWritePrivate('myNotes', doc.id, doc);
       },
       updateMyNote: (id, d) => {
         set(s => ({ myNotes: s.myNotes.map(n => n.id === id ? { ...n, ...d } : n) }));
+        fsUpdatePrivate('myNotes', id, d);
       },
       deleteMyNote: (id) => {
         set(s => ({ myNotes: s.myNotes.filter(n => n.id !== id) }));
+        fsDelPrivate('myNotes', id);
       },
 
       // ── Reviews ───────────────────────────────────────────────────────────

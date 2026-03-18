@@ -649,7 +649,7 @@ export default function Notes() {
               <strong>{activeTab === 'team' ? 'Team Notes' : 'My Notes'}</strong>
               {' — '}{activeTab === 'team'
                 ? (isCloudSync ? '☁️ synced across all devices' : 'shared with all team members')
-                : (isCloudSync ? '🔒 private · saved on this device only' : 'private to you')
+                : (isCloudSync ? '🔒 private · backed up to your account' : 'private to you')
               }
             </span>
           </div>
