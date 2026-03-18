@@ -68,27 +68,26 @@ class ErrorBoundary extends Component {
   }
 }
 
-// ── Auto-connect Firestore on startup if user is already signed in ────────────
-// Runs once after mount. If a real (non-demo) user is persisted in localStorage,
-// silently connects Firestore so cloud sync is active without any button press.
+// ── Auto-connect Firestore whenever a real user is present ───────────────────
+// Re-runs any time the user object changes (login / logout / app startup).
+// Uses a 1-second delay so the UI renders first.
 function AutoConnectFirestore() {
-  const { user, dbReady, connectFirestore } = useAppStore();
+  const { user, dbReady, dbMode, connectFirestore } = useAppStore();
 
   useEffect(() => {
-    // Only auto-connect if:
-    // 1. A real (non-demo) user is persisted
-    // 2. Firestore is not already connected
     const isRealUser = user && user.uid && user.uid !== 'demo_user';
-    if (isRealUser && !dbReady) {
-      // Small delay so the UI renders first, then sync starts in background
+    // Connect when: real user signed in AND not already syncing
+    if (isRealUser && !(dbReady && dbMode === 'firestore')) {
       const t = setTimeout(() => {
-        connectFirestore().catch(() => {});
-      }, 1000);
+        connectFirestore().catch((e) => {
+          console.warn('[AutoConnect] Firestore connect failed:', e?.message);
+        });
+      }, 800);
       return () => clearTimeout(t);
     }
-  }, [user, dbReady, connectFirestore]);
+  }, [user?.uid]); // re-run only when uid actually changes
 
-  return null; // renders nothing — side-effect only
+  return null;
 }
 
 // ── App ───────────────────────────────────────────────────────────────────────

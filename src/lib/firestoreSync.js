@@ -1,10 +1,9 @@
 // firestoreSync.js
 // ─────────────────────────────────────────────────────────────────────────────
-// This module is ONLY imported dynamically when the user explicitly connects
-// Firebase from the Backup & Restore page. It is NEVER loaded at app startup.
+// Loaded dynamically the first time the user connects Firebase.
 //
 // STORAGE PATHS:
-//   SHARED  (all team members, read/write by any authenticated user):
+//   SHARED  (all team members):
 //     stores/store_1687/associates/{id}
 //     stores/store_1687/callIns/{id}
 //     stores/store_1687/teamEvents/{id}
@@ -16,15 +15,15 @@
 //     stores/store_1687/workFiles/{associateId}
 //     stores/store_1687/checklists/{date_shift}
 //
-//   PRIVATE (per-user cloud backup, only the owner can read/write):
-//     users/{uid}/myNotes/{id}    — Personal Notes
-//     users/{uid}/myEvents/{id}   — Personal Calendar
+//   PRIVATE (per-user, only the owner can read/write):
+//     users/{uid}/myNotes/{id}
+//     users/{uid}/myEvents/{id}
 // ─────────────────────────────────────────────────────────────────────────────
 
 const STORE_ID = 'store_1687';
 
-let _db   = null;
-let _uid  = null;          // current user's UID, set on connect
+let _db            = null;
+let _uid           = null;   // current user's UID — updated every connect()
 let _syncActive    = false;
 let _unsubscribers = [];
 
@@ -37,7 +36,10 @@ async function getDb() {
   return _db;
 }
 
-// ── Shared collection helpers (stores/store_1687/…) ──────────────────────────
+// ── Public accessor for _uid (lets appStore helpers read it synchronously) ────
+export function getCurrentUid() { return _uid; }
+
+// ── Shared collection path helpers ───────────────────────────────────────────
 async function storeColl(name) {
   const { collection } = await import('firebase/firestore');
   const db = await getDb();
@@ -50,7 +52,7 @@ async function storeItem(name, id) {
   return doc(db, 'stores', STORE_ID, name, id);
 }
 
-// ── Private user collection helpers (users/{uid}/…) ──────────────────────────
+// ── Private user path helpers (users/{uid}/…) ─────────────────────────────────
 async function userColl(uid, name) {
   const { collection } = await import('firebase/firestore');
   const db = await getDb();
@@ -63,14 +65,15 @@ async function userItem(uid, name, id) {
   return doc(db, 'users', uid, name, id);
 }
 
-// ── Generic write helpers for SHARED collections ─────────────────────────────
+// ── SHARED write helpers ──────────────────────────────────────────────────────
+
 export async function fsSetItem(collName, id, data) {
   try {
     const { setDoc, serverTimestamp } = await import('firebase/firestore');
     const ref = await storeItem(collName, id);
     await setDoc(ref, { ...data, _updatedAt: serverTimestamp() }, { merge: true });
   } catch (e) {
-    console.warn(`[Firestore] setItem(${collName}/${id}):`, e?.code || e?.message);
+    console.warn(`[FS] set(${collName}/${id}):`, e?.code || e?.message);
   }
 }
 
@@ -79,13 +82,15 @@ export async function fsUpdateItem(collName, id, data) {
     const { updateDoc, serverTimestamp } = await import('firebase/firestore');
     const ref = await storeItem(collName, id);
     await updateDoc(ref, { ...data, _updatedAt: serverTimestamp() });
-  } catch (e) {
-    // Doc may not exist yet — fall back to setDoc
+  } catch {
+    // Doc may not exist yet — fall back to setDoc (merge)
     try {
       const { setDoc, serverTimestamp } = await import('firebase/firestore');
       const ref = await storeItem(collName, id);
       await setDoc(ref, { ...data, _updatedAt: serverTimestamp() }, { merge: true });
-    } catch {}
+    } catch (e2) {
+      console.warn(`[FS] update(${collName}/${id}):`, e2?.code || e2?.message);
+    }
   }
 }
 
@@ -95,53 +100,63 @@ export async function fsDeleteItem(collName, id) {
     const ref = await storeItem(collName, id);
     await deleteDoc(ref);
   } catch (e) {
-    console.warn(`[Firestore] deleteItem(${collName}/${id}):`, e?.code || e?.message);
+    console.warn(`[FS] delete(${collName}/${id}):`, e?.code || e?.message);
   }
 }
 
-// ── Private write helpers (users/{uid}/…) ────────────────────────────────────
-export async function fsSetPrivateItem(collName, id, data) {
-  const uid = _uid;
-  if (!uid) return; // not signed in — silently skip
+// ── PRIVATE write helpers (users/{uid}/…) ─────────────────────────────────────
+// NOTE: uid is read at call-time from the module-level _uid variable.
+// If sync hasn't started yet (uid null), we fall back to reading from the
+// store-level getter passed during connect. A getter is NOT available here,
+// so we accept an optional explicit uid override instead.
+
+export async function fsSetPrivateItem(collName, id, data, uidOverride) {
+  const uid = uidOverride || _uid;
+  if (!uid) {
+    console.warn(`[FS] setPrivate(${collName}/${id}): no uid — skipping`);
+    return;
+  }
   try {
     const { setDoc, serverTimestamp } = await import('firebase/firestore');
     const ref = await userItem(uid, collName, id);
     await setDoc(ref, { ...data, _updatedAt: serverTimestamp() }, { merge: true });
   } catch (e) {
-    console.warn(`[Firestore] setPrivate(${collName}/${id}):`, e?.code || e?.message);
+    console.warn(`[FS] setPrivate(${collName}/${id}):`, e?.code || e?.message);
   }
 }
 
-export async function fsUpdatePrivateItem(collName, id, data) {
-  const uid = _uid;
+export async function fsUpdatePrivateItem(collName, id, data, uidOverride) {
+  const uid = uidOverride || _uid;
   if (!uid) return;
   try {
     const { updateDoc, serverTimestamp } = await import('firebase/firestore');
     const ref = await userItem(uid, collName, id);
     await updateDoc(ref, { ...data, _updatedAt: serverTimestamp() });
-  } catch (e) {
-    // Fall back to setDoc if doc doesn't exist yet
+  } catch {
     try {
       const { setDoc, serverTimestamp } = await import('firebase/firestore');
       const ref = await userItem(uid, collName, id);
       await setDoc(ref, { ...data, _updatedAt: serverTimestamp() }, { merge: true });
-    } catch {}
+    } catch (e2) {
+      console.warn(`[FS] updatePrivate(${collName}/${id}):`, e2?.code || e2?.message);
+    }
   }
 }
 
-export async function fsDeletePrivateItem(collName, id) {
-  const uid = _uid;
+export async function fsDeletePrivateItem(collName, id, uidOverride) {
+  const uid = uidOverride || _uid;
   if (!uid) return;
   try {
     const { deleteDoc } = await import('firebase/firestore');
     const ref = await userItem(uid, collName, id);
     await deleteDoc(ref);
   } catch (e) {
-    console.warn(`[Firestore] deletePrivate(${collName}/${id}):`, e?.code || e?.message);
+    console.warn(`[FS] deletePrivate(${collName}/${id}):`, e?.code || e?.message);
   }
 }
 
-// ── Checklist & WorkFile helpers (shared) ────────────────────────────────────
+// ── Checklist & WorkFile (special-shape shared docs) ─────────────────────────
+
 export async function fsSaveChecklist(date, shift, items) {
   try {
     const { setDoc, serverTimestamp, doc } = await import('firebase/firestore');
@@ -149,7 +164,7 @@ export async function fsSaveChecklist(date, shift, items) {
     const ref = doc(db, 'stores', STORE_ID, 'checklists', `${date}_${shift}`);
     await setDoc(ref, { date, shift, items, _updatedAt: serverTimestamp() });
   } catch (e) {
-    console.warn(`[Firestore] saveChecklist(${date}/${shift}):`, e?.code || e?.message);
+    console.warn(`[FS] saveChecklist(${date}/${shift}):`, e?.code || e?.message);
   }
 }
 
@@ -160,19 +175,16 @@ export async function fsSaveWorkFile(associateId, fileData) {
     const ref = doc(db, 'stores', STORE_ID, 'workFiles', associateId);
     await setDoc(ref, { associateId, ...fileData, _updatedAt: serverTimestamp() });
   } catch (e) {
-    console.warn(`[Firestore] saveWorkFile(${associateId}):`, e?.code || e?.message);
+    console.warn(`[FS] saveWorkFile(${associateId}):`, e?.code || e?.message);
   }
 }
 
-// ── Batch import on first connect ─────────────────────────────────────────────
-// Shared data → stores/store_1687/…
-// Private data → users/{uid}/… (only if uid available)
+// ── Batch import (first-time migration) ───────────────────────────────────────
 export async function batchImportToFirestore(data, uid) {
   const { setDoc, serverTimestamp, doc } = await import('firebase/firestore');
   const db = await getDb();
   let count = 0;
 
-  // Shared collections
   const SHARED_COLLS = [
     'associates', 'callIns', 'teamEvents',
     'teamNotes', 'reviews', 'tasks', 'contacts', 'announcements',
@@ -190,7 +202,6 @@ export async function batchImportToFirestore(data, uid) {
     }
   }
 
-  // Shared workFiles map
   if (data.workFiles && typeof data.workFiles === 'object') {
     for (const [associateId, fileData] of Object.entries(data.workFiles)) {
       if (!associateId || !fileData) continue;
@@ -202,7 +213,6 @@ export async function batchImportToFirestore(data, uid) {
     }
   }
 
-  // Private collections — only migrate if we have a uid
   if (uid) {
     for (const coll of ['myNotes', 'myEvents']) {
       const items = data[coll];
@@ -221,78 +231,82 @@ export async function batchImportToFirestore(data, uid) {
   return count;
 }
 
-// ── Real-time listener helpers ────────────────────────────────────────────────
+// ── Snapshot helpers ──────────────────────────────────────────────────────────
 function subscribeCollection(collName, callback) {
-  let unsubscribe = () => {};
+  let unsub = () => {};
   (async () => {
     try {
       const { onSnapshot } = await import('firebase/firestore');
       const coll = await storeColl(collName);
-      unsubscribe = onSnapshot(
+      unsub = onSnapshot(
         coll,
         (snap) => callback(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
-        (err) => console.warn(`[Firestore] snapshot(${collName}):`, err?.code || err?.message)
+        (err)  => console.warn(`[FS] snapshot(${collName}):`, err?.code || err?.message)
       );
     } catch (e) {
-      console.warn(`[Firestore] subscribe(${collName}):`, e?.message);
+      console.warn(`[FS] subscribe(${collName}):`, e?.message);
     }
   })();
-  return () => unsubscribe();
+  return () => unsub();
 }
 
 function subscribeUserCollection(uid, collName, callback) {
-  let unsubscribe = () => {};
+  let unsub = () => {};
   (async () => {
     try {
       const { onSnapshot } = await import('firebase/firestore');
       const coll = await userColl(uid, collName);
-      unsubscribe = onSnapshot(
+      unsub = onSnapshot(
         coll,
         (snap) => callback(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
-        (err) => console.warn(`[Firestore] snapshot(users/${uid}/${collName}):`, err?.code || err?.message)
+        (err)  => console.warn(`[FS] snapshot(users/${uid}/${collName}):`, err?.code || err?.message)
       );
     } catch (e) {
-      console.warn(`[Firestore] subscribe(users/${uid}/${collName}):`, e?.message);
+      console.warn(`[FS] subscribe(users/${uid}/${collName}):`, e?.message);
     }
   })();
-  return () => unsubscribe();
+  return () => unsub();
 }
 
 function subscribeWorkFiles(callback) {
-  let unsubscribe = () => {};
+  let unsub = () => {};
   (async () => {
     try {
       const { onSnapshot } = await import('firebase/firestore');
       const coll = await storeColl('workFiles');
-      unsubscribe = onSnapshot(
+      unsub = onSnapshot(
         coll,
         (snap) => {
           const map = {};
           snap.docs.forEach(d => { map[d.id] = d.data(); });
           callback(map);
         },
-        (err) => console.warn(`[Firestore] snapshot(workFiles):`, err?.code || err?.message)
+        (err) => console.warn(`[FS] snapshot(workFiles):`, err?.code || err?.message)
       );
     } catch (e) {
-      console.warn(`[Firestore] subscribe(workFiles):`, e?.message);
+      console.warn(`[FS] subscribe(workFiles):`, e?.message);
     }
   })();
-  return () => unsubscribe();
+  return () => unsub();
 }
 
 // ── Main: init Firestore sync ─────────────────────────────────────────────────
 export async function initFirestoreSync(set, get) {
-  if (_syncActive) return;
+  // Allow re-connect after logout: tear down old listeners first
+  if (_syncActive) {
+    disconnectFirestore(set);
+  }
 
   try {
-    console.log('[Firestore] Connecting...');
+    console.log('[FS] Connecting…');
     await getDb();
 
-    // Store the current user's UID for private path writes
+    // Capture UID — MUST happen before any private write helpers can fire
     const uid = get().user?.uid || null;
     _uid = uid;
+    console.log('[FS] uid =', uid || '(none — shared data only)');
 
-    // ── Shared collections ──────────────────────────────────────────────────
+    // ── Shared collections ────────────────────────────────────────────────────
     const COLL_MAP = {
       associates:    'associates',
       callIns:       'callIns',
@@ -304,61 +318,93 @@ export async function initFirestoreSync(set, get) {
       announcements: 'announcements',
     };
 
-    let firstSnapshot = true;
+    // Track how many snapshots have fired so we know when to signal "ready"
+    const collNames      = Object.keys(COLL_MAP);
+    let   snapshotsFired = 0;
+    const TOTAL          = collNames.length;
+    const MIGRATED_KEY   = 'panda-fs-migrated-v4';
+    const alreadyMigrated = !!localStorage.getItem(MIGRATED_KEY);
 
     for (const [stateKey, collName] of Object.entries(COLL_MAP)) {
       const unsub = subscribeCollection(collName, (items) => {
-        if (items.length > 0 || !firstSnapshot) {
+        // Only update state if Firestore has items, OR migration already ran
+        // (so we trust Firestore as source of truth after first sync).
+        if (items.length > 0 || alreadyMigrated) {
           set({ [stateKey]: items });
         }
-        if (firstSnapshot) {
-          firstSnapshot = false;
+
+        snapshotsFired++;
+        if (snapshotsFired === 1) {
           set({ dbReady: true, dbMode: 'firestore' });
-          console.log('[Firestore] ✅ Connected — live sync active.');
+          console.log('[FS] ✅ Connected — live sync active.');
+        }
+        if (snapshotsFired === TOTAL) {
+          console.log('[FS] All shared collections loaded.');
         }
       });
       _unsubscribers.push(unsub);
     }
 
-    // Subscribe workFiles (shared)
-    _unsubscribers.push(subscribeWorkFiles((map) => set({ workFiles: map })));
+    // workFiles (shared, map shape)
+    _unsubscribers.push(
+      subscribeWorkFiles((map) => set({ workFiles: map }))
+    );
 
-    // ── Private collections (users/{uid}/…) ─────────────────────────────────
+    // ── Private collections ───────────────────────────────────────────────────
     if (uid) {
+      const MIGRATED_KEY = 'panda-fs-migrated-v4';
+      const alreadyMigrated = !!localStorage.getItem(MIGRATED_KEY);
+
       _unsubscribers.push(
         subscribeUserCollection(uid, 'myNotes', (items) => {
-          if (items.length > 0) set({ myNotes: items });
+          // If Firestore has data → always use it (authoritative).
+          // If Firestore is empty AND migration hasn't run yet → keep local data
+          // (the migration will push it to Firestore momentarily).
+          if (items.length > 0 || alreadyMigrated) {
+            set({ myNotes: items });
+          }
         })
       );
       _unsubscribers.push(
         subscribeUserCollection(uid, 'myEvents', (items) => {
-          if (items.length > 0) set({ myEvents: items });
+          if (items.length > 0 || alreadyMigrated) {
+            set({ myEvents: items });
+          }
         })
       );
-      console.log(`[Firestore] 🔒 Private collections syncing for uid: ${uid}`);
+      console.log(`[FS] 🔒 Private collections syncing for uid: ${uid}`);
     }
 
     _syncActive = true;
 
-    // ── First-time migration (run once per device) ───────────────────────────
-    const MIGRATED_KEY = 'panda-fs-migrated-v3'; // v3 = private collections added
-    if (!localStorage.getItem(MIGRATED_KEY)) {
-      const raw = localStorage.getItem('panda-manager-storage');
-      if (raw) {
-        const data = JSON.parse(raw)?.state || JSON.parse(raw);
-        const hasData = ['associates', 'callIns', 'teamNotes', 'myNotes', 'myEvents', 'reviews', 'tasks']
-          .some(k => Array.isArray(data[k]) && data[k].length > 0);
-        if (hasData) {
-          console.log('[Firestore] Migrating localStorage → Firestore (including private collections)...');
-          const count = await batchImportToFirestore(data, uid);
-          localStorage.setItem(MIGRATED_KEY, '1');
-          console.log(`[Firestore] ✅ Migrated ${count} records (shared + private).`);
+    // ── One-time migration: push existing localStorage data to Firestore ───────
+    if (!alreadyMigrated) {
+      try {
+        const raw  = localStorage.getItem('panda-manager-storage');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const data   = parsed?.state ?? parsed;
+          const hasData = [
+            'associates', 'callIns', 'teamNotes', 'myNotes', 'myEvents',
+            'reviews', 'tasks', 'contacts', 'announcements',
+          ].some(k => Array.isArray(data[k]) && data[k].length > 0);
+
+          if (hasData) {
+            console.log('[FS] Migrating existing data to Firestore…');
+            const count = await batchImportToFirestore(data, uid);
+            console.log(`[FS] ✅ Migrated ${count} records.`);
+          }
         }
+        localStorage.setItem(MIGRATED_KEY, '1');
+      } catch (me) {
+        console.warn('[FS] Migration error (non-fatal):', me?.message);
       }
     }
+
   } catch (e) {
-    console.warn('[Firestore] Connection failed:', e?.code || e?.message);
+    console.warn('[FS] Connection failed:', e?.code || e?.message);
     set({ dbReady: false, dbMode: 'local' });
+    _syncActive = false;
     throw e;
   }
 }
@@ -367,9 +413,9 @@ export async function initFirestoreSync(set, get) {
 export function disconnectFirestore(set) {
   _unsubscribers.forEach(fn => { try { fn(); } catch {} });
   _unsubscribers = [];
-  _syncActive = false;
-  _db  = null;
-  _uid = null;
-  set({ dbReady: false, dbMode: 'local' });
-  console.log('[Firestore] Disconnected.');
+  _syncActive    = false;
+  _db            = null;
+  _uid           = null;
+  if (set) set({ dbReady: false, dbMode: 'local' });
+  console.log('[FS] Disconnected.');
 }

@@ -57,7 +57,8 @@ export default function Login() {
         storeId: 'store_1687',
       });
       // Auto-connect Firestore sync after sign-in
-      connectFirestore().catch(() => {});
+      // Use setTimeout(0) so zustand finishes persisting the user before we read it
+      setTimeout(() => connectFirestore().catch(() => {}), 0);
       navigate('/');
     } catch (err) {
       setError(friendlyError(err.code || err.message));
@@ -85,7 +86,7 @@ export default function Login() {
         storeId: 'store_1687',
       });
       // Auto-connect Firestore sync after registration
-      connectFirestore().catch(() => {});
+      setTimeout(() => connectFirestore().catch(() => {}), 0);
       navigate('/');
     } catch (err) {
       setError(friendlyError(err.code || err.message));

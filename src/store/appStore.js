@@ -110,22 +110,30 @@ export const useAppStore = create(
           .catch(() => {});
       };
       // Private user collection helpers (users/{uid}/…)
+      // Always pass the uid from the store so writes work even if _uid hasn't
+      // been set yet by initFirestoreSync (e.g. write fires just before connect).
       const fsWritePrivate = (coll, id, data) => {
         if (get().dbMode !== 'firestore') return;
+        const uid = get().user?.uid;
+        if (!uid || uid === 'demo_user') return;
         import('../lib/firestoreSync')
-          .then(({ fsSetPrivateItem }) => fsSetPrivateItem(coll, id, data))
+          .then(({ fsSetPrivateItem }) => fsSetPrivateItem(coll, id, data, uid))
           .catch(() => {});
       };
       const fsUpdatePrivate = (coll, id, data) => {
         if (get().dbMode !== 'firestore') return;
+        const uid = get().user?.uid;
+        if (!uid || uid === 'demo_user') return;
         import('../lib/firestoreSync')
-          .then(({ fsUpdatePrivateItem }) => fsUpdatePrivateItem(coll, id, data))
+          .then(({ fsUpdatePrivateItem }) => fsUpdatePrivateItem(coll, id, data, uid))
           .catch(() => {});
       };
       const fsDelPrivate = (coll, id) => {
         if (get().dbMode !== 'firestore') return;
+        const uid = get().user?.uid;
+        if (!uid || uid === 'demo_user') return;
         import('../lib/firestoreSync')
-          .then(({ fsDeletePrivateItem }) => fsDeletePrivateItem(coll, id))
+          .then(({ fsDeletePrivateItem }) => fsDeletePrivateItem(coll, id, uid))
           .catch(() => {});
       };
 
