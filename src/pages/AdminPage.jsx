@@ -656,15 +656,43 @@ function AppHealth() {
         </span>
       </div>
 
-      {/* Firestore rules reminder */}
-      <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5 text-xs text-blue-700 space-y-1">
-        <p className="font-bold">⚠️ If Write Test fails with PERMISSION DENIED:</p>
-        <p>Deploy Firestore security rules from your terminal:</p>
-        <code className="block bg-blue-100 rounded px-2 py-1 text-[10px] font-mono break-all">
+      {/* Firestore rules reminder — only shown when test fails with PERMISSION DENIED */}
+      {testStatus === 'fail' && testDetail.includes('PERMISSION DENIED') && (
+      <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-3 text-xs text-red-800 space-y-2">
+        <p className="font-bold text-sm">🚨 PERMISSION DENIED — Action Required</p>
+        <p>Firestore security rules have <strong>not been deployed</strong> yet. Until you deploy them, private notes &amp; calendar cannot be read or written from the cloud.</p>
+
+        <p className="font-semibold mt-1">Option 1 — Firebase Console (easiest, no install needed):</p>
+        <ol className="list-decimal list-inside space-y-1 text-red-700">
+          <li>Open <a href="https://console.firebase.google.com/project/px-1687-manager-app/firestore/rules" target="_blank" rel="noopener noreferrer" className="underline font-semibold">Firebase Console → Firestore → Rules</a></li>
+          <li>Replace ALL the text with the rules below</li>
+          <li>Click <strong>Publish</strong></li>
+        </ol>
+        <code className="block bg-red-100 rounded px-2 py-2 text-[9px] font-mono whitespace-pre leading-relaxed select-all">
+{`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /stores/{storeId}/{collection}/{docId} {
+      allow read, write: if request.auth != null;
+    }
+    match /users/{userId}/{collection}/{docId} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == userId;
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}`}
+        </code>
+
+        <p className="font-semibold mt-1">Option 2 — Terminal (if Firebase CLI installed):</p>
+        <code className="block bg-red-100 rounded px-2 py-1 text-[10px] font-mono break-all">
           firebase deploy --only firestore:rules
         </code>
-        <p className="text-blue-500">The <code className="bg-blue-100 px-1 rounded">firestore.rules</code> file is in the project root.</p>
+        <p className="text-red-600 text-[10px]">Run from the project root folder where <strong>firestore.rules</strong> lives.</p>
       </div>
+      )}
 
       {/* Env info */}
       <div className="space-y-1.5">
