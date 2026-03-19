@@ -69,20 +69,22 @@ class ErrorBoundary extends Component {
 }
 
 // ── Auto-connect Firestore whenever a real user is present ───────────────────
-// Re-runs any time the user object changes (login / logout / app startup).
-// Uses a 1-second delay so the UI renders first.
+// Fires immediately on mount / when uid changes.
+// Uses a single microtask tick (setTimeout 0) so React finishes rendering
+// the initial frame before network calls start — keeps the UI snappy.
 function AutoConnectFirestore() {
   const { user, dbReady, dbMode, connectFirestore } = useAppStore();
 
   useEffect(() => {
     const isRealUser = user && user.uid && user.uid !== 'demo_user';
-    // Connect when: real user signed in AND not already syncing
     if (isRealUser && !(dbReady && dbMode === 'firestore')) {
+      // Use setTimeout(0) — one tick so React flushes the first render,
+      // then immediately start Firestore connection in the background.
       const t = setTimeout(() => {
         connectFirestore().catch((e) => {
           console.warn('[AutoConnect] Firestore connect failed:', e?.message);
         });
-      }, 800);
+      }, 0);
       return () => clearTimeout(t);
     }
   }, [user?.uid]); // re-run only when uid actually changes

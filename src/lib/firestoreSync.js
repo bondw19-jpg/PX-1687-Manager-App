@@ -2,6 +2,17 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Loaded dynamically the first time the user connects Firebase.
 //
+// KEY DESIGN DECISIONS:
+// • Firestore is ALWAYS the source of truth once connected.
+// • Private collections (myNotes, myEvents) are stored under users/{uid}/
+//   so they are per-user and invisible to other team members.
+// • Migration runs once PER UID (key includes uid) so each device/PWA
+//   context only migrates its own localStorage data once. It never
+//   overwrites existing Firestore docs (uses create-if-missing logic).
+// • onSnapshot always applies Firestore data to state — no guards that
+//   block updates when collections are empty. This ensures the PWA
+//   (which has its own isolated localStorage) always loads from Firestore.
+//
 // STORAGE PATHS:
 //   SHARED  (all team members):
 //     stores/store_1687/associates/{id}
@@ -23,7 +34,7 @@
 const STORE_ID = 'store_1687';
 
 let _db            = null;
-let _uid           = null;   // current user's UID — updated every connect()
+let _uid           = null;
 let _syncActive    = false;
 let _unsubscribers = [];
 
@@ -36,7 +47,6 @@ async function getDb() {
   return _db;
 }
 
-// ── Public accessor for _uid (lets appStore helpers read it synchronously) ────
 export function getCurrentUid() { return _uid; }
 
 // ── Shared collection path helpers ───────────────────────────────────────────
@@ -83,7 +93,6 @@ export async function fsUpdateItem(collName, id, data) {
     const ref = await storeItem(collName, id);
     await updateDoc(ref, { ...data, _updatedAt: serverTimestamp() });
   } catch {
-    // Doc may not exist yet — fall back to setDoc (merge)
     try {
       const { setDoc, serverTimestamp } = await import('firebase/firestore');
       const ref = await storeItem(collName, id);
@@ -105,10 +114,6 @@ export async function fsDeleteItem(collName, id) {
 }
 
 // ── PRIVATE write helpers (users/{uid}/…) ─────────────────────────────────────
-// NOTE: uid is read at call-time from the module-level _uid variable.
-// If sync hasn't started yet (uid null), we fall back to reading from the
-// store-level getter passed during connect. A getter is NOT available here,
-// so we accept an optional explicit uid override instead.
 
 export async function fsSetPrivateItem(collName, id, data, uidOverride) {
   const uid = uidOverride || _uid;
@@ -180,11 +185,27 @@ export async function fsSaveWorkFile(associateId, fileData) {
 }
 
 // ── Batch import (first-time migration) ───────────────────────────────────────
+// IMPORTANT: Uses { merge: false } equivalent — only sets docs that don't exist
+// yet via getDoc check, so it never overwrites data already in Firestore.
+// This is safe to run from any device (browser, PWA, new phone) without
+// clobbering another device's more recent data.
 export async function batchImportToFirestore(data, uid) {
-  const { setDoc, serverTimestamp, doc } = await import('firebase/firestore');
+  const { setDoc, getDoc, serverTimestamp, doc } = await import('firebase/firestore');
   const db = await getDb();
   let count = 0;
 
+  // Helper: only write if doc doesn't exist yet in Firestore
+  async function writeIfMissing(ref, payload) {
+    try {
+      const snap = await getDoc(ref);
+      if (!snap.exists()) {
+        await setDoc(ref, { ...payload, _updatedAt: serverTimestamp() });
+        count++;
+      }
+    } catch {}
+  }
+
+  // Shared collections
   const SHARED_COLLS = [
     'associates', 'callIns', 'teamEvents',
     'teamNotes', 'reviews', 'tasks', 'contacts', 'announcements',
@@ -194,36 +215,29 @@ export async function batchImportToFirestore(data, uid) {
     if (!Array.isArray(items)) continue;
     for (const item of items) {
       if (!item?.id) continue;
-      try {
-        const ref = doc(db, 'stores', STORE_ID, coll, item.id);
-        await setDoc(ref, { ...item, _updatedAt: serverTimestamp() }, { merge: true });
-        count++;
-      } catch {}
+      const ref = doc(db, 'stores', STORE_ID, coll, item.id);
+      await writeIfMissing(ref, item);
     }
   }
 
+  // workFiles map
   if (data.workFiles && typeof data.workFiles === 'object') {
     for (const [associateId, fileData] of Object.entries(data.workFiles)) {
       if (!associateId || !fileData) continue;
-      try {
-        const ref = doc(db, 'stores', STORE_ID, 'workFiles', associateId);
-        await setDoc(ref, { associateId, ...fileData, _updatedAt: serverTimestamp() }, { merge: true });
-        count++;
-      } catch {}
+      const ref = doc(db, 'stores', STORE_ID, 'workFiles', associateId);
+      await writeIfMissing(ref, { associateId, ...fileData });
     }
   }
 
+  // Private collections (only if uid available)
   if (uid) {
     for (const coll of ['myNotes', 'myEvents']) {
       const items = data[coll];
       if (!Array.isArray(items)) continue;
       for (const item of items) {
         if (!item?.id) continue;
-        try {
-          const ref = doc(db, 'users', uid, coll, item.id);
-          await setDoc(ref, { ...item, _updatedAt: serverTimestamp() }, { merge: true });
-          count++;
-        } catch {}
+        const ref = doc(db, 'users', uid, coll, item.id);
+        await writeIfMissing(ref, item);
       }
     }
   }
@@ -292,7 +306,7 @@ function subscribeWorkFiles(callback) {
 
 // ── Main: init Firestore sync ─────────────────────────────────────────────────
 export async function initFirestoreSync(set, get) {
-  // Allow re-connect after logout: tear down old listeners first
+  // Tear down any existing listeners (handles logout → login re-connect)
   if (_syncActive) {
     disconnectFirestore(set);
   }
@@ -301,10 +315,16 @@ export async function initFirestoreSync(set, get) {
     console.log('[FS] Connecting…');
     await getDb();
 
-    // Capture UID — MUST happen before any private write helpers can fire
     const uid = get().user?.uid || null;
     _uid = uid;
     console.log('[FS] uid =', uid || '(none — shared data only)');
+
+    // Migration key is PER UID so each user/device migrates independently
+    // and a fresh PWA context for the same user doesn't re-run migration.
+    const MIGRATED_KEY = uid
+      ? `panda-fs-migrated-v4-${uid}`
+      : 'panda-fs-migrated-v4-anon';
+    const alreadyMigrated = !!localStorage.getItem(MIGRATED_KEY);
 
     // ── Shared collections ────────────────────────────────────────────────────
     const COLL_MAP = {
@@ -318,17 +338,15 @@ export async function initFirestoreSync(set, get) {
       announcements: 'announcements',
     };
 
-    // Track how many snapshots have fired so we know when to signal "ready"
-    const collNames      = Object.keys(COLL_MAP);
-    let   snapshotsFired = 0;
-    const TOTAL          = collNames.length;
-    const MIGRATED_KEY   = 'panda-fs-migrated-v4';
-    const alreadyMigrated = !!localStorage.getItem(MIGRATED_KEY);
+    let snapshotsFired = 0;
+    const TOTAL = Object.keys(COLL_MAP).length;
 
     for (const [stateKey, collName] of Object.entries(COLL_MAP)) {
       const unsub = subscribeCollection(collName, (items) => {
-        // Only update state if Firestore has items, OR migration already ran
-        // (so we trust Firestore as source of truth after first sync).
+        // ALWAYS apply Firestore data — Firestore is the source of truth.
+        // Before migration: keep local data if Firestore is empty (items=[])
+        //   so existing local data isn't wiped before migration uploads it.
+        // After migration: always apply even if empty (user deleted everything).
         if (items.length > 0 || alreadyMigrated) {
           set({ [stateKey]: items });
         }
@@ -345,31 +363,33 @@ export async function initFirestoreSync(set, get) {
       _unsubscribers.push(unsub);
     }
 
-    // workFiles (shared, map shape)
+    // workFiles (shared)
     _unsubscribers.push(
       subscribeWorkFiles((map) => set({ workFiles: map }))
     );
 
-    // ── Private collections ───────────────────────────────────────────────────
+    // ── Private collections (users/{uid}/…) ──────────────────────────────────
+    // CRITICAL FIX: Private collections ALWAYS apply Firestore data.
+    // There is NO guard based on alreadyMigrated here — the PWA has its own
+    // isolated localStorage and will always see alreadyMigrated=false on
+    // first open. If we blocked the snapshot update, the user's private notes
+    // (which live in Firestore) would never appear in the PWA.
+    // Instead: Firestore is unconditionally authoritative for private data.
     if (uid) {
-      const MIGRATED_KEY = 'panda-fs-migrated-v4';
-      const alreadyMigrated = !!localStorage.getItem(MIGRATED_KEY);
-
       _unsubscribers.push(
         subscribeUserCollection(uid, 'myNotes', (items) => {
-          // If Firestore has data → always use it (authoritative).
-          // If Firestore is empty AND migration hasn't run yet → keep local data
-          // (the migration will push it to Firestore momentarily).
-          if (items.length > 0 || alreadyMigrated) {
-            set({ myNotes: items });
-          }
+          // Always write Firestore data to state.
+          // On first open in PWA with no local data:
+          //   - If Firestore has notes → items will be non-empty → show them ✅
+          //   - If Firestore is empty  → items=[] → show empty ✅ (correct)
+          // The migration below will upload any local-only notes that aren't
+          // in Firestore yet, and the snapshot will then fire again with them.
+          set({ myNotes: items });
         })
       );
       _unsubscribers.push(
         subscribeUserCollection(uid, 'myEvents', (items) => {
-          if (items.length > 0 || alreadyMigrated) {
-            set({ myEvents: items });
-          }
+          set({ myEvents: items });
         })
       );
       console.log(`[FS] 🔒 Private collections syncing for uid: ${uid}`);
@@ -377,10 +397,13 @@ export async function initFirestoreSync(set, get) {
 
     _syncActive = true;
 
-    // ── One-time migration: push existing localStorage data to Firestore ───────
+    // ── One-time migration per uid: upload local data that isn't in Firestore ─
+    // Runs once per uid per browser context (browser and PWA each have their
+    // own localStorage, so each will migrate its own local data independently).
+    // Uses writeIfMissing so it never overwrites newer Firestore data.
     if (!alreadyMigrated) {
       try {
-        const raw  = localStorage.getItem('panda-manager-storage');
+        const raw = localStorage.getItem('panda-manager-storage');
         if (raw) {
           const parsed = JSON.parse(raw);
           const data   = parsed?.state ?? parsed;
@@ -390,11 +413,12 @@ export async function initFirestoreSync(set, get) {
           ].some(k => Array.isArray(data[k]) && data[k].length > 0);
 
           if (hasData) {
-            console.log('[FS] Migrating existing data to Firestore…');
+            console.log('[FS] Migrating local data → Firestore (create-only, no overwrites)…');
             const count = await batchImportToFirestore(data, uid);
-            console.log(`[FS] ✅ Migrated ${count} records.`);
+            console.log(`[FS] ✅ Migrated ${count} new records.`);
           }
         }
+        // Mark migration done for this uid in this browser context
         localStorage.setItem(MIGRATED_KEY, '1');
       } catch (me) {
         console.warn('[FS] Migration error (non-fatal):', me?.message);

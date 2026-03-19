@@ -110,28 +110,33 @@ export const useAppStore = create(
           .catch(() => {});
       };
       // Private user collection helpers (users/{uid}/…)
-      // Always pass the uid from the store so writes work even if _uid hasn't
-      // been set yet by initFirestoreSync (e.g. write fires just before connect).
-      const fsWritePrivate = (coll, id, data) => {
-        if (get().dbMode !== 'firestore') return;
+      // IMPORTANT: Private writes go to Firestore whenever the user is a real
+      // signed-in account — regardless of dbMode. This ensures:
+      // 1. PWA context (which starts in 'local' mode until auto-connect fires)
+      //    still writes private notes to Firestore immediately.
+      // 2. Writes that happen before the 800ms auto-connect delay still persist.
+      // The firestoreSync module is lazy-loaded and has its own connection logic.
+      const isRealUser = () => {
         const uid = get().user?.uid;
-        if (!uid || uid === 'demo_user') return;
+        return uid && uid !== 'demo_user';
+      };
+      const fsWritePrivate = (coll, id, data) => {
+        if (!isRealUser()) return;
+        const uid = get().user.uid;
         import('../lib/firestoreSync')
           .then(({ fsSetPrivateItem }) => fsSetPrivateItem(coll, id, data, uid))
           .catch(() => {});
       };
       const fsUpdatePrivate = (coll, id, data) => {
-        if (get().dbMode !== 'firestore') return;
-        const uid = get().user?.uid;
-        if (!uid || uid === 'demo_user') return;
+        if (!isRealUser()) return;
+        const uid = get().user.uid;
         import('../lib/firestoreSync')
           .then(({ fsUpdatePrivateItem }) => fsUpdatePrivateItem(coll, id, data, uid))
           .catch(() => {});
       };
       const fsDelPrivate = (coll, id) => {
-        if (get().dbMode !== 'firestore') return;
-        const uid = get().user?.uid;
-        if (!uid || uid === 'demo_user') return;
+        if (!isRealUser()) return;
+        const uid = get().user.uid;
         import('../lib/firestoreSync')
           .then(({ fsDeletePrivateItem }) => fsDeletePrivateItem(coll, id, uid))
           .catch(() => {});
@@ -324,14 +329,20 @@ export const useAppStore = create(
 
       // ── Firebase sync status ──────────────────────────────────────────────
       dbReady: false,
-      dbMode: 'local', // 'local' | 'firestore'
+      dbMode: 'local',      // 'local' | 'firestore'
+      dbConnecting: false,  // true while the initial Firestore handshake is in progress
 
       connectFirestore: async () => {
+        // Guard: don't start a second connection attempt while one is running
+        if (get().dbConnecting) return;
+        set({ dbConnecting: true });
         try {
           const { initFirestoreSync } = await import('../lib/firestoreSync');
           await initFirestoreSync(set, get);
         } catch (e) {
           console.warn('[PandaStore] Firestore connect failed:', e?.message);
+        } finally {
+          set({ dbConnecting: false });
         }
       },
     };

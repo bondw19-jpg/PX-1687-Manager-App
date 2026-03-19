@@ -3,7 +3,7 @@ import {
   Plus, X, Search, Pin, PinOff, Pencil, Trash2, StickyNote,
   Image, FileText, Paperclip, ZoomIn, ZoomOut, Download,
   RotateCcw, ChevronLeft, ChevronRight, Eye, File,
-  Upload, FileImage, FileType, FileBadge
+  Upload, FileImage, FileType, FileBadge, RefreshCw
 } from 'lucide-react';
 import { format } from 'date-fns';
 import Header from '../components/Header';
@@ -580,9 +580,13 @@ export default function Notes() {
     teamNotes, myNotes,
     addTeamNote, updateTeamNote, deleteTeamNote,
     addMyNote, updateMyNote, deleteMyNote,
-    dbMode, dbReady,
+    dbMode, dbReady, dbConnecting, connectFirestore,
+    user,
   } = useAppStore();
-  const isCloudSync = dbReady && dbMode === 'firestore';
+  const isCloudSync  = dbReady && dbMode === 'firestore';
+  const isRealUser   = user && user.uid && user.uid !== 'demo_user';
+  // Syncing = real user is logged in AND Firestore isn't ready yet
+  const isSyncing    = isRealUser && !isCloudSync;
 
   const [activeTab, setActiveTab]   = useState('team');
   const [search, setSearch]         = useState('');
@@ -659,6 +663,38 @@ export default function Notes() {
             </span>
           )}
         </div>
+
+        {/* ── Syncing banner (My Notes tab, real user, not yet connected) ── */}
+        {activeTab === 'my' && isRealUser && (
+          <div className={`rounded-xl px-3 py-2.5 flex items-center justify-between gap-2 text-xs ${
+            isCloudSync
+              ? 'bg-green-50 border border-green-100 text-green-700'
+              : 'bg-amber-50 border border-amber-100 text-amber-700'
+          }`}>
+            <div className="flex items-center gap-2">
+              {isCloudSync ? (
+                <span>☁️ <strong>Cloud sync active</strong> — notes loaded from your account</span>
+              ) : dbConnecting ? (
+                <>
+                  <RefreshCw size={13} className="animate-spin shrink-0" />
+                  <span><strong>Connecting to cloud…</strong> Loading your private notes</span>
+                </>
+              ) : (
+                <span>⚠️ <strong>Not synced</strong> — notes may be from local cache</span>
+              )}
+            </div>
+            {!isCloudSync && (
+              <button
+                onClick={() => connectFirestore()}
+                disabled={dbConnecting}
+                className="shrink-0 flex items-center gap-1 bg-amber-100 hover:bg-amber-200 disabled:opacity-50 text-amber-800 px-2 py-1 rounded-lg font-semibold transition-colors"
+              >
+                <RefreshCw size={11} className={dbConnecting ? 'animate-spin' : ''} />
+                {dbConnecting ? 'Syncing…' : 'Pull from Cloud'}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Search + Filter row */}
         <div className="flex gap-2">
