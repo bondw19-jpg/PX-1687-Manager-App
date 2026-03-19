@@ -287,6 +287,43 @@ export default function BackupManager() {
   const [creating, setCreating]     = useState(false);
   const [restoring, setRestoring]   = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [syncingCloud, setSyncingCloud] = useState(false); // true while pushing to Firestore after import/restore
+  const [syncProgress, setSyncProgress] = useState('');    // progress message shown to user
+
+  // ── Helper: push imported/restored data to Firestore then reload ──────────
+  const pushToCloudAndReload = async (data, successMsg) => {
+    const uid = user?.uid;
+    const isRealUser = uid && uid !== 'demo_user';
+    const isConnected = dbReady && dbMode === 'firestore';
+
+    if (isRealUser && isConnected) {
+      // Push imported data to Firestore (overwrite — this is an intentional import)
+      setSyncingCloud(true);
+      setSyncProgress('Uploading to cloud…');
+      try {
+        const { batchForceToFirestore } = await import('../lib/firestoreSync');
+        const state = data?.state ?? data;
+        const count = await batchForceToFirestore(state, uid);
+        setSyncProgress(`Synced ${count} records to cloud ✅`);
+        showToast(`${successMsg} Synced ${count} records to cloud.`);
+        // Clear migration key so on next load Firestore data re-populates cleanly
+        if (uid) localStorage.removeItem(`panda-fs-migrated-v4-${uid}`);
+        await new Promise(r => setTimeout(r, 1500));
+      } catch (e) {
+        setSyncProgress('Cloud sync failed — data saved locally.');
+        showToast(`${successMsg} (cloud sync failed — data saved locally)`, 'error');
+        await new Promise(r => setTimeout(r, 1500));
+      } finally {
+        setSyncingCloud(false);
+      }
+    } else {
+      // No cloud connection — just reload. Clear migration key so it re-migrates.
+      if (uid) localStorage.removeItem(`panda-fs-migrated-v4-${uid}`);
+      showToast(successMsg + (isRealUser ? ' Connect cloud sync to back up to Firestore.' : ''));
+      await new Promise(r => setTimeout(r, 1500));
+    }
+    window.location.reload();
+  };
 
   // ── Emergency recovery from auto-backup ──────────────────────────────────
   const emergencyData = (() => {
@@ -401,21 +438,18 @@ export default function BackupManager() {
       message:      `This will replace ALL current data with the backup from ${format(new Date(backup.createdAt), 'MMM d, yyyy h:mm a')}. Your current data will be auto-saved first.`,
       confirmLabel: 'Restore Now',
       danger:       true,
-      onConfirm: () => {
+      onConfirm: async () => {
         setConfirm(null);
         setRestoring(true);
-        setTimeout(() => {
-          try {
-            createAutoBackup(); // safety net
-            const raw = JSON.stringify(backup.data);
-            localStorage.setItem(STORAGE_KEY, raw);
-            showToast('Restored! Reloading app…');
-            setTimeout(() => window.location.reload(), 1500);
-          } catch {
-            showToast('Restore failed.', 'error');
-            setRestoring(false);
-          }
-        }, 300);
+        try {
+          createAutoBackup();
+          const data = backup.data;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+          await pushToCloudAndReload(data, 'Restored!');
+        } catch {
+          showToast('Restore failed.', 'error');
+          setRestoring(false);
+        }
       },
       onCancel: () => setConfirm(null),
     });
@@ -472,17 +506,20 @@ export default function BackupManager() {
       try {
         const parsed = JSON.parse(ev.target.result);
         const appData = parsed.data || parsed;
+        const state   = appData?.state ?? appData;
+        const counts  = countRecords(appData);
+        const total   = Object.values(counts).reduce((s, v) => s + v, 0);
         setConfirm({
           title:        'Import this backup file?',
-          message:      `Exported: ${parsed.exportedAt ? format(new Date(parsed.exportedAt), 'MMM d, yyyy h:mm a') : 'Unknown date'}. Store: ${parsed.storeName || '?'}. This will replace all current data.`,
-          confirmLabel: 'Import & Replace',
+          message:      `Exported: ${parsed.exportedAt ? format(new Date(parsed.exportedAt), 'MMM d, yyyy h:mm a') : 'Unknown date'}. Store: ${parsed.storeName || '?'}. Contains ${total} records. This will replace all current data and sync to cloud.`,
+          confirmLabel: 'Import & Sync to Cloud',
           danger:       true,
-          onConfirm: () => {
+          onConfirm: async () => {
             setConfirm(null);
+            setRestoring(true);
             createAutoBackup();
             localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
-            showToast('Imported! Reloading app…');
-            setTimeout(() => window.location.reload(), 1500);
+            await pushToCloudAndReload(appData, 'Imported!');
           },
           onCancel: () => setConfirm(null),
         });
@@ -682,11 +719,25 @@ export default function BackupManager() {
       {/* Toast */}
       {toast && <Toast message={toast.message} type={toast.type} onDone={() => setToast(null)} />}
 
-      {/* Restoring overlay */}
+      {/* Restoring / importing overlay */}
       {restoring && (
-        <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-[150] flex flex-col items-center justify-center gap-4">
+        <div className="fixed inset-0 bg-white/90 backdrop-blur-sm z-[150] flex flex-col items-center justify-center gap-4 px-6">
           <div className="w-14 h-14 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-          <p className="font-semibold text-gray-700">Restoring backup…</p>
+          {syncingCloud ? (
+            <>
+              <p className="font-bold text-gray-800 text-center">Syncing to cloud…</p>
+              <p className="text-sm text-gray-500 text-center">{syncProgress || 'Uploading records to Firestore…'}</p>
+              <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-4 py-2 text-xs text-blue-700">
+                <span className="animate-pulse">☁️</span>
+                <span>Your private notes & calendar are being backed up to your account</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="font-semibold text-gray-700">Restoring data…</p>
+              {syncProgress && <p className="text-sm text-gray-500 text-center">{syncProgress}</p>}
+            </>
+          )}
         </div>
       )}
     </div>

@@ -183,14 +183,14 @@ export default function CalendarPage() {
           }`}>
             <div className="flex items-center gap-2">
               {isCloudSync ? (
-                <span>☁️ <strong>Cloud sync active</strong> — events loaded from your account</span>
+                <span>☁️ <strong>Cloud sync active</strong> — {myEvents?.length || 0} event{myEvents?.length !== 1 ? 's' : ''} backed up to your account</span>
               ) : dbConnecting ? (
                 <>
                   <RefreshCw size={13} className="animate-spin shrink-0" />
                   <span><strong>Connecting to cloud…</strong> Loading your private events</span>
                 </>
               ) : (
-                <span>⚠️ <strong>Not synced</strong> — events may be from local cache</span>
+                <span>⚠️ <strong>Not synced yet</strong> — tap to back up {myEvents?.length || 0} event{myEvents?.length !== 1 ? 's' : ''} to cloud</span>
               )}
             </div>
             {!isCloudSync && (
@@ -200,7 +200,7 @@ export default function CalendarPage() {
                 className="shrink-0 flex items-center gap-1 bg-amber-100 hover:bg-amber-200 disabled:opacity-50 text-amber-800 px-2 py-1 rounded-lg font-semibold transition-colors"
               >
                 <RefreshCw size={11} className={dbConnecting ? 'animate-spin' : ''} />
-                {dbConnecting ? 'Syncing…' : 'Pull from Cloud'}
+                {dbConnecting ? 'Syncing…' : 'Sync to Cloud'}
               </button>
             )}
           </div>

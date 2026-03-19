@@ -245,6 +245,61 @@ export async function batchImportToFirestore(data, uid) {
   return count;
 }
 
+// ── Batch FORCE import (used after restore/import) ────────────────────────────
+// Same as batchImportToFirestore but ALWAYS overwrites — uses setDoc with merge:true
+// so imported/restored data replaces whatever was in Firestore before.
+// This is the correct behaviour after a manual import or restore from backup.
+export async function batchForceToFirestore(data, uid) {
+  const { setDoc, serverTimestamp, doc } = await import('firebase/firestore');
+  const db = await getDb();
+  let count = 0;
+
+  async function forceWrite(ref, payload) {
+    try {
+      await setDoc(ref, { ...payload, _updatedAt: serverTimestamp() }, { merge: true });
+      count++;
+    } catch (e) {
+      console.warn('[FS] forceWrite failed:', e?.code || e?.message);
+    }
+  }
+
+  const SHARED_COLLS = [
+    'associates', 'callIns', 'teamEvents',
+    'teamNotes', 'reviews', 'tasks', 'contacts', 'announcements',
+  ];
+  for (const coll of SHARED_COLLS) {
+    const items = data[coll];
+    if (!Array.isArray(items)) continue;
+    for (const item of items) {
+      if (!item?.id) continue;
+      const ref = doc(db, 'stores', STORE_ID, coll, item.id);
+      await forceWrite(ref, item);
+    }
+  }
+
+  if (data.workFiles && typeof data.workFiles === 'object') {
+    for (const [associateId, fileData] of Object.entries(data.workFiles)) {
+      if (!associateId || !fileData) continue;
+      const ref = doc(db, 'stores', STORE_ID, 'workFiles', associateId);
+      await forceWrite(ref, { associateId, ...fileData });
+    }
+  }
+
+  if (uid) {
+    for (const coll of ['myNotes', 'myEvents']) {
+      const items = data[coll];
+      if (!Array.isArray(items)) continue;
+      for (const item of items) {
+        if (!item?.id) continue;
+        const ref = doc(db, 'users', uid, coll, item.id);
+        await forceWrite(ref, item);
+      }
+    }
+  }
+
+  return count;
+}
+
 // ── Snapshot helpers ──────────────────────────────────────────────────────────
 function subscribeCollection(collName, callback) {
   let unsub = () => {};
