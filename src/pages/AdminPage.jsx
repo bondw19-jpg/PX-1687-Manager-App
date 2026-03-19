@@ -499,11 +499,67 @@ function DangerZone({ onToast }) {
 // ─────────────────────────────────────────────────────────────────────────────
 function AppHealth() {
   const { dbReady, dbMode, dbConnecting, connectFirestore, user } = useAppStore();
-  const [connecting, setConnecting] = useState(false);
+  const [connecting, setConnecting]   = useState(false);
+  const [testStatus, setTestStatus]   = useState(null); // null | 'running' | 'pass' | 'fail'
+  const [testDetail, setTestDetail]   = useState('');
 
   const handleConnect = async () => {
     setConnecting(true);
     try { await connectFirestore(); } finally { setConnecting(false); }
+  };
+
+  // Live write-then-read test for private Firestore collections
+  const runLiveTest = async () => {
+    setTestStatus('running');
+    setTestDetail('');
+    try {
+      const { getFirebaseModules } = await import('../lib/firebase');
+      const { db, auth } = await getFirebaseModules();
+      const { doc, setDoc, getDoc, deleteDoc, serverTimestamp } = await import('firebase/firestore');
+
+      const uid = user?.uid;
+      if (!uid || uid === 'demo_user') {
+        setTestStatus('fail');
+        setTestDetail('No real user signed in.');
+        return;
+      }
+
+      // Check Firebase Auth state
+      if (!auth.currentUser) {
+        setTestStatus('fail');
+        setTestDetail('Firebase Auth: not authenticated. Sign out and sign back in.');
+        return;
+      }
+
+      const testId  = `_admin_test_${Date.now()}`;
+      const testRef = doc(db, 'users', uid, 'myNotes', testId);
+
+      // 1. Write test doc
+      setTestDetail('Writing test document…');
+      await setDoc(testRef, { _test: true, createdAt: serverTimestamp() });
+
+      // 2. Read it back
+      setTestDetail('Reading test document…');
+      const snap = await getDoc(testRef);
+      if (!snap.exists()) throw new Error('Document not found after write');
+
+      // 3. Delete it (clean up)
+      setTestDetail('Cleaning up…');
+      await deleteDoc(testRef);
+
+      setTestStatus('pass');
+      setTestDetail(`✅ Write → Read → Delete all succeeded for users/${uid}/myNotes`);
+    } catch (e) {
+      setTestStatus('fail');
+      const msg = e?.code || e?.message || 'Unknown error';
+      if (msg.includes('permission-denied')) {
+        setTestDetail('❌ PERMISSION DENIED — Firestore security rules are blocking writes. Deploy firestore.rules to Firebase Console.');
+      } else if (msg.includes('unauthenticated')) {
+        setTestDetail('❌ NOT AUTHENTICATED — Sign out and sign back in.');
+      } else {
+        setTestDetail(`❌ ${msg}`);
+      }
+    }
   };
 
   const storageKeys = [
@@ -540,6 +596,41 @@ function AppHealth() {
         )}
       </div>
 
+      {/* ── Live Firestore write test ───────────────────────────────────────── */}
+      <div className="space-y-1.5">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Private Cloud Write Test</p>
+        <div className="bg-gray-50 rounded-xl px-3 py-3 space-y-2">
+          <p className="text-xs text-gray-500">
+            Writes a test document to <code className="bg-gray-200 px-1 rounded text-[10px]">users/{'{uid}'}/myNotes</code>, reads it back, then deletes it.
+            Confirms your private notes actually save to Firestore.
+          </p>
+          <button
+            onClick={runLiveTest}
+            disabled={testStatus === 'running'}
+            className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-colors ${
+              testStatus === 'pass'  ? 'bg-green-100 text-green-800' :
+              testStatus === 'fail'  ? 'bg-red-100   text-red-800'   :
+              'bg-primary text-white hover:bg-red-700'
+            }`}
+          >
+            <RefreshCw size={13} className={testStatus === 'running' ? 'animate-spin' : ''} />
+            {testStatus === 'running' ? 'Testing…' :
+             testStatus === 'pass'    ? '✅ Test Passed — run again' :
+             testStatus === 'fail'    ? '❌ Test Failed — retry' :
+             '▶ Run Live Write Test'}
+          </button>
+          {testDetail && (
+            <div className={`text-xs rounded-lg px-2 py-2 leading-relaxed break-all ${
+              testStatus === 'pass' ? 'bg-green-50 text-green-700' :
+              testStatus === 'fail' ? 'bg-red-50   text-red-700'   :
+              'bg-gray-100 text-gray-600'
+            }`}>
+              {testDetail}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Storage sizes */}
       <div className="space-y-1.5">
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Local Storage</p>
@@ -565,14 +656,25 @@ function AppHealth() {
         </span>
       </div>
 
+      {/* Firestore rules reminder */}
+      <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5 text-xs text-blue-700 space-y-1">
+        <p className="font-bold">⚠️ If Write Test fails with PERMISSION DENIED:</p>
+        <p>Deploy Firestore security rules from your terminal:</p>
+        <code className="block bg-blue-100 rounded px-2 py-1 text-[10px] font-mono break-all">
+          firebase deploy --only firestore:rules
+        </code>
+        <p className="text-blue-500">The <code className="bg-blue-100 px-1 rounded">firestore.rules</code> file is in the project root.</p>
+      </div>
+
       {/* Env info */}
       <div className="space-y-1.5">
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">App Info</p>
         {[
-          { label: 'App Version',   value: '2.1.0' },
+          { label: 'App Version',      value: '2.1.0' },
           { label: 'Firebase Project', value: 'px-1687-manager-app' },
-          { label: 'Store ID',      value: useAppStore.getState().storeId },
-          { label: 'User UID',      value: user?.uid?.slice(0, 16) + '…' || '—' },
+          { label: 'Store ID',         value: useAppStore.getState().storeId },
+          { label: 'User UID',         value: user?.uid ? user.uid.slice(0, 18) + '…' : '—' },
+          { label: 'Auth State',       value: 'Email/Password' },
         ].map(({ label, value }) => (
           <div key={label} className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2.5">
             <span className="text-xs text-gray-500">{label}</span>

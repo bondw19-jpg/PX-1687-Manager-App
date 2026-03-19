@@ -192,7 +192,8 @@ export const useAppStore = create(
       },
 
       // ── Calendar ──────────────────────────────────────────────────────────
-      // teamEvents = SHARED; myEvents = PRIVATE (local only, never synced)
+      // teamEvents = SHARED (synced to stores/{storeId}/teamEvents)
+      // myEvents   = PRIVATE (synced to users/{uid}/myEvents — per-account cloud backup)
       teamEvents: [], myEvents: [],
       addTeamEvent: (e) => {
         const doc = { ...e, id: `event_${Date.now()}`, createdAt: new Date().toISOString() };
@@ -237,7 +238,8 @@ export const useAppStore = create(
       },
 
       // ── Notes ─────────────────────────────────────────────────────────────
-      // teamNotes = SHARED; myNotes = PRIVATE (local only, never synced)
+      // teamNotes = SHARED (synced to stores/{storeId}/teamNotes)
+      // myNotes   = PRIVATE (synced to users/{uid}/myNotes — per-account cloud backup)
       teamNotes: [], myNotes: [],
       addTeamNote: (n) => {
         const doc = { ...n, id: `note_${Date.now()}`, createdAt: new Date().toISOString(), pinned: false, attachments: n.attachments || [] };
