@@ -368,11 +368,33 @@ export async function initFirestoreSync(set, get) {
 
   try {
     console.log('[FS] Connecting…');
+
+    // ── CRITICAL: Wait for Firebase Auth to restore the persisted session ────
+    // In a PWA (or after any page reload) Firebase Auth needs ~100–2000ms to
+    // read the session from IndexedDB and restore auth.currentUser.
+    // If we start Firestore listeners BEFORE this completes, every read against
+    // users/{uid}/myNotes hits PERMISSION DENIED (request.auth is null) and
+    // the onSnapshot error handler silently swallows it — leaving myNotes empty.
+    //
+    // waitForAuthReady() waits for onAuthStateChanged to fire once, which is
+    // the definitive signal that auth restoration is complete.
+    const { waitForAuthReady } = await import('./firebase');
+    const firebaseUser = await waitForAuthReady();
+    console.log('[FS] Auth confirmed:', firebaseUser?.uid || 'no firebase user');
+
     await getDb();
 
-    const uid = get().user?.uid || null;
+    // Use Firebase Auth uid as the authoritative source; fall back to Zustand
+    // state uid (covers the case where user signed in earlier this session).
+    const uid = firebaseUser?.uid || get().user?.uid || null;
     _uid = uid;
     console.log('[FS] uid =', uid || '(none — shared data only)');
+
+    // If we have a uid from Firebase Auth but Zustand state has an older uid,
+    // make sure Zustand user uid matches Firebase Auth uid.
+    if (firebaseUser?.uid && get().user?.uid && firebaseUser.uid !== get().user?.uid) {
+      console.warn('[FS] uid mismatch — Firebase:', firebaseUser.uid, '| Zustand:', get().user?.uid, '— using Firebase uid');
+    }
 
     // Migration key is PER UID so each user/device migrates independently
     // and a fresh PWA context for the same user doesn't re-run migration.
@@ -424,30 +446,27 @@ export async function initFirestoreSync(set, get) {
     );
 
     // ── Private collections (users/{uid}/…) ──────────────────────────────────
-    // CRITICAL FIX: Private collections ALWAYS apply Firestore data.
-    // There is NO guard based on alreadyMigrated here — the PWA has its own
-    // isolated localStorage and will always see alreadyMigrated=false on
-    // first open. If we blocked the snapshot update, the user's private notes
-    // (which live in Firestore) would never appear in the PWA.
-    // Instead: Firestore is unconditionally authoritative for private data.
+    // Auth is confirmed ready above — onSnapshot for private collections will
+    // succeed because Firebase Auth has already restored the token.
+    // Firestore is unconditionally authoritative for private data:
+    //   - items non-empty → update state with cloud notes ✅
+    //   - items empty     → user has no cloud notes (correct — show empty) ✅
     if (uid) {
       _unsubscribers.push(
         subscribeUserCollection(uid, 'myNotes', (items) => {
-          // Always write Firestore data to state.
-          // On first open in PWA with no local data:
-          //   - If Firestore has notes → items will be non-empty → show them ✅
-          //   - If Firestore is empty  → items=[] → show empty ✅ (correct)
-          // The migration below will upload any local-only notes that aren't
-          // in Firestore yet, and the snapshot will then fire again with them.
           set({ myNotes: items });
+          console.log(`[FS] 🔒 myNotes loaded from cloud: ${items.length} note(s)`);
         })
       );
       _unsubscribers.push(
         subscribeUserCollection(uid, 'myEvents', (items) => {
           set({ myEvents: items });
+          console.log(`[FS] 🔒 myEvents loaded from cloud: ${items.length} event(s)`);
         })
       );
-      console.log(`[FS] 🔒 Private collections syncing for uid: ${uid}`);
+      console.log(`[FS] 🔒 Subscribed to private collections for uid: ${uid}`);
+    } else {
+      console.log('[FS] No uid — private collections (myNotes/myEvents) not subscribed.');
     }
 
     _syncActive = true;
@@ -496,5 +515,7 @@ export function disconnectFirestore(set) {
   _db            = null;
   _uid           = null;
   if (set) set({ dbReady: false, dbMode: 'local' });
+  // Reset auth-ready promise so the next sign-in gets a fresh auth check
+  import('./firebase').then(({ resetAuthReadyPromise }) => resetAuthReadyPromise()).catch(() => {});
   console.log('[FS] Disconnected.');
 }

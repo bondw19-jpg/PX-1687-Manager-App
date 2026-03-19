@@ -333,16 +333,22 @@ export const useAppStore = create(
       dbReady: false,
       dbMode: 'local',      // 'local' | 'firestore'
       dbConnecting: false,  // true while the initial Firestore handshake is in progress
+      needsRelogin: false,  // true if Firebase session expired (PWA needs re-login)
 
       connectFirestore: async () => {
         // Guard: don't start a second connection attempt while one is running
         if (get().dbConnecting) return;
-        set({ dbConnecting: true });
+        set({ dbConnecting: true, needsRelogin: false });
         try {
           const { initFirestoreSync } = await import('../lib/firestoreSync');
           await initFirestoreSync(set, get);
         } catch (e) {
           console.warn('[PandaStore] Firestore connect failed:', e?.message);
+          // If the error is auth-related, set needsRelogin flag
+          const code = e?.code || e?.message || '';
+          if (code.includes('permission') || code.includes('auth') || code.includes('unauthenticated')) {
+            set({ needsRelogin: true });
+          }
         } finally {
           set({ dbConnecting: false });
         }

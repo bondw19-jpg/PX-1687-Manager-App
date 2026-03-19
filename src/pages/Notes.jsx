@@ -580,7 +580,7 @@ export default function Notes() {
     teamNotes, myNotes,
     addTeamNote, updateTeamNote, deleteTeamNote,
     addMyNote, updateMyNote, deleteMyNote,
-    dbMode, dbReady, dbConnecting, connectFirestore,
+    dbMode, dbReady, dbConnecting, needsRelogin, connectFirestore,
     user,
   } = useAppStore();
   const isCloudSync  = dbReady && dbMode === 'firestore';
@@ -669,21 +669,25 @@ export default function Notes() {
           <div className={`rounded-xl px-3 py-2.5 flex items-center justify-between gap-2 text-xs ${
             isCloudSync
               ? 'bg-green-50 border border-green-100 text-green-700'
+              : needsRelogin
+              ? 'bg-red-50 border border-red-100 text-red-700'
               : 'bg-amber-50 border border-amber-100 text-amber-700'
           }`}>
             <div className="flex items-center gap-2">
               {isCloudSync ? (
                 <span>☁️ <strong>Cloud sync active</strong> — {myNotes?.length || 0} note{myNotes?.length !== 1 ? 's' : ''} backed up to your account</span>
+              ) : needsRelogin ? (
+                <span>🔐 <strong>Session expired</strong> — please sign out and sign in again to sync your notes</span>
               ) : dbConnecting ? (
                 <>
                   <RefreshCw size={13} className="animate-spin shrink-0" />
                   <span><strong>Connecting to cloud…</strong> Loading your private notes</span>
                 </>
               ) : (
-                <span>⚠️ <strong>Not synced yet</strong> — tap to back up {myNotes?.length || 0} note{myNotes?.length !== 1 ? 's' : ''} to cloud</span>
+                <span>⚠️ <strong>Not synced yet</strong> — tap to load {myNotes?.length || 0} note{myNotes?.length !== 1 ? 's' : ''} from cloud</span>
               )}
             </div>
-            {!isCloudSync && (
+            {!isCloudSync && !needsRelogin && (
               <button
                 onClick={() => connectFirestore()}
                 disabled={dbConnecting}
