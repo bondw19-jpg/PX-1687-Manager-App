@@ -3,9 +3,11 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, PhoneMissed, Star, Calendar,
   ClipboardCheck, StickyNote, ListChecks, Megaphone, BookUser,
-  Settings, LogOut, ChevronRight, HardDrive
+  Settings, LogOut, ChevronRight, HardDrive, ShieldCheck
 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
+
+const ADMIN_EMAIL = 'bondw19@gmail.com';
 
 const sections = [
   {
@@ -37,6 +39,7 @@ const sections = [
       { label: 'Announcements',   icon: Megaphone,       path: '/announcements' },
       { label: 'Quick Contacts',  icon: BookUser,        path: '/contacts' },
       { label: 'Backup & Restore', icon: HardDrive,      path: '/backup' },
+      { label: 'Admin Panel',      icon: ShieldCheck,    path: '/admin',  adminOnly: true },
     ],
   },
 ];
@@ -46,6 +49,7 @@ export default function DesktopSidebar() {
   const location  = useLocation();
   const { user, storeName } = useAppStore();
 
+  const isAdmin     = user?.email === ADMIN_EMAIL;
   const userInitial = user?.name?.[0]?.toUpperCase() || 'B';
   const userName    = user?.name  || 'Bond';
   const userRole    = user?.role  || 'Store Manager';
@@ -74,6 +78,8 @@ export default function DesktopSidebar() {
               {section.title}
             </div>
             {section.items.map(item => {
+              // Hide admin-only items for non-admin users
+              if (item.adminOnly && !isAdmin) return null;
               const Icon     = item.icon;
               const isActive = location.pathname === item.path ||
                 (item.path !== '/' && location.pathname.startsWith(item.path));
@@ -93,9 +99,12 @@ export default function DesktopSidebar() {
                   <Icon
                     size={18}
                     strokeWidth={isActive ? 2.5 : 2}
-                    className={isActive ? 'text-primary' : 'text-gray-400 group-hover:text-gray-600'}
+                    className={item.adminOnly ? 'text-amber-500' : isActive ? 'text-primary' : 'text-gray-400 group-hover:text-gray-600'}
                   />
                   <span className="flex-1 text-left">{item.label}</span>
+                  {item.adminOnly && !isActive && (
+                    <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold">ADMIN</span>
+                  )}
                   {isActive && <ChevronRight size={14} className="text-primary opacity-60" />}
                 </button>
               );

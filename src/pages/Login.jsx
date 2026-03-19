@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 
+const ADMIN_EMAIL = 'bondw19@gmail.com';
+
 export default function Login() {
   const navigate = useNavigate();
   const { setUser, connectFirestore } = useAppStore();
@@ -53,7 +55,7 @@ export default function Login() {
         uid:     u.uid,
         email:   u.email,
         name:    u.displayName || name || u.email.split('@')[0],
-        role:    'manager',
+        role:    u.email === ADMIN_EMAIL ? 'admin' : 'manager',
         storeId: 'store_1687',
       });
       // Auto-connect Firestore sync after sign-in

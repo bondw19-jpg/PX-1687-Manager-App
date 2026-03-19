@@ -16,6 +16,7 @@ const Contacts      = lazy(() => import('./pages/Contacts'));
 const Announcements = lazy(() => import('./pages/Announcements'));
 const BackupManager = lazy(() => import('./pages/BackupManager'));
 const Login         = lazy(() => import('./pages/Login'));
+const AdminPage     = lazy(() => import('./pages/AdminPage'));
 
 // ── Loading spinner ───────────────────────────────────────────────────────────
 function LoadingSpinner() {
@@ -112,6 +113,7 @@ export default function App() {
             <Route path="/contacts"      element={<Layout><Contacts /></Layout>} />
             <Route path="/announcements" element={<Layout><Announcements /></Layout>} />
             <Route path="/backup"        element={<Layout><BackupManager /></Layout>} />
+            <Route path="/admin"         element={<Layout><AdminPage /></Layout>} />
             <Route path="*"             element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
