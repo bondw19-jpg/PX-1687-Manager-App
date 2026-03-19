@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, isToday, parseISO } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus, X, Calendar, RefreshCw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, X, Calendar, RefreshCw, Clock, FileText, Trash2 } from 'lucide-react';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
@@ -12,6 +12,80 @@ const EVENT_COLORS = {
   Training: 'bg-green-500',
   Other: 'bg-gray-400',
 };
+
+// ── Event Detail Modal ───────────────────────────────────────────────────────
+function EventDetailModal({ event, onClose, onDelete }) {
+  if (!event) return null;
+
+  const colorClass = EVENT_COLORS[event.type] || 'bg-gray-400';
+
+  const handleDelete = () => {
+    if (window.confirm('Delete this event?')) {
+      onDelete(event.id);
+      onClose();
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up">
+        {/* Header stripe */}
+        <div className={`h-2 w-full rounded-t-2xl ${colorClass}`} />
+        <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-gray-100">
+          <span className={`text-xs font-bold px-2.5 py-1 rounded-full text-white ${colorClass}`}>
+            {event.type}
+          </span>
+          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {/* Title */}
+          <h2 className="text-lg font-bold text-gray-800 leading-snug">{event.title}</h2>
+
+          {/* Date & Time */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <Calendar size={15} className="text-primary shrink-0" />
+              <span>{event.date}</span>
+            </div>
+            {event.time && (
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Clock size={15} className="text-primary shrink-0" />
+                <span>{event.time}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Notes / Description */}
+          {event.notes ? (
+            <div className="bg-gray-50 rounded-xl px-3 py-3">
+              <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 mb-1.5">
+                <FileText size={13} />
+                Notes
+              </div>
+              <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{event.notes}</p>
+            </div>
+          ) : (
+            <div className="bg-gray-50 rounded-xl px-3 py-3 text-xs text-gray-400 italic">
+              No notes added for this event.
+            </div>
+          )}
+
+          {/* Delete button */}
+          <button
+            onClick={handleDelete}
+            className="w-full flex items-center justify-center gap-2 border border-red-200 text-red-500 hover:bg-red-50 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+          >
+            <Trash2 size={15} />
+            Delete Event
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function AddEventModal({ selectedDate, onClose, onSave }) {
   const [form, setForm] = useState({
@@ -110,6 +184,7 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [detailEvent, setDetailEvent]   = useState(null); // event tapped in upcoming list
 
   const events = activeTab === 'team' ? teamEvents : myEvents;
   const addEvent = activeTab === 'team' ? addTeamEvent : addMyEvent;
@@ -294,21 +369,26 @@ export default function CalendarPage() {
           ) : (
             <div className="divide-y divide-gray-50">
               {upcomingEvents.map(event => (
-                <div key={event.id} className="flex items-center gap-3 px-4 py-3">
+                <button
+                  key={event.id}
+                  onClick={() => setDetailEvent(event)}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 active:bg-gray-100 transition-colors text-left"
+                >
                   <div className={`w-2 h-10 rounded-full flex-shrink-0 ${EVENT_COLORS[event.type] || 'bg-gray-400'}`} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-800 truncate">{event.title}</p>
-                    <p className="text-xs text-gray-500">{event.date}{event.time ? ` at ${event.time}` : ''}</p>
+                    <p className="text-xs text-gray-500">
+                      {event.date}{event.time ? ` at ${event.time}` : ''}
+                      {event.notes ? <span className="ml-2 text-gray-400">· has notes</span> : ''}
+                    </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     <span className={`text-xs px-2 py-0.5 rounded-full text-white ${EVENT_COLORS[event.type] || 'bg-gray-400'}`}>
                       {event.type}
                     </span>
-                    <button onClick={() => deleteEvent(event.id)} className="p-1 text-gray-300 hover:text-red-500">
-                      <X size={14} />
-                    </button>
+                    <ChevronRight size={14} className="text-gray-300" />
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -322,6 +402,14 @@ export default function CalendarPage() {
           selectedDate={selectedDate}
           onClose={() => { setShowAddModal(false); setSelectedDate(null); }}
           onSave={addEvent}
+        />
+      )}
+
+      {detailEvent && (
+        <EventDetailModal
+          event={detailEvent}
+          onClose={() => setDetailEvent(null)}
+          onDelete={(id) => { deleteEvent(id); setDetailEvent(null); }}
         />
       )}
     </div>
