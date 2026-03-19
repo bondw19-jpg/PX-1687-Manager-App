@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, PhoneMissed, Calendar, Pin, UserCheck, ChevronRight, Phone, Cloud, CloudOff } from 'lucide-react';
+import { Users, PhoneMissed, Calendar, Pin, UserCheck, ChevronRight, Phone, Cloud, CloudOff, X, Clock, Tag, FileText, Lock } from 'lucide-react';
 import { format } from 'date-fns';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
@@ -9,7 +9,17 @@ import PreviewUpdateBanner from '../components/PreviewUpdateBanner';
 
 const PREVIEW_URL = 'https://4173-il9welzg75eglof37wb6r-ea026bf9.sandbox.novita.ai';
 
-function StatCard({ icon, count, label, color, bgColor }) {
+// ── Color map matching CalendarPage ──────────────────────────────────────────
+const TYPE_COLORS = {
+  Meeting:    { dot: 'bg-blue-500',   badge: 'bg-blue-100 text-blue-700',   bar: 'bg-blue-500' },
+  Inspection: { dot: 'bg-red-500',    badge: 'bg-red-100 text-red-700',     bar: 'bg-red-500'  },
+  Training:   { dot: 'bg-green-500',  badge: 'bg-green-100 text-green-700', bar: 'bg-green-500' },
+  Other:      { dot: 'bg-gray-400',   badge: 'bg-gray-100 text-gray-600',   bar: 'bg-gray-400' },
+};
+const typeColors = (type) => TYPE_COLORS[type] || TYPE_COLORS.Other;
+
+// ── Stat Card ─────────────────────────────────────────────────────────────────
+function StatCard({ icon, count, label, bgColor }) {
   return (
     <div className="bg-white rounded-xl p-4 shadow-sm flex items-center gap-3">
       <div className={`w-12 h-12 ${bgColor} rounded-xl flex items-center justify-center flex-shrink-0`}>
@@ -23,9 +33,152 @@ function StatCard({ icon, count, label, color, bgColor }) {
   );
 }
 
+// ── Event Detail Modal ────────────────────────────────────────────────────────
+function EventDetailModal({ event, onClose }) {
+  if (!event) return null;
+  const colors = typeColors(event.type);
+
+  // Format time display
+  const formatTime = (t) => {
+    if (!t) return null;
+    try {
+      const [h, m] = t.split(':').map(Number);
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      const hour = h % 12 || 12;
+      return `${hour}:${String(m).padStart(2, '0')} ${ampm}`;
+    } catch {
+      return t;
+    }
+  };
+
+  // Format date display
+  const formatDate = (d) => {
+    if (!d) return '';
+    try {
+      return format(new Date(d + 'T00:00:00'), 'EEEE, MMMM d, yyyy');
+    } catch {
+      return d;
+    }
+  };
+
+  const isPrivate = event.id?.startsWith('myevent_');
+
+  return (
+    <div
+      className="modal-overlay"
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up">
+        {/* Colored top bar */}
+        <div className={`h-1.5 w-full rounded-t-2xl ${colors.bar}`} />
+
+        {/* Header */}
+        <div className="flex items-start justify-between p-4 pb-3">
+          <div className="flex-1 pr-3">
+            <div className="flex items-center gap-2 mb-1">
+              <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${colors.badge}`}>
+                {event.type || 'Event'}
+              </span>
+              {isPrivate && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 font-medium flex items-center gap-1">
+                  <Lock size={10} /> My Event
+                </span>
+              )}
+            </div>
+            <h2 className="text-lg font-bold text-gray-900 leading-tight">{event.title}</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 flex-shrink-0"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Details */}
+        <div className="px-4 pb-6 space-y-3">
+          {/* Date */}
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+              <Calendar size={15} className="text-green-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-0.5">Date</p>
+              <p className="text-sm font-semibold text-gray-800">{formatDate(event.date)}</p>
+            </div>
+          </div>
+
+          {/* Time */}
+          {event.time && (
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Clock size={15} className="text-blue-600" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-0.5">Time</p>
+                <p className="text-sm font-semibold text-gray-800">{formatTime(event.time)}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Type */}
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 bg-gray-50 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+              <Tag size={15} className="text-gray-500" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-0.5">Type</p>
+              <p className="text-sm font-semibold text-gray-800">{event.type || 'Event'}</p>
+            </div>
+          </div>
+
+          {/* Notes / Description */}
+          {event.notes && (
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 bg-yellow-50 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+                <FileText size={15} className="text-yellow-600" />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-0.5">Description</p>
+                <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{event.notes}</p>
+              </div>
+            </div>
+          )}
+
+          {/* No notes placeholder */}
+          {!event.notes && (
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 bg-yellow-50 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+                <FileText size={15} className="text-yellow-400" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-0.5">Description</p>
+                <p className="text-sm text-gray-400 italic">No description added.</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Close button */}
+        <div className="px-4 pb-5">
+          <button
+            onClick={onClose}
+            className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-200 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const navigate = useNavigate();
   const { associates, callIns, teamEvents, teamNotes, myEvents, dbReady, dbMode, user } = useAppStore();
+
+  const [selectedEvent, setSelectedEvent] = useState(null);
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const currentMonth = format(new Date(), 'yyyy-MM');
@@ -34,18 +187,15 @@ export default function Dashboard() {
   const callInsThisMonth = callIns.filter(c => c.date?.startsWith(currentMonth)).length;
 
   const allEvents = [...teamEvents, ...myEvents];
-  const todayEvents = allEvents.filter(e => e.date === today);
+  const todayEvents = allEvents
+    .filter(e => e.date === today)
+    .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
   const pinnedNotes = teamNotes.filter(n => n.pinned).length;
   const totalAssociates = associates.length;
 
   const recentCallIns = [...callIns].sort((a, b) =>
     new Date(b.createdAt) - new Date(a.createdAt)
   ).slice(0, 5);
-
-  const upcomingEvents = allEvents
-    .filter(e => e.date >= today)
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .slice(0, 5);
 
   return (
     <div className="min-h-screen bg-background">
@@ -130,22 +280,54 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="space-y-2">
-                {todayEvents.map(event => (
-                  <div key={event.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
-                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                      event.type === 'Meeting' ? 'bg-blue-500' :
-                      event.type === 'Inspection' ? 'bg-red-500' :
-                      event.type === 'Training' ? 'bg-green-500' : 'bg-gray-400'
-                    }`}></div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{event.title}</p>
-                      {event.time && <p className="text-xs text-gray-500">{event.time}</p>}
-                    </div>
-                    <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
-                      {event.type || 'Event'}
-                    </span>
-                  </div>
-                ))}
+                {todayEvents.map(event => {
+                  const colors = typeColors(event.type);
+                  const isPrivate = event.id?.startsWith('myevent_');
+                  return (
+                    <button
+                      key={event.id}
+                      onClick={() => setSelectedEvent(event)}
+                      className="w-full flex items-center gap-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 active:bg-gray-200 transition-colors text-left"
+                    >
+                      {/* Color dot */}
+                      <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${colors.dot}`} />
+
+                      {/* Title + time */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-800 truncate">{event.title}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          {event.time && (
+                            <span className="text-xs text-gray-500 flex items-center gap-1">
+                              <Clock size={10} className="text-gray-400" />
+                              {event.time}
+                            </span>
+                          )}
+                          {event.notes && (
+                            <span className="text-xs text-gray-400 flex items-center gap-1">
+                              {event.time && <span className="text-gray-300">·</span>}
+                              <FileText size={10} />
+                              Notes
+                            </span>
+                          )}
+                          {isPrivate && (
+                            <span className="text-xs text-purple-400 flex items-center gap-1">
+                              {(event.time || event.notes) && <span className="text-gray-300">·</span>}
+                              <Lock size={10} />
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Type badge + chevron */}
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colors.badge}`}>
+                          {event.type || 'Event'}
+                        </span>
+                        <ChevronRight size={14} className="text-gray-300" />
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -200,6 +382,14 @@ export default function Dashboard() {
 
         <div className="h-4" />
       </div>
+
+      {/* Event Detail Modal */}
+      {selectedEvent && (
+        <EventDetailModal
+          event={selectedEvent}
+          onClose={() => setSelectedEvent(null)}
+        />
+      )}
     </div>
   );
 }
