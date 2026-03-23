@@ -204,7 +204,7 @@ export async function writePresence(uid, profile, isOnline = true) {
     const ref = doc(db, 'stores', STORE_ID, 'presence', uid);
     await setDoc(ref, {
       uid,
-      name:     profile.name  || profile.displayName || profile.email?.split('@')[0] || 'Unknown',
+      name:     (profile.name || profile.displayName || profile.email?.split('@')[0] || 'Unknown').trim().split(/\s+/)[0],
       email:    profile.email || '',
       role:     profile.role  || 'manager',
       storeId:  STORE_ID,

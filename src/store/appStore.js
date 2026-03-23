@@ -1,6 +1,12 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+// Returns only the first name (first word) from a full name string
+function firstName(str) {
+  if (!str) return 'Unknown';
+  return str.trim().split(/\s+/)[0];
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // AUTO-RECOVERY: if primary storage is missing, restore from rolling backup
 // ─────────────────────────────────────────────────────────────────────────────
@@ -157,7 +163,7 @@ export const useAppStore = create(
       addAssociate: (a) => {
         const u   = get().user;
         const doc = { ...a, id: `assoc_${Date.now()}`, createdAt: new Date().toISOString(),
-          createdBy: u ? { uid: u.uid, name: u.name || u.email?.split('@')[0] || 'Unknown' } : null };
+          createdBy: u ? { uid: u.uid, name: firstName(u.name || u.email?.split('@')[0]) } : null };
         set(s => ({ associates: [...s.associates, doc] }));
         fsWrite('associates', doc.id, doc);
       },
@@ -176,7 +182,7 @@ export const useAppStore = create(
         const u = get().user;
         const enriched = {
           ...fileData,
-          savedBy: u ? { uid: u.uid, name: u.name || u.email?.split('@')[0] || 'Unknown' } : null,
+          savedBy: u ? { uid: u.uid, name: firstName(u.name || u.email?.split('@')[0]) } : null,
         };
         set(s => ({ workFiles: { ...s.workFiles, [associateId]: enriched } }));
         if (get().dbMode === 'firestore') {
@@ -191,7 +197,7 @@ export const useAppStore = create(
       addCallIn: (c) => {
         const u   = get().user;
         const doc = { ...c, id: `callin_${Date.now()}`, createdAt: new Date().toISOString(),
-          createdBy: u ? { uid: u.uid, name: u.name || u.email?.split('@')[0] || 'Unknown' } : null };
+          createdBy: u ? { uid: u.uid, name: firstName(u.name || u.email?.split('@')[0]) } : null };
         set(s => ({ callIns: [doc, ...s.callIns] }));
         fsWrite('callIns', doc.id, doc);
       },
@@ -207,7 +213,7 @@ export const useAppStore = create(
       addTeamEvent: (e) => {
         const u   = get().user;
         const doc = { ...e, id: `event_${Date.now()}`, createdAt: new Date().toISOString(),
-          createdBy: u ? { uid: u.uid, name: u.name || u.email?.split('@')[0] || 'Unknown' } : null };
+          createdBy: u ? { uid: u.uid, name: firstName(u.name || u.email?.split('@')[0]) } : null };
         set(s => ({ teamEvents: [...s.teamEvents, doc] }));
         fsWrite('teamEvents', doc.id, doc);
       },
@@ -255,7 +261,7 @@ export const useAppStore = create(
       addTeamNote: (n) => {
         const u   = get().user;
         const doc = { ...n, id: `note_${Date.now()}`, createdAt: new Date().toISOString(), pinned: false, attachments: n.attachments || [],
-          createdBy: u ? { uid: u.uid, name: u.name || u.email?.split('@')[0] || 'Unknown' } : null };
+          createdBy: u ? { uid: u.uid, name: firstName(u.name || u.email?.split('@')[0]) } : null };
         set(s => ({ teamNotes: [doc, ...s.teamNotes] }));
         fsWrite('teamNotes', doc.id, doc);
       },
