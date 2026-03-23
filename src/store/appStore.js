@@ -154,8 +154,9 @@ export const useAppStore = create(
       storeId: 'store_1687',
       storeName: 'PANDA EXPRESS 1687',
       isOnline: true,
-      setUser:    (user) => set({ user }),
-      setStoreId: (id)   => set({ storeId: id }),
+      setUser:      (user) => set({ user }),
+      setStoreId:   (id)   => set({ storeId: id }),
+      setStoreName: (name) => set({ storeName: name }),
       setOnline:  (v)    => set({ isOnline: v }),
 
       // ── Associates ────────────────────────────────────────────────────────

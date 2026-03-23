@@ -39,6 +39,7 @@ const sections = [
       { label: 'Announcements',   icon: Megaphone,       path: '/announcements' },
       { label: 'Quick Contacts',  icon: BookUser,        path: '/contacts' },
       { label: 'Backup & Restore', icon: HardDrive,      path: '/backup' },
+      { label: 'Settings',         icon: Settings,       path: '/settings' },
       { label: 'Admin Panel',      icon: ShieldCheck,    path: '/admin',  adminOnly: true },
     ],
   },
