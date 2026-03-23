@@ -173,10 +173,15 @@ export const useAppStore = create(
       // ── Work Files (SHARED — synced to Firestore when connected) ─────────
       workFiles: {},
       saveWorkFile: (associateId, fileData) => {
-        set(s => ({ workFiles: { ...s.workFiles, [associateId]: fileData } }));
+        const u = get().user;
+        const enriched = {
+          ...fileData,
+          savedBy: u ? { uid: u.uid, name: u.name || u.email?.split('@')[0] || 'Unknown' } : null,
+        };
+        set(s => ({ workFiles: { ...s.workFiles, [associateId]: enriched } }));
         if (get().dbMode === 'firestore') {
           import('../lib/firestoreSync')
-            .then(({ fsSaveWorkFile }) => fsSaveWorkFile(associateId, fileData))
+            .then(({ fsSaveWorkFile }) => fsSaveWorkFile(associateId, enriched))
             .catch(() => {});
         }
       },

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Plus, Trash2, RefreshCw, Printer } from 'lucide-react';
+import { X, Plus, Trash2, RefreshCw, Printer, User } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 
 const KEY_LEGEND = [
@@ -15,8 +15,14 @@ const KEY_LEGEND = [
   { key: 'J', desc: 'Break violation' },
 ];
 
-function emptyRow() {
-  return { id: Date.now() + Math.random(), date: '', key: '', details: '' };
+function emptyRow(user) {
+  return {
+    id: Date.now() + Math.random(),
+    date: '',
+    key: '',
+    details: '',
+    addedBy: user ? { uid: user.uid, name: user.name || user.email?.split('@')[0] || 'Unknown' } : null,
+  };
 }
 
 // Auto-expanding textarea — grows with content, never shows scrollbar
@@ -45,18 +51,18 @@ function AutoTextarea({ value, onChange, placeholder, className }) {
 }
 
 export default function WorkFileModal({ associate, onClose }) {
-  const { workFiles, saveWorkFile } = useAppStore();
+  const { workFiles, saveWorkFile, user } = useAppStore();
   const existing = workFiles[associate.id];
 
   const [rows, setRows] = useState(
-    existing?.rows || [emptyRow(), emptyRow(), emptyRow()]
+    existing?.rows || [emptyRow(user), emptyRow(user), emptyRow(user)]
   );
 
-  const addRow = () => setRows(prev => [...prev, emptyRow()]);
+  const addRow = () => setRows(prev => [...prev, emptyRow(user)]);
 
   const clearRows = () => {
     if (window.confirm('Clear all rows?')) {
-      setRows([emptyRow(), emptyRow(), emptyRow()]);
+      setRows([emptyRow(user), emptyRow(user), emptyRow(user)]);
     }
   };
 
@@ -74,7 +80,6 @@ export default function WorkFileModal({ associate, onClose }) {
   };
 
   const handlePrint = () => {
-    // Simple print approach
     const printContent = `
       <html><head><title>Associate Work File</title>
       <style>
@@ -88,6 +93,7 @@ export default function WorkFileModal({ associate, onClose }) {
         th { background: #f0f0f0; font-weight: bold; }
         .legend { margin-top: 16px; font-size: 11px; }
         .legend h3 { font-size: 12px; margin-bottom: 4px; }
+        .added-by { font-size: 10px; color: #666; font-style: italic; }
       </style>
       </head><body>
       <h2>ASSOCIATE WORK FILE</h2>
@@ -99,11 +105,12 @@ export default function WorkFileModal({ associate, onClose }) {
         <div class="info-row"><span class="info-label">Birthday:</span><span>${associate.birthday || ''}</span></div>
         <div class="info-row"><span class="info-label">Hire Date:</span><span>${associate.hireDate || ''}</span></div>
         <div class="info-row"><span class="info-label">Status:</span><span>${associate.status || ''}</span></div>
+        ${existing?.savedBy ? `<div class="info-row"><span class="info-label">Last Saved By:</span><span>${existing.savedBy.name}</span></div>` : ''}
       </div>
       <table>
         <thead><tr><th style="width:80px">DATE</th><th style="width:40px">KEY</th><th>TOPICS & DETAILS</th></tr></thead>
         <tbody>
-          ${rows.map(r => `<tr><td>${r.date}</td><td>${r.key}</td><td>${r.details}</td></tr>`).join('')}
+          ${rows.map(r => `<tr><td>${r.date}</td><td>${r.key}</td><td>${r.details}${r.addedBy ? `<br/><span class="added-by">Added by ${r.addedBy.name}</span>` : ''}</td></tr>`).join('')}
         </tbody>
       </table>
       <div class="legend">
@@ -167,6 +174,20 @@ export default function WorkFileModal({ associate, onClose }) {
                 <span className="text-gray-500 text-xs w-28 flex-shrink-0">Status:</span>
                 <span className="font-medium text-gray-800 capitalize">{associate.status || '—'}</span>
               </div>
+              {/* Last saved by */}
+              {existing?.savedBy?.name && (
+                <div className="col-span-2 flex items-center gap-1.5 mt-1 pt-2 border-t border-gray-200">
+                  <User size={11} className="text-gray-400 flex-shrink-0" />
+                  <span className="text-xs text-gray-500">
+                    Last saved by <span className="font-semibold text-gray-700">{existing.savedBy.name}</span>
+                    {existing.savedAt && (
+                      <span className="text-gray-400 ml-1">
+                        · {new Date(existing.savedAt).toLocaleDateString()}
+                      </span>
+                    )}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -216,20 +237,29 @@ export default function WorkFileModal({ associate, onClose }) {
                       onChange={e => updateRow(row.id, 'key', e.target.value.toUpperCase())}
                     />
                   </div>
-                  {/* TOPICS & DETAILS — auto-expanding textarea */}
-                  <div className="flex items-start min-h-[32px]">
-                    <AutoTextarea
-                      className="flex-1 px-2 py-1.5 text-xs bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-primary resize-none leading-relaxed"
-                      placeholder="Details..."
-                      value={row.details}
-                      onChange={e => updateRow(row.id, 'details', e.target.value)}
-                    />
-                    <button
-                      onClick={() => removeRow(row.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1 mt-1 text-red-400 hover:text-red-600 transition-opacity mr-1 flex-shrink-0"
-                    >
-                      <Trash2 size={12} />
-                    </button>
+                  {/* TOPICS & DETAILS */}
+                  <div className="flex flex-col min-h-[32px]">
+                    <div className="flex items-start flex-1">
+                      <AutoTextarea
+                        className="flex-1 px-2 py-1.5 text-xs bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-primary resize-none leading-relaxed"
+                        placeholder="Details..."
+                        value={row.details}
+                        onChange={e => updateRow(row.id, 'details', e.target.value)}
+                      />
+                      <button
+                        onClick={() => removeRow(row.id)}
+                        className="opacity-0 group-hover:opacity-100 p-1 mt-1 text-red-400 hover:text-red-600 transition-opacity mr-1 flex-shrink-0"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                    {/* Added by chip */}
+                    {row.addedBy?.name && (
+                      <div className="flex items-center gap-1 px-2 pb-1">
+                        <User size={9} className="text-gray-300 flex-shrink-0" />
+                        <span className="text-[10px] text-gray-400 leading-none">{row.addedBy.name}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -241,7 +271,7 @@ export default function WorkFileModal({ associate, onClose }) {
                 onClick={addRow}
                 className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-xl text-xs font-medium text-gray-700 hover:bg-gray-50"
               >
-                <Plus size={14} /> Add Rows
+                <Plus size={14} /> Add Row
               </button>
               <button
                 onClick={clearRows}
