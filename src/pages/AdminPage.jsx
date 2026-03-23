@@ -181,81 +181,173 @@ function DataOverview() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SECTION 3: Signed-in Users (from Firestore users/ collection)
+// SECTION 3: Who is Online — live presence from Firestore
+// ─────────────────────────────────────────────────────────────────────────────
+// Subscribes in real-time to stores/store_1687/presence/{uid}.
+// A user is "online" if isOnline=true AND lastSeen is within the last 3 min.
 // ─────────────────────────────────────────────────────────────────────────────
 function SignedInUsers({ onToast }) {
-  const { dbReady, dbMode } = useAppStore();
+  const { dbReady, dbMode, user: adminUser } = useAppStore();
   const [users, setUsers]   = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const loadUsers = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { getFirebaseModules } = await import('../lib/firebase');
-      const { db } = await getFirebaseModules();
-      const { collection, getDocs } = await import('firebase/firestore');
-      const snap = await getDocs(collection(db, 'users'));
-      const list = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
-      setUsers(list);
-    } catch (e) {
-      onToast('Failed to load users: ' + (e?.message || 'unknown error'), 'error');
-    } finally {
-      setLoading(false);
-    }
-  }, [onToast]);
+  // Format lastSeen timestamp to readable string
+  const formatLastSeen = (ts) => {
+    if (!ts) return 'Never';
+    const date = ts.toDate ? ts.toDate() : new Date(ts);
+    const diffMs  = Date.now() - date.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1)  return 'just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24)  return `${diffHr}h ago`;
+    return date.toLocaleDateString();
+  };
+
+  // A user is considered "online" if isOnline=true AND lastSeen < 3 minutes ago
+  const isActivelyOnline = (u) => {
+    if (!u.isOnline) return false;
+    if (!u.lastSeen) return false;
+    const date = u.lastSeen.toDate ? u.lastSeen.toDate() : new Date(u.lastSeen);
+    return (Date.now() - date.getTime()) < 3 * 60 * 1000;
+  };
 
   useEffect(() => {
-    if (dbReady && dbMode === 'firestore') loadUsers();
-  }, [dbReady, dbMode, loadUsers]);
+    if (!dbReady || dbMode !== 'firestore') { setLoading(false); return; }
+
+    let unsub = () => {};
+    (async () => {
+      try {
+        const { getFirebaseModules } = await import('../lib/firebase');
+        const { db } = await getFirebaseModules();
+        const { collection, onSnapshot } = await import('firebase/firestore');
+        const ref = collection(db, 'stores', 'store_1687', 'presence');
+        unsub = onSnapshot(ref, (snap) => {
+          const list = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+          // Sort: online first, then by lastSeen desc
+          list.sort((a, b) => {
+            const aOn = isActivelyOnline(a) ? 1 : 0;
+            const bOn = isActivelyOnline(b) ? 1 : 0;
+            if (bOn !== aOn) return bOn - aOn;
+            const aTs = a.lastSeen?.toDate?.()?.getTime() || 0;
+            const bTs = b.lastSeen?.toDate?.()?.getTime() || 0;
+            return bTs - aTs;
+          });
+          setUsers(list);
+          setLoading(false);
+        }, (err) => {
+          onToast('Presence error: ' + (err?.message || 'unknown'), 'error');
+          setLoading(false);
+        });
+      } catch (e) {
+        onToast('Failed to load presence: ' + (e?.message || 'unknown'), 'error');
+        setLoading(false);
+      }
+    })();
+    return () => unsub();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbReady, dbMode]);
+
+  const onlineCount = users.filter(isActivelyOnline).length;
 
   if (!dbReady || dbMode !== 'firestore') {
     return (
       <div className="pt-4">
         <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 flex items-center gap-2 text-sm text-amber-700">
           <WifiOff size={16} />
-          <span>Connect cloud sync to view signed-in users.</span>
+          <span>Connect cloud sync to view online users.</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="pt-4 space-y-3">
+    <div className="pt-3 space-y-3">
+      {/* Summary bar */}
       <div className="flex items-center justify-between">
-        <span className="text-xs text-gray-500">{users.length} user{users.length !== 1 ? 's' : ''} found</span>
-        <button
-          onClick={loadUsers}
-          disabled={loading}
-          className="flex items-center gap-1 text-xs text-primary font-semibold"
-        >
-          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-50 border border-green-100 px-2.5 py-1 rounded-full">
+            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse inline-block" />
+            {onlineCount} online now
+          </span>
+          <span className="text-xs text-gray-400">{users.length} total users</span>
+        </div>
       </div>
+
       {loading ? (
-        <div className="flex items-center justify-center py-6">
+        <div className="flex items-center justify-center py-8">
           <RefreshCw size={20} className="animate-spin text-gray-400" />
         </div>
       ) : users.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-4">No users found in Firestore.</p>
+        <div className="text-center py-8 text-gray-400">
+          <Users size={32} className="mx-auto mb-2 text-gray-200" />
+          <p className="text-sm">No presence data yet.</p>
+          <p className="text-xs mt-1">Users appear here after they sign in.</p>
+        </div>
       ) : (
         <div className="space-y-2">
-          {users.map(u => (
-            <div key={u.uid} className="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-2.5">
-              <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm shrink-0">
-                {(u.displayName || u.email || '?')[0].toUpperCase()}
+          {users.map(u => {
+            const online    = isActivelyOnline(u);
+            const isMe      = u.uid === adminUser?.uid;
+            const isAdmin   = u.email === ADMIN_EMAIL;
+            const initial   = (u.name || u.email || '?')[0].toUpperCase();
+            const lastSeen  = formatLastSeen(u.lastSeen);
+
+            return (
+              <div
+                key={u.uid}
+                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 border transition-colors ${
+                  online
+                    ? 'bg-green-50 border-green-100'
+                    : 'bg-gray-50 border-gray-100'
+                }`}
+              >
+                {/* Avatar + online dot */}
+                <div className="relative shrink-0">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm text-white ${
+                    isAdmin ? 'bg-red-500' : 'bg-primary'
+                  }`}>
+                    {initial}
+                  </div>
+                  {/* Online indicator dot */}
+                  <span className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white ${
+                    online ? 'bg-green-500' : 'bg-gray-300'
+                  }`} />
+                </div>
+
+                {/* Name / email / last seen */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-sm font-semibold text-gray-800 truncate">
+                      {u.name || u.email?.split('@')[0] || 'Unknown'}
+                    </span>
+                    {isMe && (
+                      <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-bold">You</span>
+                    )}
+                    {isAdmin && (
+                      <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full font-bold">ADMIN</span>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-400 truncate">{u.email || u.uid}</div>
+                </div>
+
+                {/* Status */}
+                <div className="shrink-0 text-right">
+                  <span className={`text-xs font-semibold ${online ? 'text-green-600' : 'text-gray-400'}`}>
+                    {online ? '● Online' : '○ Offline'}
+                  </span>
+                  <div className="text-[10px] text-gray-400 mt-0.5">{lastSeen}</div>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold text-gray-800 truncate">{u.displayName || u.email || 'Unknown'}</div>
-                <div className="text-xs text-gray-400 truncate">{u.email || u.uid}</div>
-              </div>
-              {u.email === ADMIN_EMAIL && (
-                <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold shrink-0">ADMIN</span>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
+
+      {/* Info note */}
+      <p className="text-[10px] text-gray-400 text-center pt-1">
+        Updates live · Online = active in last 3 min
+      </p>
     </div>
   );
 }
@@ -773,8 +865,8 @@ export default function AdminPage() {
           <DataOverview />
         </Section>
 
-        {/* Section 3: Signed-in Users */}
-        <Section icon={Users} title="Signed-in Users" color="text-purple-600" defaultOpen={false}>
+        {/* Section 3: Who is Online */}
+        <Section icon={Users} title="Who is Online" color="text-green-600" defaultOpen={true}>
           <SignedInUsers onToast={onToast} />
         </Section>
 

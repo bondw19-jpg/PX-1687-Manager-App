@@ -37,6 +37,7 @@ let _db            = null;
 let _uid           = null;
 let _syncActive    = false;
 let _unsubscribers = [];
+let _heartbeatTimer = null; // interval ID for presence heartbeat
 
 // ── Lazy Firebase init ────────────────────────────────────────────────────────
 async function getDb() {
@@ -181,6 +182,67 @@ export async function fsSaveWorkFile(associateId, fileData) {
     await setDoc(ref, { associateId, ...fileData, _updatedAt: serverTimestamp() });
   } catch (e) {
     console.warn(`[FS] saveWorkFile(${associateId}):`, e?.code || e?.message);
+  }
+}
+
+// ── Presence system ────────────────────────────────────────────────────────────
+// Writes a presence doc to stores/store_1687/presence/{uid} whenever the user
+// is connected. The Admin panel subscribes to this collection live to show
+// who is online.
+//
+// Fields written:
+//   uid, name, email, role, isOnline, lastSeen (serverTimestamp), storeId
+//
+// "Online" = lastSeen within the last 3 minutes (heartbeat every 60s)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function writePresence(uid, profile, isOnline = true) {
+  if (!uid) return;
+  try {
+    const { setDoc, serverTimestamp, doc } = await import('firebase/firestore');
+    const db = await getDb();
+    const ref = doc(db, 'stores', STORE_ID, 'presence', uid);
+    await setDoc(ref, {
+      uid,
+      name:     profile.name  || profile.displayName || profile.email?.split('@')[0] || 'Unknown',
+      email:    profile.email || '',
+      role:     profile.role  || 'manager',
+      storeId:  STORE_ID,
+      isOnline,
+      lastSeen: serverTimestamp(),
+    }, { merge: true });
+  } catch (e) {
+    // Non-fatal — presence is best-effort
+    console.warn('[FS] writePresence failed:', e?.code || e?.message);
+  }
+}
+
+export async function writePresenceOffline(uid) {
+  if (!uid) return;
+  try {
+    const { updateDoc, serverTimestamp, doc } = await import('firebase/firestore');
+    const db = await getDb();
+    const ref = doc(db, 'stores', STORE_ID, 'presence', uid);
+    await updateDoc(ref, { isOnline: false, lastSeen: serverTimestamp() });
+  } catch {
+    // Ignore — user may be offline anyway
+  }
+}
+
+export function startPresenceHeartbeat(uid, profile) {
+  stopPresenceHeartbeat(); // clear any existing timer
+  if (!uid) return;
+  // Write immediately, then every 60 seconds
+  writePresence(uid, profile, true);
+  _heartbeatTimer = setInterval(() => {
+    writePresence(uid, profile, true);
+  }, 60_000);
+}
+
+export function stopPresenceHeartbeat() {
+  if (_heartbeatTimer) {
+    clearInterval(_heartbeatTimer);
+    _heartbeatTimer = null;
   }
 }
 
@@ -471,6 +533,24 @@ export async function initFirestoreSync(set, get) {
 
     _syncActive = true;
 
+    // ── Presence heartbeat ────────────────────────────────────────────────────
+    // Write the user's presence immediately and refresh every 60 seconds.
+    // This powers the "Who is online" list in the Admin panel.
+    if (uid) {
+      const userProfile = get().user || {};
+      startPresenceHeartbeat(uid, userProfile);
+
+      // Mark offline when the tab/PWA is closed or navigated away
+      const handleOffline = () => writePresenceOffline(uid).catch(() => {});
+      window.addEventListener('beforeunload', handleOffline);
+      window.addEventListener('pagehide',     handleOffline);
+      // Store cleanup ref so disconnectFirestore can remove it
+      _unsubscribers.push(() => {
+        window.removeEventListener('beforeunload', handleOffline);
+        window.removeEventListener('pagehide',     handleOffline);
+      });
+    }
+
     // ── One-time migration per uid: upload local data that isn't in Firestore ─
     // Runs once per uid per browser context (browser and PWA each have their
     // own localStorage, so each will migrate its own local data independently).
@@ -509,6 +589,10 @@ export async function initFirestoreSync(set, get) {
 
 // ── Disconnect ────────────────────────────────────────────────────────────────
 export function disconnectFirestore(set) {
+  // Stop heartbeat and mark user offline before tearing down listeners
+  stopPresenceHeartbeat();
+  if (_uid) writePresenceOffline(_uid).catch(() => {});
+
   _unsubscribers.forEach(fn => { try { fn(); } catch {} });
   _unsubscribers = [];
   _syncActive    = false;
