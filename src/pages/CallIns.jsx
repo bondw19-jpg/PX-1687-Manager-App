@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
-import { PhoneMissed, Plus, X, Search, BarChart2 } from 'lucide-react';
+import { PhoneMissed, Plus, X, Search, BarChart2, User } from 'lucide-react';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
@@ -233,6 +233,11 @@ export default function CallIns() {
                   <p className="text-xs text-gray-500">{callIn.date} {callIn.time ? `at ${callIn.time}` : ''}</p>
                   {callIn.reason && (
                     <p className="text-xs text-gray-400 truncate mt-0.5">{callIn.reason}</p>
+                  )}
+                  {callIn.createdBy?.name && (
+                    <p className="flex items-center gap-1 text-xs text-blue-600 mt-0.5 font-medium">
+                      <User size={10} /> Logged by {callIn.createdBy.name}
+                    </p>
                   )}
                 </div>
                 <div className="flex flex-col items-end gap-1">

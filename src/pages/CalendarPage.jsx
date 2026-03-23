@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, isToday, parseISO } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus, X, Calendar, RefreshCw, Clock, FileText, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, X, Calendar, RefreshCw, Clock, FileText, Trash2, User } from 'lucide-react';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
@@ -57,6 +57,14 @@ function EventDetailModal({ event, onClose, onDelete }) {
               </div>
             )}
           </div>
+
+          {/* Creator */}
+          {event.createdBy?.name && (
+            <div className="flex items-center gap-2 text-xs text-blue-600 font-medium bg-blue-50 rounded-xl px-3 py-2">
+              <User size={13} className="shrink-0" />
+              Added by <strong>{event.createdBy.name}</strong>
+            </div>
+          )}
 
           {/* Notes / Description */}
           {event.notes ? (
@@ -380,6 +388,9 @@ export default function CalendarPage() {
                     <p className="text-xs text-gray-500">
                       {event.date}{event.time ? ` at ${event.time}` : ''}
                       {event.notes ? <span className="ml-2 text-gray-400">· has notes</span> : ''}
+                      {event.createdBy?.name && activeTab === 'team' && (
+                        <span className="ml-2 text-blue-500">· by {event.createdBy.name}</span>
+                      )}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">

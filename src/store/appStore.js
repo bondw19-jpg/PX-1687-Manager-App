@@ -155,7 +155,9 @@ export const useAppStore = create(
       // ── Associates ────────────────────────────────────────────────────────
       associates: [],
       addAssociate: (a) => {
-        const doc = { ...a, id: `assoc_${Date.now()}`, createdAt: new Date().toISOString() };
+        const u   = get().user;
+        const doc = { ...a, id: `assoc_${Date.now()}`, createdAt: new Date().toISOString(),
+          createdBy: u ? { uid: u.uid, name: u.name || u.email?.split('@')[0] || 'Unknown' } : null };
         set(s => ({ associates: [...s.associates, doc] }));
         fsWrite('associates', doc.id, doc);
       },
@@ -182,7 +184,9 @@ export const useAppStore = create(
       // ── Call-Ins ──────────────────────────────────────────────────────────
       callIns: [],
       addCallIn: (c) => {
-        const doc = { ...c, id: `callin_${Date.now()}`, createdAt: new Date().toISOString() };
+        const u   = get().user;
+        const doc = { ...c, id: `callin_${Date.now()}`, createdAt: new Date().toISOString(),
+          createdBy: u ? { uid: u.uid, name: u.name || u.email?.split('@')[0] || 'Unknown' } : null };
         set(s => ({ callIns: [doc, ...s.callIns] }));
         fsWrite('callIns', doc.id, doc);
       },
@@ -196,7 +200,9 @@ export const useAppStore = create(
       // myEvents   = PRIVATE (synced to users/{uid}/myEvents — per-account cloud backup)
       teamEvents: [], myEvents: [],
       addTeamEvent: (e) => {
-        const doc = { ...e, id: `event_${Date.now()}`, createdAt: new Date().toISOString() };
+        const u   = get().user;
+        const doc = { ...e, id: `event_${Date.now()}`, createdAt: new Date().toISOString(),
+          createdBy: u ? { uid: u.uid, name: u.name || u.email?.split('@')[0] || 'Unknown' } : null };
         set(s => ({ teamEvents: [...s.teamEvents, doc] }));
         fsWrite('teamEvents', doc.id, doc);
       },
@@ -242,7 +248,9 @@ export const useAppStore = create(
       // myNotes   = PRIVATE (synced to users/{uid}/myNotes — per-account cloud backup)
       teamNotes: [], myNotes: [],
       addTeamNote: (n) => {
-        const doc = { ...n, id: `note_${Date.now()}`, createdAt: new Date().toISOString(), pinned: false, attachments: n.attachments || [] };
+        const u   = get().user;
+        const doc = { ...n, id: `note_${Date.now()}`, createdAt: new Date().toISOString(), pinned: false, attachments: n.attachments || [],
+          createdBy: u ? { uid: u.uid, name: u.name || u.email?.split('@')[0] || 'Unknown' } : null };
         set(s => ({ teamNotes: [doc, ...s.teamNotes] }));
         fsWrite('teamNotes', doc.id, doc);
       },

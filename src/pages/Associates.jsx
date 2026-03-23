@@ -191,6 +191,11 @@ function ViewAssociateModal({ associate, onClose }) {
               <div className="mt-1">
                 <StarRating rating={associate.starRating || 0} />
               </div>
+              {associate.createdBy?.name && (
+                <p className="flex items-center gap-1 text-xs text-blue-500 mt-1">
+                  <User size={11} /> Added by {associate.createdBy.name}
+                </p>
+              )}
             </div>
           </div>
 
@@ -352,6 +357,11 @@ export default function Associates() {
                   <div className="mt-1.5">
                     <StarRating rating={assoc.starRating || 0} onRate={(r) => updateAssociate(assoc.id, { starRating: r })} />
                   </div>
+                  {assoc.createdBy?.name && (
+                    <p className="flex items-center gap-1 text-[10px] text-blue-500 mt-1">
+                      <User size={9} /> Added by {assoc.createdBy.name}
+                    </p>
+                  )}
                 </div>
               </div>
 

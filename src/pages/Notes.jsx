@@ -3,7 +3,7 @@ import {
   Plus, X, Search, Pin, PinOff, Pencil, Trash2, StickyNote,
   Image, FileText, Paperclip, ZoomIn, ZoomOut, Download,
   RotateCcw, ChevronLeft, ChevronRight, Eye, File,
-  Upload, FileImage, FileType, FileBadge, RefreshCw
+  Upload, FileImage, FileType, FileBadge, RefreshCw, User
 } from 'lucide-react';
 import { format } from 'date-fns';
 import Header from '../components/Header';
@@ -503,7 +503,7 @@ function AttachmentRow({ attachments, onOpenLightbox }) {
 }
 
 // ─── Note Card ───────────────────────────────────────────────────────────────
-function NoteCard({ note, onPin, onEdit, onDelete, onOpenLightbox }) {
+function NoteCard({ note, onPin, onEdit, onDelete, onOpenLightbox, showCreator }) {
   const [expanded, setExpanded] = useState(false);
   const preview = note.body?.substring(0, 140);
   const hasMore = note.body?.length > 140;
@@ -526,6 +526,12 @@ function NoteCard({ note, onPin, onEdit, onDelete, onOpenLightbox }) {
             <span className="text-xs text-gray-400">
               {note.createdAt ? format(new Date(note.createdAt), 'MMM d, yyyy') : ''}
             </span>
+            {showCreator && note.createdBy?.name && (
+              <span className="flex items-center gap-1 text-xs text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded-full">
+                <User size={10} />
+                {note.createdBy.name}
+              </span>
+            )}
             {attachCount > 0 && (
               <span className="flex items-center gap-1 text-xs text-gray-400">
                 <Paperclip size={11} /> {attachCount} {attachCount === 1 ? 'file' : 'files'}
@@ -768,6 +774,7 @@ export default function Notes() {
                 onEdit={setEditNote}
                 onDelete={handleDelete}
                 onOpenLightbox={openLightbox}
+                showCreator={activeTab === 'team'}
               />
             ))}
           </div>
