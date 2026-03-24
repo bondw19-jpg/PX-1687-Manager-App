@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, PhoneMissed, Calendar, Pin, UserCheck, ChevronRight, Phone, Cloud, CloudOff, X, Clock, Tag, FileText, Lock } from 'lucide-react';
-import { format } from 'date-fns';
+import { Users, PhoneMissed, Calendar, Pin, UserCheck, ChevronRight, Phone, Cloud, CloudOff, X, Clock, Tag, FileText, Lock, Shield, AlertTriangle } from 'lucide-react';
+import { format, subDays, isAfter } from 'date-fns';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
@@ -197,6 +197,30 @@ export default function Dashboard() {
     new Date(b.createdAt) - new Date(a.createdAt)
   ).slice(0, 5);
 
+  // ── Attendance analytics ──────────────────────────────────────────────────
+  const POINTS_MAP = { 'No-Show': 3, 'Unexcused': 2, 'Late/Tardy': 1, 'Excused': 0 };
+  const cutoff90 = subDays(new Date(), 90);
+
+  // Top 3 by incidents this month
+  const topAbsent = (() => {
+    const map = {};
+    callIns.filter(c => c.date?.startsWith(currentMonth)).forEach(c => {
+      if (!c.associateName) return;
+      if (!map[c.associateName]) map[c.associateName] = { name: c.associateName, count: 0, pts: 0 };
+      map[c.associateName].count++;
+      map[c.associateName].pts += (c.points ?? POINTS_MAP[c.type] ?? 0);
+    });
+    return Object.values(map).sort((a, b) => b.pts - a.pts).slice(0, 3);
+  })();
+
+  // At-risk associates (5+ pts in 90 days)
+  const atRisk = associates.filter(a => {
+    const pts = callIns
+      .filter(c => c.associateId === a.id && isAfter(new Date(c.date || 0), cutoff90))
+      .reduce((s, c) => s + (c.points ?? POINTS_MAP[c.type] ?? 0), 0);
+    return pts >= 5;
+  });
+
   return (
     <div className="min-h-screen bg-background">
       <Header title="Dashboard" />
@@ -338,15 +362,42 @@ export default function Dashboard() {
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
             <div className="flex items-center gap-2 font-semibold text-gray-800">
               <PhoneMissed size={18} className="text-primary" />
-              Recent Call-Ins
+              Recent Attendance Log
             </div>
-            <button
-              onClick={() => navigate('/callins')}
-              className="text-xs text-primary font-medium flex items-center gap-1"
-            >
+            <button onClick={() => navigate('/callins')}
+              className="text-xs text-primary font-medium flex items-center gap-1">
               View All <ChevronRight size={14} />
             </button>
           </div>
+
+          {/* At-risk alert */}
+          {atRisk.length > 0 && (
+            <div className="mx-4 mt-3 flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-xs text-red-700">
+              <AlertTriangle size={13} className="flex-shrink-0" />
+              <span><strong>{atRisk.length} associate{atRisk.length > 1 ? 's' : ''}</strong> at critical attendance points (5+) — action required</span>
+              <button onClick={() => navigate('/callins')} className="ml-auto underline font-semibold">Review</button>
+            </div>
+          )}
+
+          {/* Top absentees this month */}
+          {topAbsent.length > 0 && (
+            <div className="px-4 pt-3">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Top Absences This Month</p>
+              <div className="flex gap-2 flex-wrap">
+                {topAbsent.map(r => (
+                  <div key={r.name} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold ${
+                    r.pts >= 5 ? 'bg-red-50 border-red-200 text-red-700' :
+                    r.pts >= 3 ? 'bg-yellow-50 border-yellow-200 text-yellow-700' :
+                    'bg-gray-50 border-gray-200 text-gray-700'
+                  }`}>
+                    <Shield size={11} />
+                    {r.name} · {r.pts}pt{r.pts !== 1 ? 's' : ''}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="p-4">
             {recentCallIns.length === 0 ? (
               <div className="flex flex-col items-center py-6 text-gray-400">
@@ -366,13 +417,17 @@ export default function Dashboard() {
                       <p className="text-sm font-medium text-gray-800 truncate">{callIn.associateName}</p>
                       <p className="text-xs text-gray-500">{callIn.date} • {callIn.time || 'N/A'}</p>
                     </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                      callIn.type === 'Excused' ? 'bg-green-100 text-green-700' :
-                      callIn.type === 'No-Show' ? 'bg-red-100 text-red-700' :
-                      'bg-yellow-100 text-yellow-700'
-                    }`}>
-                      {callIn.type}
-                    </span>
+                    <div className="flex flex-col items-end gap-0.5">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        callIn.type === 'Excused'    ? 'bg-green-100 text-green-700' :
+                        callIn.type === 'No-Show'    ? 'bg-red-100 text-red-700' :
+                        callIn.type === 'Late/Tardy' ? 'bg-orange-100 text-orange-700' :
+                        'bg-yellow-100 text-yellow-700'
+                      }`}>{callIn.type}</span>
+                      {(callIn.points ?? POINTS_MAP[callIn.type] ?? 0) > 0 && (
+                        <span className="text-[10px] text-gray-400">+{callIn.points ?? POINTS_MAP[callIn.type]}pt</span>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

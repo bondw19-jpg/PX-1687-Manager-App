@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Eye, FileText, Pencil, Trash2, Search, Star, X, Plus, Phone, Calendar, User, Users, UserPlus } from 'lucide-react';
+import { Eye, FileText, Pencil, Trash2, Search, Star, X, Plus, Phone, Calendar, User, Users, UserPlus, Shield, AlertTriangle } from 'lucide-react';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import WorkFileModal from '../components/WorkFileModal';
+import { get90DayPoints, get90DayCallIns, pointsColor, pointsEmoji } from './CallIns';
 
 const POSITIONS = ['All Positions', 'FOH', 'BOH', 'Cook', 'Shift Lead', 'Manager'];
 const POSITION_COLORS = {
@@ -171,6 +172,10 @@ function AssociateModal({ associate, onClose, onSave }) {
 }
 
 function ViewAssociateModal({ associate, onClose }) {
+  const { callIns } = useAppStore();
+  const pts  = get90DayPoints(callIns, associate.id);
+  const incidents = get90DayCallIns(callIns, associate.id);
+
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up max-h-[85vh] flex flex-col">
@@ -198,6 +203,48 @@ function ViewAssociateModal({ associate, onClose }) {
               )}
             </div>
           </div>
+
+          {/* Attendance Points Panel */}
+          <div className={`rounded-xl p-3 border ${pointsColor(pts)}`}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-bold flex items-center gap-1.5">
+                <Shield size={13} /> 90-Day Attendance Points
+              </p>
+              <span className="text-lg font-bold">{pointsEmoji(pts)} {pts} pt{pts !== 1 ? 's' : ''}</span>
+            </div>
+            {/* Progress bar */}
+            <div className="w-full bg-white/60 rounded-full h-2 mb-2">
+              <div className={`h-2 rounded-full ${pts <= 2 ? 'bg-green-500' : pts <= 4 ? 'bg-yellow-400' : 'bg-red-500'}`}
+                style={{ width: `${Math.min(100, (pts / 8) * 100)}%` }} />
+            </div>
+            <p className="text-[11px] opacity-80">
+              {pts === 0 ? 'No incidents in the last 90 days — great attendance!' :
+               pts <= 2 ? `${incidents.length} incident${incidents.length !== 1 ? 's' : ''} — within acceptable range` :
+               pts <= 4 ? `${incidents.length} incidents — verbal warning recommended` :
+               `${incidents.length} incidents — written warning / counseling required`}
+            </p>
+            {pts >= 5 && (
+              <div className="mt-2 flex items-center gap-1.5 text-[11px] font-semibold">
+                <AlertTriangle size={12} /> Action required — review Work File
+              </div>
+            )}
+          </div>
+
+          {/* Recent incidents list */}
+          {incidents.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Recent Incidents (90d)</p>
+              {incidents.slice(0, 5).map(c => (
+                <div key={c.id} className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${pointsColor(c.points ?? 0)}`}>
+                    +{c.points ?? 0}pt
+                  </span>
+                  <span className="text-xs text-gray-700 font-medium">{c.type}</span>
+                  <span className="text-xs text-gray-400 ml-auto">{c.date}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             {[
@@ -235,7 +282,7 @@ function ViewAssociateModal({ associate, onClose }) {
 }
 
 export default function Associates() {
-  const { associates, addAssociate, updateAssociate, deleteAssociate } = useAppStore();
+  const { associates, addAssociate, updateAssociate, deleteAssociate, callIns, workFiles, saveWorkFile } = useAppStore();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All Status');
   const [positionFilter, setPositionFilter] = useState('All Positions');
@@ -362,6 +409,17 @@ export default function Associates() {
                       <User size={9} /> Added by {assoc.createdBy.name}
                     </p>
                   )}
+                  {/* 90-day attendance points badge */}
+                  {(() => {
+                    const pts = get90DayPoints(callIns, assoc.id);
+                    const cnt = get90DayCallIns(callIns, assoc.id).length;
+                    if (cnt === 0) return null;
+                    return (
+                      <p className={`flex items-center gap-1 text-[10px] font-bold mt-1 px-1.5 py-0.5 rounded-full border w-fit ${pointsColor(pts)}`}>
+                        <Shield size={9} /> {pointsEmoji(pts)} {pts} pt{pts !== 1 ? 's' : ''} · {cnt} incident{cnt !== 1 ? 's' : ''} (90d)
+                      </p>
+                    );
+                  })()}
                 </div>
               </div>
 

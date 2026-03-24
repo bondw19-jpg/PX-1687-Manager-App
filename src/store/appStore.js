@@ -201,6 +201,38 @@ export const useAppStore = create(
           createdBy: u ? { uid: u.uid, name: firstName(u.name || u.email?.split('@')[0]) } : null };
         set(s => ({ callIns: [doc, ...s.callIns] }));
         fsWrite('callIns', doc.id, doc);
+
+        // ── Auto Work File entry on threshold ─────────────────────────────
+        // If associate hits 3+ incidents OR 5+ points in 90 days → add WF row
+        if (doc.associateId) {
+          const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 90);
+          const POINTS_MAP = { 'No-Show': 3, 'Unexcused': 2, 'Late/Tardy': 1, 'Excused': 0 };
+          const KEY_MAP    = { 'No-Show': 'A', 'Unexcused': 'B', 'Late/Tardy': 'F', 'Excused': '' };
+          const recent = [...get().callIns.filter(x =>
+            x.associateId === doc.associateId && new Date(x.date) >= cutoff
+          ), doc];
+          const pts   = recent.reduce((s, x) => s + (x.points ?? POINTS_MAP[x.type] ?? 0), 0);
+          const count = recent.length;
+
+          const shouldFlag = count === 3 || count === 5 || pts >= 5;
+          if (shouldFlag) {
+            const existing = get().workFiles[doc.associateId] || { rows: [] };
+            const newRow = {
+              id:      Date.now() + Math.random(),
+              date:    doc.date,
+              key:     KEY_MAP[doc.type] || 'G',
+              details: `Auto: ${doc.type} — ${count} incidents / ${pts} pts in 90 days.${doc.reason ? ' ' + doc.reason : ''}`,
+              addedBy: u ? { uid: u.uid, name: firstName(u.name || u.email?.split('@')[0]) } : null,
+            };
+            const updatedFile = { ...existing, rows: [...(existing.rows || []), newRow], savedAt: new Date().toISOString() };
+            set(s => ({ workFiles: { ...s.workFiles, [doc.associateId]: updatedFile } }));
+            if (get().dbMode === 'firestore') {
+              import('../lib/firestoreSync')
+                .then(({ fsSaveWorkFile }) => fsSaveWorkFile(doc.associateId, updatedFile))
+                .catch(() => {});
+            }
+          }
+        }
       },
       deleteCallIn: (id) => {
         set(s => ({ callIns: s.callIns.filter(c => c.id !== id) }));
