@@ -68,7 +68,7 @@ function TaskModal({ task, associates, onClose, onSave }) {
               onChange={e => setForm({ ...form, description: e.target.value })}
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <div>
               <label className="text-xs font-semibold text-gray-600 mb-1 block">Assignee</label>
               {associates.length > 0 ? (
@@ -235,9 +235,9 @@ export default function Tasks() {
       <Header title="Tasks & To-Do" onAdd={() => setShowAdd(true)} />
       <DesktopPageHeader title="Tasks & To-Do" onAdd={() => setShowAdd(true)} addLabel="+ Add Task" />
 
-      <div className="p-4 space-y-4">
+      <div className="desktop-page-content p-4 lg:p-0 space-y-4">
         {/* Stats */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
             { label: 'To Do', count: todo.length, bg: 'bg-gray-100', icon: '⚫' },
             { label: 'In Progress', count: inProgress.length, bg: 'bg-yellow-50', icon: '🟡' },

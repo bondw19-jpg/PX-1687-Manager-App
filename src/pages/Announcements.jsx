@@ -21,7 +21,7 @@ function AnnouncementModal({ onClose, onSave }) {
           <h2 className="font-bold text-lg text-gray-800">New Announcement</h2>
           <button onClick={onClose} className="p-2 text-gray-400 rounded-lg"><X size={20} /></button>
         </div>
-        <div className="p-4 space-y-3">
+        <div className="desktop-page-content p-4 lg:p-0 space-y-3">
           <div>
             <label className="text-xs font-semibold text-gray-600 mb-1 block">Title *</label>
             <input
@@ -91,7 +91,7 @@ export default function Announcements() {
       <Header title="Announcements" onAdd={() => setShowAdd(true)} />
       <DesktopPageHeader title="Announcements" onAdd={() => setShowAdd(true)} addLabel="+ New Announcement" />
 
-      <div className="p-4 space-y-3">
+      <div className="desktop-page-content p-4 lg:p-0 space-y-3">
         {announcements.length === 0 ? (
           <div className="bg-white rounded-xl p-10 flex flex-col items-center text-gray-400">
             <Megaphone size={40} className="mb-3 text-gray-200" />
@@ -105,7 +105,8 @@ export default function Announcements() {
             </button>
           </div>
         ) : (
-          announcements.map(ann => (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {announcements.map(ann => (
             <div key={ann.id} className={`bg-white rounded-xl shadow-sm p-4 border-l-4 ${PRIORITY_LEFT[ann.priority] || PRIORITY_LEFT.Normal}`}>
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
@@ -130,7 +131,8 @@ export default function Announcements() {
                 </button>
               </div>
             </div>
-          ))
+          ))}
+          </div>
         )}
         <div className="h-4" />
       </div>

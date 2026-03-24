@@ -241,44 +241,18 @@ export default function Dashboard() {
         </div>
       ) : null}
 
-      <div className="p-4 space-y-4">
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 gap-3">
-          <StatCard
-            icon={<Users size={22} className="text-red-500" />}
-            count={activeAssociates}
-            label="Active Associates"
-            bgColor="bg-red-50"
-          />
-          <StatCard
-            icon={<PhoneMissed size={22} className="text-orange-500" />}
-            count={callInsThisMonth}
-            label="Call-Ins This Month"
-            bgColor="bg-orange-50"
-          />
-          <StatCard
-            icon={<Calendar size={22} className="text-green-500" />}
-            count={todayEvents.length}
-            label="Today's Events"
-            bgColor="bg-green-50"
-          />
-          <StatCard
-            icon={<Pin size={22} className="text-blue-500" />}
-            count={pinnedNotes}
-            label="Pinned Notes"
-            bgColor="bg-blue-50"
-          />
+      <div className="desktop-page-content p-4 lg:p-0 space-y-4">
+        {/* Stats Grid — 2 col mobile, 5 col desktop */}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          <StatCard icon={<Users size={22} className="text-red-500" />}     count={activeAssociates}    label="Active Associates"    bgColor="bg-red-50" />
+          <StatCard icon={<UserCheck size={22} className="text-purple-500" />} count={totalAssociates}   label="Total Associates"     bgColor="bg-purple-50" />
+          <StatCard icon={<PhoneMissed size={22} className="text-orange-500" />} count={callInsThisMonth} label="Call-Ins This Month" bgColor="bg-orange-50" />
+          <StatCard icon={<Calendar size={22} className="text-green-500" />} count={todayEvents.length} label="Today's Events"       bgColor="bg-green-50" />
+          <StatCard icon={<Pin size={22} className="text-blue-500" />}       count={pinnedNotes}        label="Pinned Notes"         bgColor="bg-blue-50" />
         </div>
 
-        {/* Total Associates */}
-        <div className="grid grid-cols-2 gap-3">
-          <StatCard
-            icon={<UserCheck size={22} className="text-purple-500" />}
-            count={totalAssociates}
-            label="Total Associates"
-            bgColor="bg-purple-50"
-          />
-        </div>
+        {/* Desktop 2-col layout */}
+        <div className="lg:grid lg:grid-cols-2 lg:gap-6 space-y-4 lg:space-y-0">
 
         {/* Today's Events */}
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
@@ -434,6 +408,8 @@ export default function Dashboard() {
             )}
           </div>
         </div>
+
+        </div>{/* end desktop 2-col */}
 
         <div className="h-4" />
       </div>

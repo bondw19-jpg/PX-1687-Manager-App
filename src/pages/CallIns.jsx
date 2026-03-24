@@ -387,10 +387,10 @@ export default function CallIns() {
       <Header title="Call-Ins" onAdd={() => setShowModal(true)} />
       <DesktopPageHeader title="Call-In & Attendance" onAdd={() => setShowModal(true)} addLabel="+ Log Attendance" />
 
-      <div className="p-4 space-y-4">
+      <div className="desktop-page-content p-4 lg:p-0 space-y-4">
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* Stats — 2-col mobile, 4-col desktop */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
             { label: 'Total Logged',    count: totalCallIns,       icon: '📵', bg: 'bg-red-50',    color: 'text-red-500'    },
             { label: 'This Month',      count: thisMonth,           icon: '📅', bg: 'bg-orange-50', color: 'text-orange-500' },
@@ -428,7 +428,10 @@ export default function CallIns() {
         {/* 90-day points leaderboard */}
         <PointsLeaderboard callIns={callIns} associates={associates} />
 
-        {/* Search & Filters */}
+        {/* Desktop: left=search+list, right=chart (sticky) */}
+        <div className="lg:grid lg:grid-cols-[1fr_380px] lg:gap-6 space-y-4 lg:space-y-0">
+          <div className="space-y-4">
+          {/* Search & Filters */}}
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
@@ -468,26 +471,31 @@ export default function CallIns() {
           </div>
         )}
 
-        {/* Frequency chart */}
-        <div className="bg-white rounded-xl shadow-sm p-4">
-          <div className="flex items-center gap-2 font-semibold text-gray-800 mb-4">
-            <BarChart2 size={18} className="text-primary" /> Call-In Frequency
-          </div>
-          {chartData.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-4">No call-in data yet</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={160}>
-              <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                <Tooltip />
-                <Bar dataKey="count" radius={[4,4,0,0]}>
-                  {chartData.map((_, i) => <Cell key={i} fill="#C8102E" />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
+          </div>{/* end left col */}
+
+          {/* Right col: chart sticky */}
+          <div className="space-y-4 lg:sticky lg:top-4">
+            <div className="bg-white rounded-xl shadow-sm p-4">
+              <div className="flex items-center gap-2 font-semibold text-gray-800 mb-4">
+                <BarChart2 size={18} className="text-primary" /> Call-In Frequency
+              </div>
+              {chartData.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-4">No call-in data yet</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                    <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                    <Tooltip />
+                    <Bar dataKey="count" radius={[4,4,0,0]}>
+                      {chartData.map((_, i) => <Cell key={i} fill="#C8102E" />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>{/* end right col */}
+        </div>{/* end desktop grid */}
 
         <div className="h-4" />
       </div>

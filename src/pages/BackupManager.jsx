@@ -556,7 +556,7 @@ export default function BackupManager() {
       <Header title="Backup & Restore" />
       <DesktopPageHeader title="Backup & Restore" />
 
-      <div className="p-4 space-y-4 max-w-2xl mx-auto">
+      <div className="desktop-page-content p-4 lg:p-0 space-y-4 max-w-2xl lg:max-w-3xl mx-auto">
 
         {/* Firebase Sync Card */}
         <FirebaseSyncCard

@@ -78,7 +78,7 @@ function ReviewModal({ review, associates, onClose, onSave }) {
           </div>
 
           {/* Date & Overall */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <div>
               <label className="text-xs font-semibold text-gray-600 mb-1 block">Review Date</label>
               <input
@@ -155,7 +155,7 @@ export default function Reviews() {
       <Header title="Performance Reviews" onAdd={() => setShowAdd(true)} />
       <DesktopPageHeader title="Performance Reviews" onAdd={() => setShowAdd(true)} addLabel="+ New Review" />
 
-      <div className="p-4 space-y-3">
+      <div className="desktop-page-content p-4 lg:p-0 space-y-3">
         {/* Search */}
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -181,7 +181,7 @@ export default function Reviews() {
             </button>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {filtered.map(review => (
               <div key={review.id} className="bg-white rounded-xl shadow-sm p-4">
                 <div className="flex items-start gap-3">

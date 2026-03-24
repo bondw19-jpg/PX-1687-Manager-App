@@ -349,7 +349,7 @@ export default function Settings() {
       <Header title="Settings" />
       <DesktopPageHeader title="Settings" subtitle="Account, store & app preferences" />
 
-      <div className="max-w-lg mx-auto px-4 pb-24 pt-4 desktop:pt-0">
+      <div className="desktop-page-content p-4 lg:p-0 pb-24 max-w-lg lg:max-w-2xl mx-auto">
 
         {/* Profile card */}
         <div className="bg-primary rounded-2xl p-5 flex items-center gap-4 shadow-md mt-2">

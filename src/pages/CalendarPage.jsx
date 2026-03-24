@@ -40,7 +40,7 @@ function EventDetailModal({ event, onClose, onDelete }) {
           </button>
         </div>
 
-        <div className="p-4 space-y-4">
+        <div className="desktop-page-content p-4 lg:p-0 space-y-4">
           {/* Title */}
           <h2 className="text-lg font-bold text-gray-800 leading-snug">{event.title}</h2>
 
@@ -223,8 +223,12 @@ export default function CalendarPage() {
       <Header title="Calendar" onAdd={() => setShowAddModal(true)} />
       <DesktopPageHeader title="Calendar" onAdd={() => setShowAddModal(true)} addLabel="+ Add Event" />
 
-      <div className="p-4 space-y-4">
-        {/* Tabs */}
+      <div className="desktop-page-content p-4 lg:p-0 space-y-4">
+
+        {/* Desktop: left=tabs+calendar+sync, right=upcoming (sticky) */}
+        <div className="lg:grid lg:grid-cols-[1fr_360px] lg:gap-6 space-y-4 lg:space-y-0">
+          <div className="space-y-4">
+          {/* Tabs */}
         <div className="flex bg-gray-100 rounded-xl p-1">
           <button
             onClick={() => setActiveTab('team')}
@@ -360,6 +364,10 @@ export default function CalendarPage() {
           </div>
         </div>
 
+          </div>{/* end left col */}
+
+          {/* Right col — upcoming events sticky */}
+          <div className="lg:sticky lg:top-4">
         {/* Upcoming Events */}
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 font-semibold text-gray-800">
@@ -404,6 +412,8 @@ export default function CalendarPage() {
             </div>
           )}
         </div>
+          </div>{/* end right col */}
+        </div>{/* end desktop grid */}
 
         <div className="h-4" />
       </div>

@@ -37,8 +37,8 @@ function ContactModal({ contact, onClose, onSave }) {
           <h2 className="font-bold text-lg text-gray-800">{contact ? 'Edit Contact' : 'New Contact'}</h2>
           <button onClick={onClose} className="p-2 text-gray-400 rounded-lg"><X size={20} /></button>
         </div>
-        <div className="p-4 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+        <div className="desktop-page-content p-4 lg:p-0 space-y-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <div>
               <label className="text-xs font-semibold text-gray-600 mb-1 block">Name *</label>
               <input
@@ -134,7 +134,7 @@ export default function Contacts() {
       <Header title="Quick Contacts" onAdd={() => setShowAdd(true)} />
       <DesktopPageHeader title="Quick Contacts" onAdd={() => setShowAdd(true)} addLabel="+ Add Contact" />
 
-      <div className="p-4 space-y-3">
+      <div className="desktop-page-content p-4 lg:p-0 space-y-3">
         {/* Search */}
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -147,6 +147,7 @@ export default function Contacts() {
         </div>
 
         {/* Contact Cards */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
         {filtered.map(contact => (
           <div key={contact.id} className="bg-white rounded-xl shadow-sm p-4">
             <div className="flex items-center gap-3 mb-2">
@@ -202,6 +203,7 @@ export default function Contacts() {
             </div>
           </div>
         ))}
+        </div>
 
         {filtered.length === 0 && (
           <div className="bg-white rounded-xl p-8 flex flex-col items-center text-gray-400">

@@ -630,7 +630,7 @@ export default function Notes() {
       <Header title="Notes" onAdd={() => setShowAddModal(true)} />
       <DesktopPageHeader title="Notes" onAdd={() => setShowAddModal(true)} addLabel="+ New Note" />
 
-      <div className="p-4 space-y-3 max-w-3xl mx-auto">
+      <div className="desktop-page-content p-4 lg:p-0 space-y-3 max-w-full">
         {/* Tabs */}
         <div className="flex bg-gray-100 rounded-xl p-1">
           <button
@@ -765,7 +765,7 @@ export default function Notes() {
             )}
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
             {filtered.map(note => (
               <NoteCard
                 key={note.id}

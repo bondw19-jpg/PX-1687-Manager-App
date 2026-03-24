@@ -83,6 +83,39 @@ body {
     animation: fadeScaleIn 0.2s ease-out !important;
     max-height: 90vh;
   }
+
+  /* Desktop page content — constrained width, centered */
+  .desktop-page-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1.5rem 2rem 2rem;
+  }
+
+  /* Desktop 2-column layout helper */
+  .desktop-two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  /* Desktop 3-column layout helper */
+  .desktop-three-col {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+    align-items: start;
+  }
+
+  /* Desktop left panel (wider) */
+  .desktop-col-left {
+    grid-column: 1;
+  }
+
+  /* Desktop right panel (narrower) */
+  .desktop-col-right {
+    grid-column: 2;
+  }
 }
 
 /* Scrollbar styling */

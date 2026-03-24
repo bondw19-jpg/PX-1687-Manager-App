@@ -62,7 +62,7 @@ export default function Checklist() {
       <Header title="Shift Checklist" />
       <DesktopPageHeader title="Shift Checklist" />
 
-      <div className="p-4 space-y-4">
+      <div className="desktop-page-content p-4 lg:p-0 space-y-4">
         {/* Tabs */}
         <div className="flex bg-white rounded-xl shadow-sm overflow-hidden">
           {[...SHIFTS, 'history'].map(tab => (

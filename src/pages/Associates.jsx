@@ -310,7 +310,7 @@ export default function Associates() {
       <Header title="Associates" onAdd={() => setShowAddModal(true)} />
       <DesktopPageHeader title="Associates" onAdd={() => setShowAddModal(true)} addLabel="+ Add Associate" />
 
-      <div className="p-4 space-y-3">
+      <div className="desktop-page-content p-4 lg:p-0 space-y-3">
         {/* Search */}
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -372,7 +372,8 @@ export default function Associates() {
             )}
           </div>
         ) : (
-          filtered.map(assoc => (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {filtered.map(assoc => (
             <div key={assoc.id} className="bg-white rounded-xl p-4 shadow-sm">
               <div className="flex items-start gap-3 mb-3">
                 <div className={`w-10 h-10 ${getColor(assoc.name)} rounded-xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0`}>
@@ -451,7 +452,8 @@ export default function Associates() {
                 </button>
               </div>
             </div>
-          ))
+          ))}
+          </div>
         )}
 
         <div className="h-4" />

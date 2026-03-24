@@ -844,7 +844,7 @@ export default function AdminPage() {
       <Header title="Admin Panel" />
       <DesktopPageHeader title="Admin Panel" />
 
-      <div className="p-4 max-w-2xl mx-auto space-y-3 pb-10">
+      <div className="desktop-page-content p-4 lg:p-0 space-y-3 pb-10">
 
         {/* Admin badge banner */}
         <div className="flex items-center gap-3 bg-primary text-white rounded-2xl px-5 py-4 shadow-md">
@@ -855,35 +855,44 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Section 1: Store Settings */}
-        <Section icon={Store} title="Store Settings" color="text-primary" defaultOpen>
-          <StoreSettings onToast={onToast} />
-        </Section>
+        {/* Desktop 2-col layout for sections */}
+        <div className="lg:grid lg:grid-cols-2 lg:gap-4 space-y-3 lg:space-y-0">
+          {/* Left column */}
+          <div className="space-y-3">
+            {/* Section 1: Store Settings */}
+            <Section icon={Store} title="Store Settings" color="text-primary" defaultOpen>
+              <StoreSettings onToast={onToast} />
+            </Section>
 
-        {/* Section 2: Data Overview */}
-        <Section icon={BarChart2} title="Data Overview" color="text-blue-600" defaultOpen>
-          <DataOverview />
-        </Section>
+            {/* Section 3: Who is Online */}
+            <Section icon={Users} title="Who is Online" color="text-green-600" defaultOpen={true}>
+              <SignedInUsers onToast={onToast} />
+            </Section>
 
-        {/* Section 3: Who is Online */}
-        <Section icon={Users} title="Who is Online" color="text-green-600" defaultOpen={true}>
-          <SignedInUsers onToast={onToast} />
-        </Section>
+            {/* Section 5: App Health */}
+            <Section icon={Activity} title="App Health & Diagnostics" color="text-green-600" defaultOpen={false}>
+              <AppHealth />
+            </Section>
+          </div>
 
-        {/* Section 4: Checklist Templates */}
-        <Section icon={ClipboardList} title="Checklist Templates" color="text-amber-600" defaultOpen={false}>
-          <ChecklistTemplates onToast={onToast} />
-        </Section>
+          {/* Right column */}
+          <div className="space-y-3">
+            {/* Section 2: Data Overview */}
+            <Section icon={BarChart2} title="Data Overview" color="text-blue-600" defaultOpen>
+              <DataOverview />
+            </Section>
 
-        {/* Section 5: App Health */}
-        <Section icon={Activity} title="App Health & Diagnostics" color="text-green-600" defaultOpen={false}>
-          <AppHealth />
-        </Section>
+            {/* Section 4: Checklist Templates */}
+            <Section icon={ClipboardList} title="Checklist Templates" color="text-amber-600" defaultOpen={false}>
+              <ChecklistTemplates onToast={onToast} />
+            </Section>
 
-        {/* Section 6: Danger Zone */}
-        <Section icon={AlertTriangle} title="Danger Zone" color="text-red-600" defaultOpen={false}>
-          <DangerZone onToast={onToast} />
-        </Section>
+            {/* Section 6: Danger Zone */}
+            <Section icon={AlertTriangle} title="Danger Zone" color="text-red-600" defaultOpen={false}>
+              <DangerZone onToast={onToast} />
+            </Section>
+          </div>
+        </div>
 
       </div>
 
