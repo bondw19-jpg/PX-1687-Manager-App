@@ -25,6 +25,11 @@ body {
   overflow-x: hidden;
 }
 
+/* Sidebar hidden on mobile by default — shown via media query below */
+#desktop-sidebar {
+  display: none;
+}
+
 /* ── Desktop: full-width sidebar + content layout ── */
 @media (min-width: 1024px) {
   body {
@@ -197,7 +202,4 @@ input:focus, textarea:focus, select:focus {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Desktop sidebar hidden by default on mobile */
-#desktop-sidebar {
-  display: none;
-}
+
