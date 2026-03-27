@@ -33,6 +33,20 @@
 
 const STORE_ID = 'store_1687';
 
+// Strip base64 dataUrls from attachment arrays before writing to Firestore.
+// Firestore documents have a 1 MB size limit; a single base64-encoded image
+// easily exceeds that and causes the write to fail silently, making the note
+// disappear when onSnapshot overwrites state with the server's (broken) copy.
+// We keep all other metadata (id, name, type, size) for display purposes.
+function stripAttachmentDataUrls(data) {
+  if (!data || typeof data !== 'object') return data;
+  if (!Array.isArray(data.attachments) || data.attachments.length === 0) return data;
+  return {
+    ...data,
+    attachments: data.attachments.map(({ dataUrl: _dropped, ...rest }) => rest),
+  };
+}
+
 let _db            = null;
 let _uid           = null;
 let _syncActive    = false;
@@ -82,7 +96,8 @@ export async function fsSetItem(collName, id, data) {
   try {
     const { setDoc, serverTimestamp } = await import('firebase/firestore');
     const ref = await storeItem(collName, id);
-    await setDoc(ref, { ...data, _updatedAt: serverTimestamp() }, { merge: true });
+    const safe = stripAttachmentDataUrls(data);
+    await setDoc(ref, { ...safe, _updatedAt: serverTimestamp() }, { merge: true });
   } catch (e) {
     console.warn(`[FS] set(${collName}/${id}):`, e?.code || e?.message);
   }
@@ -125,7 +140,8 @@ export async function fsSetPrivateItem(collName, id, data, uidOverride) {
   try {
     const { setDoc, serverTimestamp } = await import('firebase/firestore');
     const ref = await userItem(uid, collName, id);
-    await setDoc(ref, { ...data, _updatedAt: serverTimestamp() }, { merge: true });
+    const safe = stripAttachmentDataUrls(data);
+    await setDoc(ref, { ...safe, _updatedAt: serverTimestamp() }, { merge: true });
   } catch (e) {
     console.warn(`[FS] setPrivate(${collName}/${id}):`, e?.code || e?.message);
   }

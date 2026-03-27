@@ -447,23 +447,41 @@ export const useAppStore = create(
         checklists:    (persisted?.checklists && typeof persisted.checklists === 'object') ? persisted.checklists : current.checklists,
         workFiles:     (persisted?.workFiles  && typeof persisted.workFiles  === 'object') ? persisted.workFiles  : current.workFiles,
       }),
-      partialize: (state) => ({
-        user:          state.user,
-        storeId:       state.storeId,
-        storeName:     state.storeName,
-        associates:    state.associates,
-        workFiles:     state.workFiles,
-        callIns:       state.callIns,
-        teamEvents:    state.teamEvents,
-        myEvents:      state.myEvents,
-        checklists:    state.checklists,
-        teamNotes:     state.teamNotes,
-        myNotes:       state.myNotes,
-        reviews:       state.reviews,
-        tasks:         state.tasks,
-        contacts:      state.contacts,
-        announcements: state.announcements,
-      }),
+      partialize: (state) => {
+        // Strip base64 dataUrl from note attachments before writing to
+        // localStorage — dataUrls can be several MB each and will quickly
+        // exhaust the 5 MB localStorage quota, causing a QuotaExceededError
+        // that silently corrupts the persisted store and makes notes disappear.
+        // We keep all other attachment metadata (id, name, type, size) so the
+        // UI can still display a placeholder for stored attachments.
+        const stripDataUrls = (notes) =>
+          Array.isArray(notes)
+            ? notes.map(n => ({
+                ...n,
+                attachments: Array.isArray(n.attachments)
+                  ? n.attachments.map(({ dataUrl: _dropped, ...rest }) => rest)
+                  : [],
+              }))
+            : [];
+
+        return {
+          user:          state.user,
+          storeId:       state.storeId,
+          storeName:     state.storeName,
+          associates:    state.associates,
+          workFiles:     state.workFiles,
+          callIns:       state.callIns,
+          teamEvents:    state.teamEvents,
+          myEvents:      state.myEvents,
+          checklists:    state.checklists,
+          teamNotes:     stripDataUrls(state.teamNotes),
+          myNotes:       stripDataUrls(state.myNotes),
+          reviews:       state.reviews,
+          tasks:         state.tasks,
+          contacts:      state.contacts,
+          announcements: state.announcements,
+        };
+      },
     }
   )
 );

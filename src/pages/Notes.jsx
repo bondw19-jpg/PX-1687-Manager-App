@@ -173,7 +173,7 @@ function LightboxViewer({ attachments, startIndex = 0, onClose }) {
         onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
         style={{ cursor: zoom > 1 ? 'grab' : 'default' }}
       >
-        {isImage ? (
+        {isImage && current.dataUrl ? (
           <img
             src={current.dataUrl}
             alt={current.name}
@@ -189,19 +189,25 @@ function LightboxViewer({ attachments, startIndex = 0, onClose }) {
         ) : (
           <div className="flex flex-col items-center gap-4 text-white p-8">
             <div className="w-24 h-24 bg-white/10 rounded-2xl flex items-center justify-center">
-              {fileIcon(current?.type)}
+              {isImage ? <Image size={40} className="text-white/40" /> : fileIcon(current?.type)}
             </div>
             <div className="text-center">
               <p className="font-semibold text-lg">{current?.name}</p>
               <p className="text-white/50 text-sm mt-1">{current?.size ? (current.size / 1024).toFixed(1) + ' KB' : ''}</p>
-              <p className="text-white/40 text-xs mt-2">Preview not available for this file type</p>
+              <p className="text-white/40 text-xs mt-2">
+                {isImage && !current.dataUrl
+                  ? 'Image preview not available — attachment stored without preview data'
+                  : 'Preview not available for this file type'}
+              </p>
             </div>
-            <button
-              onClick={handleDownload}
-              className="flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-xl font-semibold text-sm mt-2"
-            >
-              <Download size={16} /> Download File
-            </button>
+            {current.dataUrl && (
+              <button
+                onClick={handleDownload}
+                className="flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-xl font-semibold text-sm mt-2"
+              >
+                <Download size={16} /> Download File
+              </button>
+            )}
           </div>
         )}
 
@@ -235,7 +241,7 @@ function LightboxViewer({ attachments, startIndex = 0, onClose }) {
                 i === idx ? 'border-primary' : 'border-transparent opacity-50 hover:opacity-80'
               }`}
             >
-              {att.type?.startsWith('image/') ? (
+              {att.type?.startsWith('image/') && att.dataUrl ? (
                 <img src={att.dataUrl} alt={att.name} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full bg-white/10 flex items-center justify-center">
@@ -462,13 +468,23 @@ function AttachmentRow({ attachments, onOpenLightbox }) {
           {images.map((img, i) => (
             <div
               key={img.id || i}
-              className="relative aspect-square rounded-xl overflow-hidden bg-gray-100 cursor-pointer group"
-              onClick={() => onOpenLightbox(attachments, attachments.indexOf(img))}
+              className={`relative aspect-square rounded-xl overflow-hidden bg-gray-100 group ${img.dataUrl ? 'cursor-pointer' : 'cursor-default'}`}
+              onClick={() => img.dataUrl && onOpenLightbox(attachments, attachments.indexOf(img))}
             >
-              <img src={img.dataUrl} alt={img.name} className="w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center">
-                <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-all" />
-              </div>
+              {img.dataUrl ? (
+                <>
+                  <img src={img.dataUrl} alt={img.name} className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center">
+                    <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-all" />
+                  </div>
+                </>
+              ) : (
+                /* Placeholder: dataUrl stripped for storage — image was saved but can't be previewed */
+                <div className="w-full h-full flex flex-col items-center justify-center gap-1 p-1">
+                  <Image size={22} className="text-gray-300 flex-shrink-0" />
+                  <span className="text-[10px] text-gray-400 text-center leading-tight break-all line-clamp-2">{img.name}</span>
+                </div>
+              )}
               {i === 2 && images.length > 3 && (
                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                   <span className="text-white font-bold text-lg">+{images.length - 3}</span>
