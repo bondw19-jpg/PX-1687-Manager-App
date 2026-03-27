@@ -75,6 +75,12 @@ export default function Announcements() {
   const { announcements, addAnnouncement, deleteAnnouncement } = useAppStore();
   const [showAdd, setShowAdd] = useState(false);
 
+  const handleDelete = (id, title) => {
+    if (window.confirm(`Delete "${title}"? This cannot be undone.`)) {
+      deleteAnnouncement(id);
+    }
+  };
+
   const PRIORITY_COLORS = {
     Normal: 'bg-blue-50 border-blue-200 text-blue-700',
     Important: 'bg-yellow-50 border-yellow-200 text-yellow-700',
@@ -124,7 +130,7 @@ export default function Announcements() {
                   )}
                 </div>
                 <button
-                  onClick={() => deleteAnnouncement(ann.id)}
+                  onClick={() => handleDelete(ann.id, ann.title)}
                   className="p-1.5 text-gray-300 hover:text-red-500 flex-shrink-0"
                 >
                   <Trash2 size={16} />

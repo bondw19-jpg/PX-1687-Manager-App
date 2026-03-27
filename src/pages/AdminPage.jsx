@@ -400,7 +400,11 @@ function ChecklistTemplates({ onToast }) {
     setNewItem('');
   };
 
-  const deleteItem = (idx) => setItems(prev => prev.filter((_, i) => i !== idx));
+  const deleteItem = (idx) => {
+    if (window.confirm(`Remove checklist item "${items[idx]}"? This cannot be undone.`)) {
+      setItems(prev => prev.filter((_, i) => i !== idx));
+    }
+  };
 
   const startEdit = (idx) => { setEditIdx(idx); setEditVal(items[idx]); };
   const saveEdit  = () => {

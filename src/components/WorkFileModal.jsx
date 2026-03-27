@@ -71,7 +71,9 @@ export default function WorkFileModal({ associate, onClose }) {
   };
 
   const removeRow = (id) => {
-    setRows(prev => prev.filter(r => r.id !== id));
+    if (window.confirm('Remove this work file row? This cannot be undone.')) {
+      setRows(prev => prev.filter(r => r.id !== id));
+    }
   };
 
   const handleSave = () => {

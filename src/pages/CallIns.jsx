@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { format, subDays, isAfter } from 'date-fns';
 import {
   PhoneMissed, Plus, X, Search, BarChart2, User,
-  Shield, Clock, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp
+  Shield, Clock, AlertTriangle, CheckCircle2, ChevronDown
 } from 'lucide-react';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
@@ -215,65 +215,167 @@ function LogCallInModal({ onClose, onSave, associates }) {
   );
 }
 
-// ── Call-in detail card ───────────────────────────────────────────────────────
+// ── Call-in detail modal (shown when card is tapped) ─────────────────────────
+function CallInDetailModal({ callIn, onClose, onDelete }) {
+  const typeInfo = CALL_IN_TYPES.find(t => t.label === callIn.type) || CALL_IN_TYPES[1];
+  const pts = callIn.points ?? POINTS_BY_TYPE[callIn.type] ?? 0;
+
+  const handleDelete = () => {
+    if (window.confirm(`Remove this call-in record for ${callIn.associateName}? This cannot be undone.`)) {
+      onDelete(callIn.id);
+      onClose();
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+          <h2 className="font-bold text-base text-gray-800">Call-In Details</h2>
+          <button onClick={onClose} className="p-2 text-gray-400 rounded-lg"><X size={20} /></button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {/* Associate avatar + name */}
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 bg-primary rounded-2xl flex items-center justify-center text-white font-bold text-2xl flex-shrink-0">
+              {callIn.associateName?.[0]?.toUpperCase() || '?'}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-lg text-gray-800">{callIn.associateName}</p>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <span className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${typeInfo.badge}`}>
+                  {callIn.type}
+                </span>
+                {pts > 0 && (
+                  <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold border ${pointsColor(pts)}`}>
+                    +{pts} pt{pts > 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Details grid */}
+          <div className="bg-gray-50 rounded-xl p-3 space-y-2.5">
+            <div className="flex items-start gap-2">
+              <Clock size={14} className="text-gray-400 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-[11px] text-gray-400 font-medium">Date &amp; Time</p>
+                <p className="text-sm text-gray-800 font-semibold">
+                  {callIn.date}{callIn.time ? ` · ${callIn.time}` : ''}
+                </p>
+              </div>
+            </div>
+
+            {callIn.reason && (
+              <div className="flex items-start gap-2">
+                <AlertTriangle size={14} className="text-gray-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-[11px] text-gray-400 font-medium">Reason</p>
+                  <p className="text-sm text-gray-800">{callIn.reason}</p>
+                </div>
+              </div>
+            )}
+
+            {callIn.covered && (
+              <div className="flex items-start gap-2">
+                <CheckCircle2 size={14} className="text-gray-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-[11px] text-gray-400 font-medium">Shift Covered?</p>
+                  <p className="text-sm text-gray-800 font-semibold">
+                    {callIn.covered}
+                    {callIn.coveredBy && <span className="font-normal text-gray-600"> · by {callIn.coveredBy}</span>}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {callIn.createdBy?.name && (
+              <div className="flex items-start gap-2">
+                <User size={14} className="text-gray-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-[11px] text-gray-400 font-medium">Logged by</p>
+                  <p className="text-sm text-blue-600 font-medium">{callIn.createdBy.name}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Point callout */}
+          <div className={`rounded-xl px-3 py-2.5 text-xs font-medium flex items-center gap-2 border ${pointsColor(pts)}`}>
+            <Shield size={13} />
+            {pts === 0
+              ? 'No points added — excused absence'
+              : `+${pts} point${pts > 1 ? 's' : ''} counted toward 90-day rolling total`}
+          </div>
+
+          {/* Delete */}
+          <button
+            onClick={handleDelete}
+            className="w-full flex items-center justify-center gap-2 py-3 border-2 border-red-200 text-red-600 rounded-xl text-sm font-semibold hover:bg-red-50 transition-colors"
+          >
+            <X size={16} /> Remove This Record
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Call-in log card (tappable) ───────────────────────────────────────────────
 function CallInCard({ callIn, onDelete }) {
-  const [expanded, setExpanded] = useState(false);
+  const [showDetail, setShowDetail] = useState(false);
   const typeInfo = CALL_IN_TYPES.find(t => t.label === callIn.type) || CALL_IN_TYPES[1];
   const pts = callIn.points ?? POINTS_BY_TYPE[callIn.type] ?? 0;
 
   return (
-    <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-      <div className="flex items-center gap-3 p-3">
-        <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white font-bold flex-shrink-0">
-          {callIn.associateName?.[0]?.toUpperCase() || '?'}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm text-gray-800">{callIn.associateName}</p>
-          <p className="text-xs text-gray-500">
-            {callIn.date}{callIn.time ? ` · ${callIn.time}` : ''}
-          </p>
-          {callIn.reason && (
-            <p className="text-xs text-gray-400 truncate mt-0.5">{callIn.reason}</p>
-          )}
-          {callIn.createdBy?.name && (
-            <p className="flex items-center gap-1 text-[11px] text-blue-600 mt-0.5 font-medium">
-              <User size={10} /> Logged by {callIn.createdBy.name}
-            </p>
-          )}
-        </div>
-        <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${typeInfo.badge}`}>
-            {callIn.type}
-          </span>
-          {pts > 0 && (
-            <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold border ${pointsColor(pts)}`}>
-              +{pts}pt{pts > 1 ? 's' : ''}
-            </span>
-          )}
-        </div>
-        <div className="flex flex-col items-center gap-1 ml-1">
-          <button onClick={() => setExpanded(v => !v)} className="text-gray-300 hover:text-gray-500 p-0.5">
-            {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
-          <button onClick={() => onDelete(callIn.id)} className="text-gray-300 hover:text-red-500 p-0.5">
-            <X size={14} />
-          </button>
-        </div>
-      </div>
-
-      {/* Expanded coverage info */}
-      {expanded && (callIn.covered || callIn.coveredBy) && (
-        <div className="px-3 pb-3">
-          <div className="bg-blue-50 rounded-xl px-3 py-2 text-xs text-blue-700 border border-blue-100 flex items-center gap-2">
-            <CheckCircle2 size={12} />
-            <span>
-              Shift covered: <strong>{callIn.covered || '—'}</strong>
-              {callIn.coveredBy && <> · By <strong>{callIn.coveredBy}</strong></>}
-            </span>
+    <>
+      <button
+        onClick={() => setShowDetail(true)}
+        className="w-full bg-white rounded-xl shadow-sm overflow-hidden text-left active:scale-[0.99] transition-transform hover:shadow-md"
+      >
+        <div className="flex items-center gap-3 p-3">
+          <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white font-bold flex-shrink-0">
+            {callIn.associateName?.[0]?.toUpperCase() || '?'}
           </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-sm text-gray-800">{callIn.associateName}</p>
+            <p className="text-xs text-gray-500">
+              {callIn.date}{callIn.time ? ` · ${callIn.time}` : ''}
+            </p>
+            {callIn.reason && (
+              <p className="text-xs text-gray-400 truncate mt-0.5">{callIn.reason}</p>
+            )}
+            {callIn.createdBy?.name && (
+              <p className="flex items-center gap-1 text-[11px] text-blue-600 mt-0.5 font-medium">
+                <User size={10} /> Logged by {callIn.createdBy.name}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${typeInfo.badge}`}>
+              {callIn.type}
+            </span>
+            {pts > 0 && (
+              <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold border ${pointsColor(pts)}`}>
+                +{pts}pt{pts > 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+          <ChevronDown size={16} className="text-gray-300 ml-1 flex-shrink-0" />
         </div>
+      </button>
+
+      {showDetail && (
+        <CallInDetailModal
+          callIn={callIn}
+          onClose={() => setShowDetail(false)}
+          onDelete={onDelete}
+        />
       )}
-    </div>
+    </>
   );
 }
 
