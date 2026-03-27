@@ -104,15 +104,16 @@ export async function fsSetItem(collName, id, data) {
 }
 
 export async function fsUpdateItem(collName, id, data) {
+  const safe = stripAttachmentDataUrls(data);
   try {
     const { updateDoc, serverTimestamp } = await import('firebase/firestore');
     const ref = await storeItem(collName, id);
-    await updateDoc(ref, { ...data, _updatedAt: serverTimestamp() });
+    await updateDoc(ref, { ...safe, _updatedAt: serverTimestamp() });
   } catch {
     try {
       const { setDoc, serverTimestamp } = await import('firebase/firestore');
       const ref = await storeItem(collName, id);
-      await setDoc(ref, { ...data, _updatedAt: serverTimestamp() }, { merge: true });
+      await setDoc(ref, { ...safe, _updatedAt: serverTimestamp() }, { merge: true });
     } catch (e2) {
       console.warn(`[FS] update(${collName}/${id}):`, e2?.code || e2?.message);
     }
@@ -150,15 +151,16 @@ export async function fsSetPrivateItem(collName, id, data, uidOverride) {
 export async function fsUpdatePrivateItem(collName, id, data, uidOverride) {
   const uid = uidOverride || _uid;
   if (!uid) return;
+  const safe = stripAttachmentDataUrls(data);
   try {
     const { updateDoc, serverTimestamp } = await import('firebase/firestore');
     const ref = await userItem(uid, collName, id);
-    await updateDoc(ref, { ...data, _updatedAt: serverTimestamp() });
+    await updateDoc(ref, { ...safe, _updatedAt: serverTimestamp() });
   } catch {
     try {
       const { setDoc, serverTimestamp } = await import('firebase/firestore');
       const ref = await userItem(uid, collName, id);
-      await setDoc(ref, { ...data, _updatedAt: serverTimestamp() }, { merge: true });
+      await setDoc(ref, { ...safe, _updatedAt: serverTimestamp() }, { merge: true });
     } catch (e2) {
       console.warn(`[FS] updatePrivate(${collName}/${id}):`, e2?.code || e2?.message);
     }
@@ -503,7 +505,29 @@ export async function initFirestoreSync(set, get) {
         //   so existing local data isn't wiped before migration uploads it.
         // After migration: always apply even if empty (user deleted everything).
         if (items.length > 0 || alreadyMigrated) {
-          set({ [stateKey]: items });
+          // For note collections: preserve in-memory dataUrls.
+          // Firestore strips dataUrls (1MB limit) so when onSnapshot fires
+          // immediately after a write it would erase the attachment previews
+          // that are still live in memory.  We merge by restoring any dataUrl
+          // from the current state for items that share the same id.
+          if (stateKey === 'teamNotes') {
+            const existing = get().teamNotes || [];
+            const dataUrlMap = {};
+            existing.forEach(n => {
+              if (Array.isArray(n.attachments)) {
+                n.attachments.forEach(a => { if (a.id && a.dataUrl) dataUrlMap[a.id] = a.dataUrl; });
+              }
+            });
+            const merged = items.map(n => ({
+              ...n,
+              attachments: Array.isArray(n.attachments)
+                ? n.attachments.map(a => ({ ...a, dataUrl: a.dataUrl || dataUrlMap[a.id] || undefined }))
+                : [],
+            }));
+            set({ teamNotes: merged });
+          } else {
+            set({ [stateKey]: items });
+          }
         }
 
         snapshotsFired++;
@@ -532,7 +556,21 @@ export async function initFirestoreSync(set, get) {
     if (uid) {
       _unsubscribers.push(
         subscribeUserCollection(uid, 'myNotes', (items) => {
-          set({ myNotes: items });
+          // Same dataUrl-preservation logic as teamNotes above
+          const existing = get().myNotes || [];
+          const dataUrlMap = {};
+          existing.forEach(n => {
+            if (Array.isArray(n.attachments)) {
+              n.attachments.forEach(a => { if (a.id && a.dataUrl) dataUrlMap[a.id] = a.dataUrl; });
+            }
+          });
+          const merged = items.map(n => ({
+            ...n,
+            attachments: Array.isArray(n.attachments)
+              ? n.attachments.map(a => ({ ...a, dataUrl: a.dataUrl || dataUrlMap[a.id] || undefined }))
+              : [],
+          }));
+          set({ myNotes: merged });
           console.log(`[FS] 🔒 myNotes loaded from cloud: ${items.length} note(s)`);
         })
       );
