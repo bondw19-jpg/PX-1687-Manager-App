@@ -168,6 +168,17 @@ export default function NoteUploadProgress() {
                       style={{ width: `${file.done || file.error ? 100 : file.pct}%` }}
                     />
                   </div>
+                  {/* Show error code so we know what went wrong */}
+                  {file.error && file.errorMsg && (
+                    <p className="text-[10px] text-red-300/70 mt-0.5 truncate">
+                      {file.errorMsg.includes('unauthorized') || file.errorMsg.includes('permission')
+                        ? '⚠️ Storage permission denied — check Firebase Storage rules'
+                        : file.errorMsg.includes('quota')
+                          ? '⚠️ Storage quota exceeded'
+                          : `⚠️ ${file.errorMsg}`
+                      }
+                    </p>
+                  )}
                 </div>
               ))}
             </div>

@@ -62,7 +62,10 @@ export async function uploadNoteAttachment(attachment, noteId, scope = 'team', o
     const { ref, uploadBytesResumable, getDownloadURL } = await import('firebase/storage');
     const { getFirebaseModules } = await import('./firebase');
     const { storage } = await getFirebaseModules();
-    if (!storage) return attachment;
+    if (!storage) {
+      console.warn('[Storage] storage instance not available');
+      return { ...attachment, _uploadError: true, _uploadErrorMsg: 'Storage not initialised' };
+    }
 
     // Convert dataUrl → Blob for uploadBytesResumable (gives us progress events)
     const res  = await fetch(attachment.dataUrl);
@@ -79,7 +82,11 @@ export async function uploadNoteAttachment(attachment, noteId, scope = 'team', o
           const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
           onProgress?.(pct);
         },
-        reject,
+        (err) => {
+          // Surface the exact Firebase Storage error code so it shows in the UI
+          console.error('[Storage] upload error:', err?.code, err?.message);
+          reject(err);
+        },
         async () => {
           try { resolve(await getDownloadURL(task.snapshot.ref)); }
           catch (e) { reject(e); }
@@ -89,8 +96,9 @@ export async function uploadNoteAttachment(attachment, noteId, scope = 'team', o
 
     return { ...attachment, storageUrl };
   } catch (e) {
-    console.warn('[Storage] uploadNoteAttachment failed:', e?.code || e?.message);
-    return { ...attachment, _uploadError: true }; // non-fatal fallback
+    const code = e?.code || e?.message || 'unknown';
+    console.error('[Storage] uploadNoteAttachment failed:', code);
+    return { ...attachment, _uploadError: true, _uploadErrorMsg: code };
   }
 }
 
@@ -104,9 +112,10 @@ export async function uploadNoteAttachments(note, scope = 'team', onFileProgress
       if (att.storageUrl) return att; // already uploaded
       return uploadNoteAttachment(
         att, note.id, scope,
-        pct => onFileProgress?.(att.name, pct, false, false)
+        pct => onFileProgress?.(att.name, pct, false, false, '')
       ).then(result => {
-        onFileProgress?.(att.name, 100, true, !!result._uploadError);
+        const isError = !!result._uploadError;
+        onFileProgress?.(att.name, 100, !isError, isError, result._uploadErrorMsg || '');
         return result;
       });
     })

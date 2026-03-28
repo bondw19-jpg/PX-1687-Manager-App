@@ -174,12 +174,12 @@ export const useAppStore = create(
           },
         }));
       },
-      _updateNoteUploadFile: (noteId, fileName, pct, done = false, error = false) => {
+      _updateNoteUploadFile: (noteId, fileName, pct, done = false, error = false, errorMsg = '') => {
         set(s => {
           const entry = s.noteUploads[noteId];
           if (!entry) return {};
           const files = entry.files.map(f =>
-            f.name === fileName ? { ...f, pct: done ? 100 : pct, done, error } : f
+            f.name === fileName ? { ...f, pct: done ? 100 : pct, done, error, errorMsg } : f
           );
           const allDone = files.every(f => f.done || f.error);
           return { noteUploads: { ...s.noteUploads, [noteId]: { ...entry, files, allDone } } };
@@ -345,8 +345,8 @@ export const useAppStore = create(
           const fileNames = doc.attachments.filter(a => a.dataUrl).map(a => a.name);
           get()._startNoteUpload(doc.id, doc.title, fileNames);
           import('../lib/firestoreSync').then(async ({ uploadNoteAttachments, fsUpdateItem }) => {
-            const enriched = await uploadNoteAttachments(doc, 'team', (name, pct, done, error) => {
-              get()._updateNoteUploadFile(doc.id, name, pct, done, error);
+            const enriched = await uploadNoteAttachments(doc, 'team', (name, pct, done, error, errorMsg) => {
+              get()._updateNoteUploadFile(doc.id, name, pct, done, error, errorMsg);
             });
             set(s => ({ teamNotes: s.teamNotes.map(n => n.id === doc.id ? { ...n, attachments: enriched.attachments } : n) }));
             fsUpdateItem('teamNotes', doc.id, { attachments: enriched.attachments });
@@ -364,8 +364,8 @@ export const useAppStore = create(
           const fileNames = d.attachments.filter(a => a.dataUrl && !a.storageUrl).map(a => a.name);
           get()._startNoteUpload(id, noteTitle, fileNames);
           import('../lib/firestoreSync').then(async ({ uploadNoteAttachments, fsUpdateItem }) => {
-            const enriched = await uploadNoteAttachments({ id, attachments: d.attachments }, 'team', (name, pct, done, error) => {
-              get()._updateNoteUploadFile(id, name, pct, done, error);
+            const enriched = await uploadNoteAttachments({ id, attachments: d.attachments }, 'team', (name, pct, done, error, errorMsg) => {
+              get()._updateNoteUploadFile(id, name, pct, done, error, errorMsg);
             });
             set(s => ({ teamNotes: s.teamNotes.map(n => n.id === id ? { ...n, attachments: enriched.attachments } : n) }));
             fsUpdateItem('teamNotes', id, { attachments: enriched.attachments });
@@ -389,8 +389,8 @@ export const useAppStore = create(
           const fileNames = doc.attachments.filter(a => a.dataUrl).map(a => a.name);
           get()._startNoteUpload(doc.id, doc.title, fileNames);
           import('../lib/firestoreSync').then(async ({ uploadNoteAttachments, fsUpdatePrivateItem }) => {
-            const enriched = await uploadNoteAttachments(doc, 'my', (name, pct, done, error) => {
-              get()._updateNoteUploadFile(doc.id, name, pct, done, error);
+            const enriched = await uploadNoteAttachments(doc, 'my', (name, pct, done, error, errorMsg) => {
+              get()._updateNoteUploadFile(doc.id, name, pct, done, error, errorMsg);
             });
             set(s => ({ myNotes: s.myNotes.map(n => n.id === doc.id ? { ...n, attachments: enriched.attachments } : n) }));
             fsUpdatePrivateItem('myNotes', doc.id, { attachments: enriched.attachments }, uid);
@@ -407,8 +407,8 @@ export const useAppStore = create(
           const fileNames = d.attachments.filter(a => a.dataUrl && !a.storageUrl).map(a => a.name);
           get()._startNoteUpload(id, noteTitle, fileNames);
           import('../lib/firestoreSync').then(async ({ uploadNoteAttachments, fsUpdatePrivateItem }) => {
-            const enriched = await uploadNoteAttachments({ id, attachments: d.attachments }, 'my', (name, pct, done, error) => {
-              get()._updateNoteUploadFile(id, name, pct, done, error);
+            const enriched = await uploadNoteAttachments({ id, attachments: d.attachments }, 'my', (name, pct, done, error, errorMsg) => {
+              get()._updateNoteUploadFile(id, name, pct, done, error, errorMsg);
             });
             set(s => ({ myNotes: s.myNotes.map(n => n.id === id ? { ...n, attachments: enriched.attachments } : n) }));
             fsUpdatePrivateItem('myNotes', id, { attachments: enriched.attachments }, uid);
