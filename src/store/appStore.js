@@ -159,6 +159,40 @@ export const useAppStore = create(
       setStoreName: (name) => set({ storeName: name }),
       setOnline:  (v)    => set({ isOnline: v }),
 
+      // ── Note attachment upload tracking ───────────────────────────────────
+      // noteUploads: { [noteId]: { noteTitle, files: [{name, pct, done, error}], allDone } }
+      noteUploads: {},
+      _startNoteUpload: (noteId, noteTitle, fileNames) => {
+        set(s => ({
+          noteUploads: {
+            ...s.noteUploads,
+            [noteId]: {
+              noteTitle,
+              files: fileNames.map(name => ({ name, pct: 0, done: false, error: false })),
+              allDone: false,
+            },
+          },
+        }));
+      },
+      _updateNoteUploadFile: (noteId, fileName, pct, done = false, error = false) => {
+        set(s => {
+          const entry = s.noteUploads[noteId];
+          if (!entry) return {};
+          const files = entry.files.map(f =>
+            f.name === fileName ? { ...f, pct: done ? 100 : pct, done, error } : f
+          );
+          const allDone = files.every(f => f.done || f.error);
+          return { noteUploads: { ...s.noteUploads, [noteId]: { ...entry, files, allDone } } };
+        });
+      },
+      _clearNoteUpload: (noteId) => {
+        set(s => {
+          const uploads = { ...s.noteUploads };
+          delete uploads[noteId];
+          return { noteUploads: uploads };
+        });
+      },
+
       // ── Associates ────────────────────────────────────────────────────────
       associates: [],
       addAssociate: (a) => {
@@ -308,13 +342,16 @@ export const useAppStore = create(
         fsWrite('teamNotes', doc.id, doc);
         // Step 3: upload attachments to Storage in background, then patch Firestore with storageUrls
         if (get().dbMode === 'firestore' && doc.attachments.some(a => a.dataUrl)) {
+          const fileNames = doc.attachments.filter(a => a.dataUrl).map(a => a.name);
+          get()._startNoteUpload(doc.id, doc.title, fileNames);
           import('../lib/firestoreSync').then(async ({ uploadNoteAttachments, fsUpdateItem }) => {
-            const enriched = await uploadNoteAttachments(doc, 'team');
-            // Patch in-memory state with storageUrls
+            const enriched = await uploadNoteAttachments(doc, 'team', (name, pct, done, error) => {
+              get()._updateNoteUploadFile(doc.id, name, pct, done, error);
+            });
             set(s => ({ teamNotes: s.teamNotes.map(n => n.id === doc.id ? { ...n, attachments: enriched.attachments } : n) }));
-            // Patch only the attachments field in Firestore (note already exists)
             fsUpdateItem('teamNotes', doc.id, { attachments: enriched.attachments });
-          }).catch(() => {}); // non-fatal — note already saved without storageUrl
+            setTimeout(() => get()._clearNoteUpload(doc.id), 2500);
+          }).catch(() => { get()._clearNoteUpload(doc.id); });
         }
       },
       updateTeamNote: (id, d) => {
@@ -323,11 +360,17 @@ export const useAppStore = create(
         fsUpdate('teamNotes', id, d);
         // Upload any new attachments that have dataUrl but no storageUrl yet
         if (get().dbMode === 'firestore' && Array.isArray(d.attachments) && d.attachments.some(a => a.dataUrl && !a.storageUrl)) {
+          const noteTitle = get().teamNotes.find(n => n.id === id)?.title || 'Note';
+          const fileNames = d.attachments.filter(a => a.dataUrl && !a.storageUrl).map(a => a.name);
+          get()._startNoteUpload(id, noteTitle, fileNames);
           import('../lib/firestoreSync').then(async ({ uploadNoteAttachments, fsUpdateItem }) => {
-            const enriched = await uploadNoteAttachments({ id, attachments: d.attachments }, 'team');
+            const enriched = await uploadNoteAttachments({ id, attachments: d.attachments }, 'team', (name, pct, done, error) => {
+              get()._updateNoteUploadFile(id, name, pct, done, error);
+            });
             set(s => ({ teamNotes: s.teamNotes.map(n => n.id === id ? { ...n, attachments: enriched.attachments } : n) }));
             fsUpdateItem('teamNotes', id, { attachments: enriched.attachments });
-          }).catch(() => {});
+            setTimeout(() => get()._clearNoteUpload(id), 2500);
+          }).catch(() => { get()._clearNoteUpload(id); });
         }
       },
       deleteTeamNote: (id) => {
@@ -343,11 +386,16 @@ export const useAppStore = create(
         // Step 3: background Storage upload → patch storageUrls
         if (isRealUser() && doc.attachments.some(a => a.dataUrl)) {
           const uid = get().user.uid;
+          const fileNames = doc.attachments.filter(a => a.dataUrl).map(a => a.name);
+          get()._startNoteUpload(doc.id, doc.title, fileNames);
           import('../lib/firestoreSync').then(async ({ uploadNoteAttachments, fsUpdatePrivateItem }) => {
-            const enriched = await uploadNoteAttachments(doc, 'my');
+            const enriched = await uploadNoteAttachments(doc, 'my', (name, pct, done, error) => {
+              get()._updateNoteUploadFile(doc.id, name, pct, done, error);
+            });
             set(s => ({ myNotes: s.myNotes.map(n => n.id === doc.id ? { ...n, attachments: enriched.attachments } : n) }));
             fsUpdatePrivateItem('myNotes', doc.id, { attachments: enriched.attachments }, uid);
-          }).catch(() => {});
+            setTimeout(() => get()._clearNoteUpload(doc.id), 2500);
+          }).catch(() => { get()._clearNoteUpload(doc.id); });
         }
       },
       updateMyNote: (id, d) => {
@@ -355,11 +403,17 @@ export const useAppStore = create(
         fsUpdatePrivate('myNotes', id, d);
         if (isRealUser() && Array.isArray(d.attachments) && d.attachments.some(a => a.dataUrl && !a.storageUrl)) {
           const uid = get().user.uid;
+          const noteTitle = get().myNotes.find(n => n.id === id)?.title || 'Note';
+          const fileNames = d.attachments.filter(a => a.dataUrl && !a.storageUrl).map(a => a.name);
+          get()._startNoteUpload(id, noteTitle, fileNames);
           import('../lib/firestoreSync').then(async ({ uploadNoteAttachments, fsUpdatePrivateItem }) => {
-            const enriched = await uploadNoteAttachments({ id, attachments: d.attachments }, 'my');
+            const enriched = await uploadNoteAttachments({ id, attachments: d.attachments }, 'my', (name, pct, done, error) => {
+              get()._updateNoteUploadFile(id, name, pct, done, error);
+            });
             set(s => ({ myNotes: s.myNotes.map(n => n.id === id ? { ...n, attachments: enriched.attachments } : n) }));
             fsUpdatePrivateItem('myNotes', id, { attachments: enriched.attachments }, uid);
-          }).catch(() => {});
+            setTimeout(() => get()._clearNoteUpload(id), 2500);
+          }).catch(() => { get()._clearNoteUpload(id); });
         }
       },
       deleteMyNote: (id) => {

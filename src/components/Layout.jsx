@@ -1,6 +1,7 @@
 import React from 'react';
 import BottomNav from './BottomNav';
 import DesktopSidebar from './DesktopSidebar';
+import NoteUploadProgress from './NoteUploadProgress';
 
 export default function Layout({ children }) {
   return (
@@ -18,6 +19,9 @@ export default function Layout({ children }) {
       <div className="bottom-nav">
         <BottomNav />
       </div>
+
+      {/* Attachment upload progress bar — floats above bottom nav */}
+      <NoteUploadProgress />
     </div>
   );
 }

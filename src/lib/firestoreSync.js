@@ -55,33 +55,61 @@ function stripAttachmentDataUrls(data) {
 //
 // Returns { ...attachment, storageUrl } on success, or the original attachment
 // on failure (non-fatal — preview will fall back to in-memory dataUrl).
-export async function uploadNoteAttachment(attachment, noteId, scope = 'team') {
+// onProgress(pct: 0-100) is called during upload if provided.
+export async function uploadNoteAttachment(attachment, noteId, scope = 'team', onProgress) {
   if (!attachment.dataUrl) return attachment; // nothing to upload
   try {
-    const { getStorage, ref, uploadString, getDownloadURL } = await import('firebase/storage');
+    const { ref, uploadBytesResumable, getDownloadURL } = await import('firebase/storage');
     const { getFirebaseModules } = await import('./firebase');
     const { storage } = await getFirebaseModules();
     if (!storage) return attachment;
 
-    const path = `noteAttachments/${scope}/${noteId}/${attachment.id}`;
+    // Convert dataUrl → Blob for uploadBytesResumable (gives us progress events)
+    const res  = await fetch(attachment.dataUrl);
+    const blob = await res.blob();
+
+    const path       = `noteAttachments/${scope}/${noteId}/${attachment.id}`;
     const storageRef = ref(storage, path);
-    await uploadString(storageRef, attachment.dataUrl, 'data_url');
-    const storageUrl = await getDownloadURL(storageRef);
+    const task       = uploadBytesResumable(storageRef, blob, { contentType: attachment.type });
+
+    const storageUrl = await new Promise((resolve, reject) => {
+      task.on(
+        'state_changed',
+        snap => {
+          const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
+          onProgress?.(pct);
+        },
+        reject,
+        async () => {
+          try { resolve(await getDownloadURL(task.snapshot.ref)); }
+          catch (e) { reject(e); }
+        }
+      );
+    });
+
     return { ...attachment, storageUrl };
   } catch (e) {
     console.warn('[Storage] uploadNoteAttachment failed:', e?.code || e?.message);
-    return attachment; // non-fatal fallback
+    return { ...attachment, _uploadError: true }; // non-fatal fallback
   }
 }
 
 // Upload all attachments in a note that don't yet have a storageUrl.
+// onFileProgress(fileName, pct, done, error) is called for each file.
 // Returns the note with updated attachments (storageUrl added where uploaded).
-export async function uploadNoteAttachments(note, scope = 'team') {
+export async function uploadNoteAttachments(note, scope = 'team', onFileProgress) {
   if (!Array.isArray(note.attachments) || note.attachments.length === 0) return note;
   const uploadedAttachments = await Promise.all(
-    note.attachments.map(att =>
-      att.storageUrl ? att : uploadNoteAttachment(att, note.id, scope)
-    )
+    note.attachments.map(att => {
+      if (att.storageUrl) return att; // already uploaded
+      return uploadNoteAttachment(
+        att, note.id, scope,
+        pct => onFileProgress?.(att.name, pct, false, false)
+      ).then(result => {
+        onFileProgress?.(att.name, 100, true, !!result._uploadError);
+        return result;
+      });
+    })
   );
   return { ...note, attachments: uploadedAttachments };
 }
