@@ -295,12 +295,33 @@ export const useAppStore = create(
         const u   = get().user;
         const doc = { ...n, id: `note_${Date.now()}`, createdAt: new Date().toISOString(), pinned: false, attachments: n.attachments || [],
           createdBy: u ? { uid: u.uid, name: firstName(u.name || u.email?.split('@')[0]) } : null };
+        // Add to state immediately with dataUrl for instant in-session preview
         set(s => ({ teamNotes: [doc, ...s.teamNotes] }));
-        fsWrite('teamNotes', doc.id, doc);
+        // Upload attachments to Firebase Storage, then write to Firestore
+        // so that storageUrl is persisted and previews survive reload.
+        if (get().dbMode === 'firestore') {
+          import('../lib/firestoreSync').then(async ({ uploadNoteAttachments, fsSetItem }) => {
+            const enriched = await uploadNoteAttachments(doc, 'team');
+            // Patch in-memory state with storageUrls so current session shows them too
+            set(s => ({ teamNotes: s.teamNotes.map(n => n.id === doc.id ? enriched : n) }));
+            fsSetItem('teamNotes', enriched.id, enriched);
+          }).catch(() => fsWrite('teamNotes', doc.id, doc));
+        }
       },
       updateTeamNote: (id, d) => {
         set(s => ({ teamNotes: s.teamNotes.map(n => n.id === id ? { ...n, ...d } : n) }));
-        fsUpdate('teamNotes', id, d);
+        // If the update includes attachments, upload any new ones first
+        if (get().dbMode === 'firestore' && Array.isArray(d.attachments)) {
+          const noteId = id;
+          import('../lib/firestoreSync').then(async ({ uploadNoteAttachments, fsUpdateItem }) => {
+            const enriched = await uploadNoteAttachments({ id: noteId, attachments: d.attachments }, 'team');
+            const enrichedData = { ...d, attachments: enriched.attachments };
+            set(s => ({ teamNotes: s.teamNotes.map(n => n.id === id ? { ...n, ...enrichedData } : n) }));
+            fsUpdateItem('teamNotes', id, enrichedData);
+          }).catch(() => fsUpdate('teamNotes', id, d));
+        } else {
+          fsUpdate('teamNotes', id, d);
+        }
       },
       deleteTeamNote: (id) => {
         set(s => ({ teamNotes: s.teamNotes.filter(n => n.id !== id) }));
@@ -310,11 +331,28 @@ export const useAppStore = create(
       addMyNote: (n) => {
         const doc = { ...n, id: `mynote_${Date.now()}`, createdAt: new Date().toISOString(), pinned: false, attachments: n.attachments || [] };
         set(s => ({ myNotes: [doc, ...s.myNotes] }));
-        fsWritePrivate('myNotes', doc.id, doc);
+        if (isRealUser()) {
+          const uid = get().user.uid;
+          import('../lib/firestoreSync').then(async ({ uploadNoteAttachments, fsSetPrivateItem }) => {
+            const enriched = await uploadNoteAttachments(doc, 'my');
+            set(s => ({ myNotes: s.myNotes.map(n => n.id === doc.id ? enriched : n) }));
+            fsSetPrivateItem('myNotes', enriched.id, enriched, uid);
+          }).catch(() => fsWritePrivate('myNotes', doc.id, doc));
+        }
       },
       updateMyNote: (id, d) => {
         set(s => ({ myNotes: s.myNotes.map(n => n.id === id ? { ...n, ...d } : n) }));
-        fsUpdatePrivate('myNotes', id, d);
+        if (isRealUser() && Array.isArray(d.attachments)) {
+          const uid = get().user.uid;
+          import('../lib/firestoreSync').then(async ({ uploadNoteAttachments, fsUpdatePrivateItem }) => {
+            const enriched = await uploadNoteAttachments({ id, attachments: d.attachments }, 'my');
+            const enrichedData = { ...d, attachments: enriched.attachments };
+            set(s => ({ myNotes: s.myNotes.map(n => n.id === id ? { ...n, ...enrichedData } : n) }));
+            fsUpdatePrivateItem('myNotes', id, enrichedData, uid);
+          }).catch(() => fsUpdatePrivate('myNotes', id, d));
+        } else {
+          fsUpdatePrivate('myNotes', id, d);
+        }
       },
       deleteMyNote: (id) => {
         set(s => ({ myNotes: s.myNotes.filter(n => n.id !== id) }));

@@ -37,7 +37,7 @@ const STORE_ID = 'store_1687';
 // Firestore documents have a 1 MB size limit; a single base64-encoded image
 // easily exceeds that and causes the write to fail silently, making the note
 // disappear when onSnapshot overwrites state with the server's (broken) copy.
-// We keep all other metadata (id, name, type, size) for display purposes.
+// We keep all other metadata (id, name, type, size, storageUrl) for display.
 function stripAttachmentDataUrls(data) {
   if (!data || typeof data !== 'object') return data;
   if (!Array.isArray(data.attachments) || data.attachments.length === 0) return data;
@@ -45,6 +45,45 @@ function stripAttachmentDataUrls(data) {
     ...data,
     attachments: data.attachments.map(({ dataUrl: _dropped, ...rest }) => rest),
   };
+}
+
+// ── Firebase Storage upload ───────────────────────────────────────────────────
+// Uploads a single attachment (base64 dataUrl) to Firebase Storage and returns
+// the permanent public download URL.  Stored at:
+//   noteAttachments/{scope}/{noteId}/{attachmentId}
+// where scope is 'team' or 'my' (matching the note collection).
+//
+// Returns { ...attachment, storageUrl } on success, or the original attachment
+// on failure (non-fatal — preview will fall back to in-memory dataUrl).
+export async function uploadNoteAttachment(attachment, noteId, scope = 'team') {
+  if (!attachment.dataUrl) return attachment; // nothing to upload
+  try {
+    const { getStorage, ref, uploadString, getDownloadURL } = await import('firebase/storage');
+    const { getFirebaseModules } = await import('./firebase');
+    const { storage } = await getFirebaseModules();
+    if (!storage) return attachment;
+
+    const path = `noteAttachments/${scope}/${noteId}/${attachment.id}`;
+    const storageRef = ref(storage, path);
+    await uploadString(storageRef, attachment.dataUrl, 'data_url');
+    const storageUrl = await getDownloadURL(storageRef);
+    return { ...attachment, storageUrl };
+  } catch (e) {
+    console.warn('[Storage] uploadNoteAttachment failed:', e?.code || e?.message);
+    return attachment; // non-fatal fallback
+  }
+}
+
+// Upload all attachments in a note that don't yet have a storageUrl.
+// Returns the note with updated attachments (storageUrl added where uploaded).
+export async function uploadNoteAttachments(note, scope = 'team') {
+  if (!Array.isArray(note.attachments) || note.attachments.length === 0) return note;
+  const uploadedAttachments = await Promise.all(
+    note.attachments.map(att =>
+      att.storageUrl ? att : uploadNoteAttachment(att, note.id, scope)
+    )
+  );
+  return { ...note, attachments: uploadedAttachments };
 }
 
 let _db            = null;

@@ -116,10 +116,13 @@ function LightboxViewer({ attachments, startIndex = 0, onClose }) {
   };
   const onTouchEnd = () => { lastDist.current = null; };
 
+  // Use storageUrl (permanent, survives reload) with dataUrl as session-only fallback
+  const currentSrc = current?.storageUrl || current?.dataUrl || null;
+
   const handleDownload = () => {
-    if (!current?.dataUrl) return;
+    if (!currentSrc) return;
     const a = document.createElement('a');
-    a.href = current.dataUrl;
+    a.href = currentSrc;
     a.download = current.name || 'attachment';
     a.click();
   };
@@ -173,9 +176,9 @@ function LightboxViewer({ attachments, startIndex = 0, onClose }) {
         onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
         style={{ cursor: zoom > 1 ? 'grab' : 'default' }}
       >
-        {isImage && current.dataUrl ? (
+        {isImage && currentSrc ? (
           <img
-            src={current.dataUrl}
+            src={currentSrc}
             alt={current.name}
             draggable={false}
             style={{
@@ -195,12 +198,12 @@ function LightboxViewer({ attachments, startIndex = 0, onClose }) {
               <p className="font-semibold text-lg">{current?.name}</p>
               <p className="text-white/50 text-sm mt-1">{current?.size ? (current.size / 1024).toFixed(1) + ' KB' : ''}</p>
               <p className="text-white/40 text-xs mt-2">
-                {isImage && !current.dataUrl
-                  ? 'Image preview not available — attachment stored without preview data'
+                {isImage && !currentSrc
+                  ? 'Image preview not available — reopen to reload from cloud'
                   : 'Preview not available for this file type'}
               </p>
             </div>
-            {current.dataUrl && (
+            {currentSrc && (
               <button
                 onClick={handleDownload}
                 className="flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-xl font-semibold text-sm mt-2"
@@ -241,8 +244,8 @@ function LightboxViewer({ attachments, startIndex = 0, onClose }) {
                 i === idx ? 'border-primary' : 'border-transparent opacity-50 hover:opacity-80'
               }`}
             >
-              {att.type?.startsWith('image/') && att.dataUrl ? (
-                <img src={att.dataUrl} alt={att.name} className="w-full h-full object-cover" />
+              {att.type?.startsWith('image/') && (att.storageUrl || att.dataUrl) ? (
+                <img src={att.storageUrl || att.dataUrl} alt={att.name} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full bg-white/10 flex items-center justify-center">
                   {fileIcon(att.type)}
@@ -336,7 +339,7 @@ function AttachmentUploader({ attachments, onChange }) {
           {attachments.map((att, i) => (
             <div key={att.id || i} className="flex items-center gap-3 bg-white border border-gray-100 rounded-xl px-3 py-2 shadow-sm">
               {att.type?.startsWith('image/') ? (
-                <img src={att.dataUrl} alt={att.name} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                <img src={att.storageUrl || att.dataUrl} alt={att.name} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
               ) : (
                 <div className="w-10 h-10 bg-gray-50 rounded-lg flex items-center justify-center flex-shrink-0">
                   {fileIcon(att.type)}
@@ -465,21 +468,23 @@ function AttachmentRow({ attachments, onOpenLightbox }) {
       {/* Image thumbnails grid */}
       {images.length > 0 && (
         <div className={`grid gap-1.5 ${images.length === 1 ? 'grid-cols-1' : images.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
-          {images.map((img, i) => (
+          {images.map((img, i) => {
+            const imgSrc = img.storageUrl || img.dataUrl || null;
+            return (
             <div
               key={img.id || i}
-              className={`relative aspect-square rounded-xl overflow-hidden bg-gray-100 group ${img.dataUrl ? 'cursor-pointer' : 'cursor-default'}`}
-              onClick={() => img.dataUrl && onOpenLightbox(attachments, attachments.indexOf(img))}
+              className={`relative aspect-square rounded-xl overflow-hidden bg-gray-100 group ${imgSrc ? 'cursor-pointer' : 'cursor-default'}`}
+              onClick={() => imgSrc && onOpenLightbox(attachments, attachments.indexOf(img))}
             >
-              {img.dataUrl ? (
+              {imgSrc ? (
                 <>
-                  <img src={img.dataUrl} alt={img.name} className="w-full h-full object-cover" />
+                  <img src={imgSrc} alt={img.name} className="w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center">
                     <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-all" />
                   </div>
                 </>
               ) : (
-                /* Placeholder: dataUrl stripped for storage — image was saved but can't be previewed */
+                /* Placeholder: no preview available yet */
                 <div className="w-full h-full flex flex-col items-center justify-center gap-1 p-1">
                   <Image size={22} className="text-gray-300 flex-shrink-0" />
                   <span className="text-[10px] text-gray-400 text-center leading-tight break-all line-clamp-2">{img.name}</span>
@@ -491,7 +496,8 @@ function AttachmentRow({ attachments, onOpenLightbox }) {
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
