@@ -236,34 +236,76 @@ export const useAppStore = create(
         set(s => ({ callIns: [doc, ...s.callIns] }));
         fsWrite('callIns', doc.id, doc);
 
-        // ── Auto Work File entry on threshold ─────────────────────────────
-        // If associate hits 3+ incidents OR 5+ points in 90 days → add WF row
+        // ── PX Progressive Discipline: Auto Work File entry ───────────────
+        // Thresholds per PX policy:
+        //   2–3.9 pts → Coaching
+        //   4–5.9 pts → First Written Warning
+        //   6–7.9 pts → Final Written Warning
+        //   8+ pts    → Termination Eligible
+        // Also trigger on: 3 incidents, 5 incidents, 8 incidents in 90 days
         if (doc.associateId) {
           const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 90);
-          const POINTS_MAP = { 'No-Show': 3, 'Unexcused': 2, 'Late/Tardy': 1, 'Excused': 0 };
-          const KEY_MAP    = { 'No-Show': 'A', 'Unexcused': 'B', 'Late/Tardy': 'F', 'Excused': '' };
+
+          // Resolve point value — supports new subtype system and legacy types
+          const getDocPoints = (x) => {
+            if (x.points !== undefined) return x.points;
+            const LEGACY_MAP = { 'No-Show': 3, 'Unexcused': 2, 'Late/Tardy': 1, 'Excused': 0 };
+            return LEGACY_MAP[x.type] ?? 0;
+          };
+
+          // Category → Work File key mapping
+          const getCatKey = (x) => {
+            if (x.categoryId === 'absence') return 'A';
+            if (x.categoryId === 'tardiness') return 'F';
+            if (x.categoryId === 'early_departure') return 'E';
+            if (x.categoryId === 'protected' || x.categoryId === 'emergency') return '';
+            // Legacy
+            const LEGACY_KEY = { 'No-Show': 'A', 'Unexcused': 'B', 'Late/Tardy': 'F', 'Excused': '' };
+            return LEGACY_KEY[x.type] || 'G';
+          };
+
           const recent = [...get().callIns.filter(x =>
             x.associateId === doc.associateId && new Date(x.date) >= cutoff
           ), doc];
-          const pts   = recent.reduce((s, x) => s + (x.points ?? POINTS_MAP[x.type] ?? 0), 0);
+
+          const pts   = recent.reduce((s, x) => s + getDocPoints(x), 0);
           const count = recent.length;
 
-          const shouldFlag = count === 3 || count === 5 || pts >= 5;
-          if (shouldFlag) {
-            const existing = get().workFiles[doc.associateId] || { rows: [] };
-            const newRow = {
-              id:      Date.now() + Math.random(),
-              date:    doc.date,
-              key:     KEY_MAP[doc.type] || 'G',
-              details: `Auto: ${doc.type} — ${count} incidents / ${pts} pts in 90 days.${doc.reason ? ' ' + doc.reason : ''}`,
-              addedBy: u ? { uid: u.uid, name: firstName(u.name || u.email?.split('@')[0]) } : null,
-            };
-            const updatedFile = { ...existing, rows: [...(existing.rows || []), newRow], savedAt: new Date().toISOString() };
-            set(s => ({ workFiles: { ...s.workFiles, [doc.associateId]: updatedFile } }));
-            if (get().dbMode === 'firestore') {
-              import('../lib/firestoreSync')
-                .then(({ fsSaveWorkFile }) => fsSaveWorkFile(doc.associateId, updatedFile))
-                .catch(() => {});
+          // Determine discipline level
+          const getDisciplineLabel = (p) => {
+            if (p >= 8)   return { label: 'Termination Eligible', key: 'T' };
+            if (p >= 6)   return { label: 'Final Written Warning', key: 'W' };
+            if (p >= 4)   return { label: 'First Written Warning', key: 'W' };
+            if (p >= 2)   return { label: 'Coaching', key: 'C' };
+            return null;
+          };
+
+          const discipline = getDisciplineLabel(pts);
+          // Trigger on: new discipline milestone reached OR incident count milestones
+          const incidentMilestone = count === 3 || count === 5 || count === 8;
+          const ptsMilestone = pts === 2 || pts === 4 || pts === 6 || pts >= 8;
+
+          if (discipline && (incidentMilestone || ptsMilestone || pts >= 8)) {
+            const catKey = getCatKey(doc);
+            if (catKey) { // Don't auto-flag protected/emergency (0 pts) absences
+              const existing  = get().workFiles[doc.associateId] || { rows: [] };
+              const subtypeLabel = doc.subtypeId
+                ? (doc.subtypeId.replace(/_/g, ' '))
+                : doc.type;
+              const newRow = {
+                id:      Date.now() + Math.random(),
+                date:    doc.date,
+                key:     catKey,
+                details: `Auto [PX Policy]: ${subtypeLabel} — ${count} incident${count !== 1 ? 's' : ''} / ${pts} pts in 90 days. Action: ${discipline.label}.${doc.reason ? ' Reason: ' + doc.reason : ''}`,
+                addedBy: u ? { uid: u.uid, name: firstName(u.name || u.email?.split('@')[0]) } : null,
+              };
+              const updatedFile = { ...existing, rows: [...(existing.rows || []), newRow], savedAt: new Date().toISOString() };
+              set(s => ({ workFiles: { ...s.workFiles, [doc.associateId]: updatedFile } }));
+              if (get().dbMode === 'firestore') {
+                import('../lib/firestoreSync')
+                  .then(({ fsSaveWorkFile }) => fsSaveWorkFile(doc.associateId, updatedFile))
+                  .catch(() => {});
+              }
             }
           }
         }

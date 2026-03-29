@@ -1,33 +1,140 @@
 import React, { useState, useMemo } from 'react';
-import { format, subDays, isAfter } from 'date-fns';
+import { format, subDays, isAfter, differenceInDays } from 'date-fns';
 import {
   PhoneMissed, Plus, X, Search, BarChart2, User,
-  Shield, Clock, AlertTriangle, CheckCircle2, ChevronDown
+  Shield, Clock, AlertTriangle, CheckCircle2, ChevronDown,
+  FileText, Info, Award, TrendingDown, ChevronRight
 } from 'lucide-react';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
-// ── Point system ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// PANDA EXPRESS ATTENDANCE POINT SYSTEM
+// Effective for Panda Express Store #1687 — Aligned with corporate policy
+// Points roll off after 90 days; recovery bonuses at 30 and 60 day streaks
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Main category definitions with subcategories and point values
+export const PX_ATTENDANCE_POLICY = {
+  categories: [
+    {
+      id: 'tardiness',
+      label: 'Tardiness / Late Arrival',
+      icon: '⏰',
+      color: 'bg-orange-500 text-white',
+      badge: 'bg-orange-100 text-orange-700',
+      subtypes: [
+        { id: 'tardy_minor',    label: 'Minor (1–30 min late)',    points: 0.5 },
+        { id: 'tardy_moderate', label: 'Moderate (31–60 min late)', points: 1   },
+        { id: 'tardy_severe',   label: 'Severe (60+ min late)',     points: 1.5 },
+      ],
+    },
+    {
+      id: 'early_departure',
+      label: 'Early Departure',
+      icon: '🚪',
+      color: 'bg-yellow-500 text-white',
+      badge: 'bg-yellow-100 text-yellow-700',
+      subtypes: [
+        { id: 'early_partial',  label: 'Left early (with notice)',    points: 1 },
+        { id: 'early_walkout',  label: 'Left early (without notice)', points: 2 },
+      ],
+    },
+    {
+      id: 'absence',
+      label: 'Absence / No-Show',
+      icon: '🚫',
+      color: 'bg-red-600 text-white',
+      badge: 'bg-red-100 text-red-700',
+      subtypes: [
+        { id: 'absence_excused',   label: 'Excused absence (called in)',        points: 1 },
+        { id: 'absence_unexcused', label: 'Unexcused absence (no call/no show)',points: 2 },
+        { id: 'absence_noshow',    label: 'No-Show (missed, no contact)',        points: 3 },
+      ],
+    },
+    {
+      id: 'protected',
+      label: 'Protected / Zero-Point',
+      icon: '🛡️',
+      color: 'bg-green-600 text-white',
+      badge: 'bg-green-100 text-green-700',
+      subtypes: [
+        { id: 'protected_fmla',      label: 'FMLA / Medical Leave',      points: 0 },
+        { id: 'protected_jury',      label: 'Jury Duty / Civic Duty',    points: 0 },
+        { id: 'protected_military',  label: 'Military Service',           points: 0 },
+        { id: 'protected_bereavement', label: 'Bereavement Leave',        points: 0 },
+        { id: 'protected_healthcode', label: 'Health Code Related',       points: 0 },
+        { id: 'protected_other',     label: 'Other Protected (manager approved)', points: 0 },
+      ],
+    },
+    {
+      id: 'emergency',
+      label: 'Emergency (With Documentation)',
+      icon: '🏥',
+      color: 'bg-blue-600 text-white',
+      badge: 'bg-blue-100 text-blue-700',
+      subtypes: [
+        { id: 'emergency_medical',   label: 'Medical Emergency (w/ records)',   points: 0 },
+        { id: 'emergency_accident',  label: 'Accident / Police Report',         points: 0 },
+        { id: 'emergency_family',    label: 'Family Emergency (documented)',     points: 0 },
+        { id: 'emergency_discretion', label: 'Manager Discretion Waiver',       points: 0 },
+      ],
+    },
+  ],
+};
+
+// Flat map: subtypeId → { points, label, categoryId, category }
+export const SUBTYPE_MAP = {};
+PX_ATTENDANCE_POLICY.categories.forEach(cat => {
+  cat.subtypes.forEach(sub => {
+    SUBTYPE_MAP[sub.id] = { ...sub, categoryId: cat.id, categoryLabel: cat.label, category: cat };
+  });
+});
+
+// Legacy CALL_IN_TYPES kept for backward compat with existing records
 export const CALL_IN_TYPES = [
   { label: 'No-Show',    points: 3, color: 'bg-red-600 text-white',     badge: 'bg-red-100 text-red-700'    },
   { label: 'Unexcused',  points: 2, color: 'bg-primary text-white',     badge: 'bg-yellow-100 text-yellow-700' },
   { label: 'Late/Tardy', points: 1, color: 'bg-orange-500 text-white',  badge: 'bg-orange-100 text-orange-700' },
   { label: 'Excused',    points: 0, color: 'bg-green-500 text-white',   badge: 'bg-green-100 text-green-700'  },
 ];
-
 export const POINTS_BY_TYPE = Object.fromEntries(CALL_IN_TYPES.map(t => [t.label, t.points]));
 
 const MONTHS = ['All Months','January','February','March','April','May','June',
   'July','August','September','October','November','December'];
 
-// 90-day rolling window helper (exported so Associates page can use it)
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPER FUNCTIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Get point value from a call-in record (supports new subtype system + legacy)
+export function getCallInPoints(callIn) {
+  if (callIn.points !== undefined) return callIn.points;
+  if (callIn.subtypeId && SUBTYPE_MAP[callIn.subtypeId]) return SUBTYPE_MAP[callIn.subtypeId].points;
+  return POINTS_BY_TYPE[callIn.type] ?? 0;
+}
+
+// Get category info for a call-in record
+export function getCallInCategory(callIn) {
+  if (callIn.categoryId) {
+    return PX_ATTENDANCE_POLICY.categories.find(c => c.id === callIn.categoryId);
+  }
+  // Legacy mapping
+  const legacyMap = {
+    'No-Show': 'absence', 'Unexcused': 'absence',
+    'Late/Tardy': 'tardiness', 'Excused': 'protected',
+  };
+  return PX_ATTENDANCE_POLICY.categories.find(c => c.id === legacyMap[callIn.type]) || CALL_IN_TYPES[1];
+}
+
+// 90-day rolling window
 export function get90DayPoints(callIns, associateId) {
   const cutoff = subDays(new Date(), 90);
   return callIns
     .filter(c => c.associateId === associateId && isAfter(new Date(c.date), cutoff))
-    .reduce((sum, c) => sum + (POINTS_BY_TYPE[c.type] ?? 0), 0);
+    .reduce((sum, c) => sum + getCallInPoints(c), 0);
 }
 
 export function get90DayCallIns(callIns, associateId) {
@@ -37,38 +144,67 @@ export function get90DayCallIns(callIns, associateId) {
   );
 }
 
-// Color indicator for point total
+// Progressive discipline thresholds
+export const DISCIPLINE_LEVELS = [
+  { min: 0,   max: 1.9, label: 'Good Standing',      color: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-200', emoji: '✅', action: 'No action required' },
+  { min: 2,   max: 3.9, label: 'Coaching',            color: 'text-blue-700',   bg: 'bg-blue-50',   border: 'border-blue-200',  emoji: '💬', action: 'Verbal coaching conversation' },
+  { min: 4,   max: 5.9, label: 'First Written Warning', color: 'text-yellow-700', bg: 'bg-yellow-50', border: 'border-yellow-200', emoji: '📋', action: 'Issue First Written Warning' },
+  { min: 6,   max: 7.9, label: 'Final Written Warning', color: 'text-orange-700', bg: 'bg-orange-50', border: 'border-orange-200', emoji: '⚠️', action: 'Issue Final Written Warning' },
+  { min: 8,   max: Infinity, label: 'Termination Eligible', color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200', emoji: '🔴', action: 'Eligible for termination per policy' },
+];
+
+export function getDisciplineLevel(pts) {
+  return DISCIPLINE_LEVELS.find(d => pts >= d.min && pts <= d.max) || DISCIPLINE_LEVELS[0];
+}
+
+// Color/emoji helpers updated for new thresholds
 export function pointsColor(pts) {
-  if (pts === 0) return 'text-green-600 bg-green-50 border-green-200';
-  if (pts <= 2)  return 'text-green-600 bg-green-50 border-green-200';
-  if (pts <= 4)  return 'text-yellow-700 bg-yellow-50 border-yellow-200';
-  return             'text-red-600 bg-red-50 border-red-200';
+  const d = getDisciplineLevel(pts);
+  return `${d.color} ${d.bg} ${d.border}`;
 }
 
 export function pointsEmoji(pts) {
-  if (pts <= 2) return '🟢';
-  if (pts <= 4) return '🟡';
+  if (pts < 2)  return '✅';
+  if (pts < 4)  return '💬';
+  if (pts < 6)  return '📋';
+  if (pts < 8)  return '⚠️';
   return '🔴';
 }
 
-// ── Log Call-In modal ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// LOG CALL-IN MODAL — Full PX Policy
+// ─────────────────────────────────────────────────────────────────────────────
 function LogCallInModal({ onClose, onSave, associates }) {
   const today = format(new Date(), 'yyyy-MM-dd');
   const now   = format(new Date(), 'HH:mm');
+
+  const firstCat = PX_ATTENDANCE_POLICY.categories[0];
+  const firstSub = firstCat.subtypes[0];
 
   const [form, setForm] = useState({
     associateId:   associates[0]?.id   || '',
     associateName: associates[0]?.name || '',
     date:    today,
     time:    now,
-    type:    'Unexcused',
+    categoryId: firstCat.id,
+    subtypeId:  firstSub.id,
     reason:  '',
-    covered: '',        // was shift covered?
-    coveredBy: '',      // who covered?
+    documentation: '',   // medical record, police report, etc.
+    covered:    '',
+    coveredBy:  '',
+    managerNote: '',
   });
 
-  const typeInfo    = CALL_IN_TYPES.find(t => t.label === form.type);
-  const pointValue  = typeInfo?.points ?? 0;
+  const category   = PX_ATTENDANCE_POLICY.categories.find(c => c.id === form.categoryId) || firstCat;
+  const subtype    = category.subtypes.find(s => s.id === form.subtypeId) || category.subtypes[0];
+  const pointValue = subtype.points;
+  const discipline = getDisciplineLevel(pointValue);
+  const isProtected = category.id === 'protected' || category.id === 'emergency';
+
+  const handleCatChange = (catId) => {
+    const cat = PX_ATTENDANCE_POLICY.categories.find(c => c.id === catId);
+    setForm(f => ({ ...f, categoryId: catId, subtypeId: cat?.subtypes[0]?.id || '' }));
+  };
 
   const handleAssocChange = (id) => {
     const a = associates.find(x => x.id === id);
@@ -77,17 +213,34 @@ function LogCallInModal({ onClose, onSave, associates }) {
 
   const handleSave = () => {
     if (!form.associateName) return alert('Select an associate');
-    onSave({ ...form, points: pointValue });
+    if (!form.categoryId)    return alert('Select an attendance category');
+    if (!form.subtypeId)     return alert('Select a specific type');
+    onSave({
+      ...form,
+      points: pointValue,
+      // Legacy compat fields
+      type: category.id === 'tardiness' ? 'Late/Tardy'
+          : category.id === 'protected' || category.id === 'emergency' ? 'Excused'
+          : subtype.points >= 3 ? 'No-Show'
+          : subtype.points >= 2 ? 'Unexcused'
+          : 'Excused',
+    });
     onClose();
   };
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up max-h-[92vh] overflow-y-auto">
+      <div className="bg-white rounded-t-2xl w-full max-w-[520px] animate-slide-up max-h-[92vh] overflow-y-auto">
+
+        {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-100 sticky top-0 bg-white z-10">
-          <h2 className="font-bold text-lg text-gray-800">Log Call-In / Attendance</h2>
+          <div>
+            <h2 className="font-bold text-lg text-gray-800">Log Attendance Event</h2>
+            <p className="text-xs text-gray-400">PX Attendance Point System</p>
+          </div>
           <button onClick={onClose} className="p-2 text-gray-400 rounded-lg"><X size={20} /></button>
         </div>
+
         <div className="p-4 space-y-4">
 
           {/* Associate */}
@@ -125,41 +278,114 @@ function LogCallInModal({ onClose, onSave, associates }) {
             </div>
           </div>
 
-          {/* Type + point badge */}
+          {/* ── STEP 1: Category ── */}
           <div>
-            <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Attendance Type</label>
-            <div className="grid grid-cols-2 gap-2">
-              {CALL_IN_TYPES.map(t => (
-                <button key={t.label} onClick={() => setForm(f => ({ ...f, type: t.label }))}
-                  className={`py-2.5 rounded-xl text-xs font-semibold border transition-all flex items-center justify-center gap-1.5 ${
-                    form.type === t.label ? t.color + ' border-transparent shadow-sm' : 'bg-white text-gray-600 border-gray-200'
+            <label className="text-xs font-semibold text-gray-600 mb-1.5 block">
+              Step 1 — Attendance Category *
+            </label>
+            <div className="grid grid-cols-1 gap-2">
+              {PX_ATTENDANCE_POLICY.categories.map(cat => (
+                <button
+                  key={cat.id}
+                  onClick={() => handleCatChange(cat.id)}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all text-sm font-medium ${
+                    form.categoryId === cat.id
+                      ? cat.color + ' border-transparent shadow-sm'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <span className="text-base">{cat.icon}</span>
+                  <span className="flex-1">{cat.label}</span>
+                  {form.categoryId === cat.id && <ChevronRight size={14} className="opacity-70" />}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── STEP 2: Subtype ── */}
+          <div>
+            <label className="text-xs font-semibold text-gray-600 mb-1.5 block">
+              Step 2 — Specific Type *
+            </label>
+            <div className="space-y-1.5">
+              {category.subtypes.map(sub => (
+                <button
+                  key={sub.id}
+                  onClick={() => setForm(f => ({ ...f, subtypeId: sub.id }))}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-left transition-all ${
+                    form.subtypeId === sub.id
+                      ? 'bg-gray-800 text-white border-transparent'
+                      : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <span className="text-sm">{sub.label}</span>
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ml-3 flex-shrink-0 ${
+                    form.subtypeId === sub.id ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
                   }`}>
-                  {t.label}
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                    form.type === t.label ? 'bg-white/30 text-white' : 'bg-gray-100 text-gray-500'
-                  }`}>
-                    {t.points === 0 ? '0 pts' : `+${t.points} pt${t.points > 1 ? 's' : ''}`}
+                    {sub.points === 0 ? '0 pts' : `+${sub.points} pt${sub.points !== 1 ? 's' : ''}`}
                   </span>
                 </button>
               ))}
             </div>
-            {/* Point value callout */}
-            <div className={`mt-2 rounded-xl px-3 py-2 text-xs font-medium flex items-center gap-2 border ${pointsColor(pointValue)}`}>
-              <Shield size={13} />
-              {pointValue === 0
-                ? 'No points — excused absence'
-                : `+${pointValue} point${pointValue > 1 ? 's' : ''} added to 90-day total`}
+          </div>
+
+          {/* Point impact callout */}
+          <div className={`rounded-xl px-3 py-2.5 text-xs font-medium flex items-start gap-2 border ${
+            isProtected ? 'text-green-700 bg-green-50 border-green-200' : `${discipline.color} ${discipline.bg} ${discipline.border}`
+          }`}>
+            <Shield size={14} className="mt-0.5 flex-shrink-0" />
+            <div>
+              {isProtected ? (
+                <p><strong>0 points</strong> — Protected/emergency category. No points assessed.</p>
+              ) : (
+                <>
+                  <p><strong>+{pointValue} point{pointValue !== 1 ? 's' : ''}</strong> added to 90-day rolling total</p>
+                  <p className="mt-0.5 opacity-80">{discipline.emoji} Discipline level: {discipline.label} — {discipline.action}</p>
+                </>
+              )}
             </div>
           </div>
+
+          {/* Protected/Emergency: documentation required */}
+          {isProtected && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-2">
+              <p className="text-xs font-bold text-blue-700 flex items-center gap-1.5">
+                <FileText size={13} /> Documentation Required
+              </p>
+              <p className="text-xs text-blue-600">
+                Protected absences require supporting documentation (medical records, court papers, military orders, police report, etc.).
+              </p>
+              <textarea
+                className="w-full border border-blue-200 rounded-xl px-3 py-2 text-sm resize-none bg-white"
+                rows={2}
+                placeholder="Document type & reference (e.g. 'ER discharge note, dated 2026-03-15')..."
+                value={form.documentation}
+                onChange={e => setForm(f => ({ ...f, documentation: e.target.value }))}
+              />
+            </div>
+          )}
 
           {/* Reason */}
           <div>
             <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Reason / Notes</label>
             <textarea
               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm resize-none"
-              rows={2} placeholder="Reason for absence or tardiness..."
+              rows={2}
+              placeholder="Reason for absence or tardiness..."
               value={form.reason}
               onChange={e => setForm(f => ({ ...f, reason: e.target.value }))}
+            />
+          </div>
+
+          {/* Manager Note (optional — appears in work file) */}
+          <div>
+            <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Manager Note (optional)</label>
+            <textarea
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm resize-none"
+              rows={2}
+              placeholder="Internal manager notes — context for the record..."
+              value={form.managerNote}
+              onChange={e => setForm(f => ({ ...f, managerNote: e.target.value }))}
             />
           </div>
 
@@ -205,9 +431,22 @@ function LogCallInModal({ onClose, onSave, associates }) {
             )}
           </div>
 
+          {/* PX Policy Info box */}
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+            <p className="text-xs font-bold text-gray-600 mb-1.5 flex items-center gap-1.5">
+              <Info size={12} /> PX Attendance Point Recovery
+            </p>
+            <ul className="text-xs text-gray-500 space-y-0.5">
+              <li>• Points expire after <strong>90 days</strong> (rolling window)</li>
+              <li>• 30-day incident-free: <strong>−0.5 pt recovery</strong></li>
+              <li>• 60-day incident-free: <strong>−1 pt recovery</strong></li>
+              <li>• Protected absences (FMLA, jury duty, etc.) = <strong>0 points</strong></li>
+            </ul>
+          </div>
+
           <button onClick={handleSave}
             className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-sm">
-            Log Attendance
+            Log Attendance Event
           </button>
         </div>
       </div>
@@ -215,13 +454,22 @@ function LogCallInModal({ onClose, onSave, associates }) {
   );
 }
 
-// ── Call-in detail modal (shown when card is tapped) ─────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// CALL-IN DETAIL MODAL
+// ─────────────────────────────────────────────────────────────────────────────
 function CallInDetailModal({ callIn, onClose, onDelete }) {
-  const typeInfo = CALL_IN_TYPES.find(t => t.label === callIn.type) || CALL_IN_TYPES[1];
-  const pts = callIn.points ?? POINTS_BY_TYPE[callIn.type] ?? 0;
+  const category = getCallInCategory(callIn);
+  const subtype  = callIn.subtypeId ? SUBTYPE_MAP[callIn.subtypeId] : null;
+  const pts      = getCallInPoints(callIn);
+  const discipline = getDisciplineLevel(pts);
+  const isProtected = category?.id === 'protected' || category?.id === 'emergency';
+
+  // Badge props — fall back to legacy type display
+  const badgeBg   = category?.badge || 'bg-gray-100 text-gray-700';
+  const typeLabel = subtype?.label || callIn.type || 'Unknown';
 
   const handleDelete = () => {
-    if (window.confirm(`Remove this call-in record for ${callIn.associateName}? This cannot be undone.`)) {
+    if (window.confirm(`Remove this attendance record for ${callIn.associateName}? This cannot be undone.`)) {
       onDelete(callIn.id);
       onClose();
     }
@@ -229,15 +477,17 @@ function CallInDetailModal({ callIn, onClose, onDelete }) {
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up max-h-[92vh] flex flex-col">
+      <div className="bg-white rounded-t-2xl w-full max-w-[520px] animate-slide-up max-h-[92vh] flex flex-col">
+
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
-          <h2 className="font-bold text-base text-gray-800">Call-In Details</h2>
+          <h2 className="font-bold text-base text-gray-800">Attendance Record</h2>
           <button onClick={onClose} className="p-2 text-gray-400 rounded-lg"><X size={20} /></button>
         </div>
 
         <div className="p-4 space-y-4 overflow-y-auto flex-1">
-          {/* Associate avatar + name */}
+
+          {/* Associate + category badges */}
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 bg-primary rounded-2xl flex items-center justify-center text-white font-bold text-2xl flex-shrink-0">
               {callIn.associateName?.[0]?.toUpperCase() || '?'}
@@ -245,12 +495,18 @@ function CallInDetailModal({ callIn, onClose, onDelete }) {
             <div className="flex-1 min-w-0">
               <p className="font-bold text-lg text-gray-800">{callIn.associateName}</p>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${typeInfo.badge}`}>
-                  {callIn.type}
-                </span>
-                {pts > 0 && (
+                {category && (
+                  <span className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${badgeBg}`}>
+                    {category.icon} {category.label}
+                  </span>
+                )}
+                {pts > 0 ? (
                   <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold border ${pointsColor(pts)}`}>
-                    +{pts} pt{pts > 1 ? 's' : ''}
+                    +{pts} pt{pts !== 1 ? 's' : ''}
+                  </span>
+                ) : (
+                  <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-green-100 text-green-700 border border-green-200">
+                    0 pts — Protected
                   </span>
                 )}
               </div>
@@ -259,6 +515,7 @@ function CallInDetailModal({ callIn, onClose, onDelete }) {
 
           {/* Details grid */}
           <div className="bg-gray-50 rounded-xl p-3 space-y-2.5">
+
             <div className="flex items-start gap-2">
               <Clock size={14} className="text-gray-400 mt-0.5 flex-shrink-0" />
               <div>
@@ -269,12 +526,42 @@ function CallInDetailModal({ callIn, onClose, onDelete }) {
               </div>
             </div>
 
+            {typeLabel && (
+              <div className="flex items-start gap-2">
+                <Info size={14} className="text-gray-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-[11px] text-gray-400 font-medium">Specific Type</p>
+                  <p className="text-sm text-gray-800">{typeLabel}</p>
+                </div>
+              </div>
+            )}
+
             {callIn.reason && (
               <div className="flex items-start gap-2">
                 <AlertTriangle size={14} className="text-gray-400 mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="text-[11px] text-gray-400 font-medium">Reason</p>
                   <p className="text-sm text-gray-800">{callIn.reason}</p>
+                </div>
+              </div>
+            )}
+
+            {callIn.documentation && (
+              <div className="flex items-start gap-2">
+                <FileText size={14} className="text-gray-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-[11px] text-gray-400 font-medium">Documentation</p>
+                  <p className="text-sm text-gray-800">{callIn.documentation}</p>
+                </div>
+              </div>
+            )}
+
+            {callIn.managerNote && (
+              <div className="flex items-start gap-2">
+                <Award size={14} className="text-gray-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-[11px] text-gray-400 font-medium">Manager Note</p>
+                  <p className="text-sm text-gray-800 italic">{callIn.managerNote}</p>
                 </div>
               </div>
             )}
@@ -303,12 +590,35 @@ function CallInDetailModal({ callIn, onClose, onDelete }) {
             )}
           </div>
 
-          {/* Point callout */}
-          <div className={`rounded-xl px-3 py-2.5 text-xs font-medium flex items-center gap-2 border ${pointsColor(pts)}`}>
-            <Shield size={13} />
-            {pts === 0
-              ? 'No points added — excused absence'
-              : `+${pts} point${pts > 1 ? 's' : ''} counted toward 90-day rolling total`}
+          {/* Discipline level callout */}
+          <div className={`rounded-xl px-3 py-2.5 text-xs font-medium flex items-start gap-2 border ${
+            isProtected ? 'text-green-700 bg-green-50 border-green-200' : `${discipline.color} ${discipline.bg} ${discipline.border}`
+          }`}>
+            <Shield size={14} className="mt-0.5 flex-shrink-0" />
+            <div>
+              {isProtected ? (
+                <p>Protected absence — <strong>0 points</strong> assessed. Documentation on file.</p>
+              ) : (
+                <>
+                  <p>+{pts} point{pts !== 1 ? 's' : ''} counted toward 90-day rolling total</p>
+                  <p className="mt-0.5 opacity-80">
+                    {discipline.emoji} <strong>{discipline.label}</strong> — {discipline.action}
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Policy callout: point recovery */}
+          <div className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
+            <p className="text-xs font-bold text-gray-500 mb-1 flex items-center gap-1.5">
+              <TrendingDown size={12} /> Point Recovery Reminders
+            </p>
+            <ul className="text-xs text-gray-400 space-y-0.5">
+              <li>• Points expire automatically after 90 days</li>
+              <li>• 30-day clean streak → −0.5 pt recovery</li>
+              <li>• 60-day clean streak → −1 pt recovery</li>
+            </ul>
           </div>
 
           {/* Delete */}
@@ -324,11 +634,21 @@ function CallInDetailModal({ callIn, onClose, onDelete }) {
   );
 }
 
-// ── Call-in log card (tappable) ───────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// CALL-IN CARD (tappable)
+// ─────────────────────────────────────────────────────────────────────────────
 function CallInCard({ callIn, onDelete }) {
   const [showDetail, setShowDetail] = useState(false);
-  const typeInfo = CALL_IN_TYPES.find(t => t.label === callIn.type) || CALL_IN_TYPES[1];
-  const pts = callIn.points ?? POINTS_BY_TYPE[callIn.type] ?? 0;
+  const category  = getCallInCategory(callIn);
+  const subtype   = callIn.subtypeId ? SUBTYPE_MAP[callIn.subtypeId] : null;
+  const pts       = getCallInPoints(callIn);
+  const discipline = getDisciplineLevel(pts);
+  const isProtected = category?.id === 'protected' || category?.id === 'emergency';
+
+  const badgeBg  = category?.badge || 'bg-gray-100 text-gray-700';
+  const typeShort = subtype?.label
+    ? (subtype.label.length > 28 ? subtype.label.slice(0, 26) + '…' : subtype.label)
+    : callIn.type;
 
   return (
     <>
@@ -337,33 +657,41 @@ function CallInCard({ callIn, onDelete }) {
         className="w-full bg-white rounded-xl shadow-sm overflow-hidden text-left active:scale-[0.99] transition-transform hover:shadow-md"
       >
         <div className="flex items-center gap-3 p-3">
+          {/* Avatar */}
           <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white font-bold flex-shrink-0">
             {callIn.associateName?.[0]?.toUpperCase() || '?'}
           </div>
+
+          {/* Main info */}
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-sm text-gray-800">{callIn.associateName}</p>
             <p className="text-xs text-gray-500">
               {callIn.date}{callIn.time ? ` · ${callIn.time}` : ''}
             </p>
-            {callIn.reason && (
-              <p className="text-xs text-gray-400 truncate mt-0.5">{callIn.reason}</p>
-            )}
+            <p className="text-xs text-gray-400 truncate mt-0.5">{typeShort}</p>
             {callIn.createdBy?.name && (
               <p className="flex items-center gap-1 text-[11px] text-blue-600 mt-0.5 font-medium">
-                <User size={10} /> Logged by {callIn.createdBy.name}
+                <User size={10} /> {callIn.createdBy.name}
               </p>
             )}
           </div>
+
+          {/* Right badges */}
           <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${typeInfo.badge}`}>
-              {callIn.type}
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${badgeBg}`}>
+              {category?.icon} {category?.label?.split('/')[0]?.trim() || callIn.type}
             </span>
-            {pts > 0 && (
+            {isProtected ? (
+              <span className="text-[11px] px-2 py-0.5 rounded-full font-bold border bg-green-50 text-green-700 border-green-200">
+                0 pts
+              </span>
+            ) : (
               <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold border ${pointsColor(pts)}`}>
-                +{pts}pt{pts > 1 ? 's' : ''}
+                +{pts}pt{pts !== 1 ? 's' : ''}
               </span>
             )}
           </div>
+
           <ChevronDown size={16} className="text-gray-300 ml-1 flex-shrink-0" />
         </div>
       </button>
@@ -379,18 +707,81 @@ function CallInCard({ callIn, onDelete }) {
   );
 }
 
-// ── Points leaderboard panel ──────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// DISCIPLINE LEGEND PANEL
+// ─────────────────────────────────────────────────────────────────────────────
+function DisciplineLegend() {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+      <button
+        className="w-full flex items-center justify-between p-4 text-left"
+        onClick={() => setExpanded(e => !e)}
+      >
+        <div className="flex items-center gap-2 font-semibold text-gray-800">
+          <Award size={18} className="text-primary" />
+          PX Progressive Discipline Scale
+        </div>
+        <ChevronDown size={16} className={`text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+      </button>
+      {expanded && (
+        <div className="px-4 pb-4 space-y-2 border-t border-gray-100">
+          {DISCIPLINE_LEVELS.map(d => (
+            <div key={d.label} className={`flex items-start gap-3 rounded-xl p-2.5 border ${d.bg} ${d.border}`}>
+              <span className="text-lg flex-shrink-0">{d.emoji}</span>
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm font-bold ${d.color}`}>{d.label}</p>
+                <p className="text-xs text-gray-500">{d.min}–{d.max === Infinity ? '8+' : d.max} pts — {d.action}</p>
+              </div>
+            </div>
+          ))}
+          <div className="mt-3 pt-3 border-t border-gray-200">
+            <p className="text-xs font-bold text-gray-600 mb-1.5 flex items-center gap-1">
+              <TrendingDown size={12} /> Point Recovery
+            </p>
+            <ul className="text-xs text-gray-500 space-y-1">
+              <li className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
+                30-day clean streak → <strong>−0.5 pt</strong> recovery bonus
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
+                60-day clean streak → <strong>−1 pt</strong> recovery bonus
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-gray-400 flex-shrink-0" />
+                All points expire after <strong>90 days</strong> (rolling)
+              </li>
+            </ul>
+          </div>
+          <div className="mt-2">
+            <p className="text-xs font-bold text-gray-600 mb-1.5 flex items-center gap-1">
+              <Shield size={12} /> Zero-Point Categories
+            </p>
+            <p className="text-xs text-gray-500">
+              FMLA · Jury Duty · Military · Bereavement · Health Code · Emergency (with documentation) · Manager Discretion Waiver
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POINTS LEADERBOARD
+// ─────────────────────────────────────────────────────────────────────────────
 function PointsLeaderboard({ callIns, associates }) {
   const rows = useMemo(() => {
     return associates
-      .map(a => ({
-        name: a.name,
-        pts: get90DayPoints(callIns, a.id),
-        count: get90DayCallIns(callIns, a.id).length,
-      }))
+      .map(a => {
+        const pts   = get90DayPoints(callIns, a.id);
+        const count = get90DayCallIns(callIns, a.id).length;
+        return { name: a.name, pts, count };
+      })
       .filter(r => r.count > 0)
       .sort((a, b) => b.pts - a.pts)
-      .slice(0, 8);
+      .slice(0, 10);
   }, [callIns, associates]);
 
   if (rows.length === 0) return null;
@@ -402,43 +793,55 @@ function PointsLeaderboard({ callIns, associates }) {
         90-Day Attendance Points
         <span className="ml-auto text-xs text-gray-400 font-normal">Rolling window</span>
       </div>
-      <div className="space-y-2">
-        {rows.map(r => (
-          <div key={r.name} className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-              {r.name[0]?.toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between mb-0.5">
-                <span className="text-sm font-medium text-gray-800 truncate">{r.name}</span>
-                <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ml-2 ${pointsColor(r.pts)}`}>
-                  {pointsEmoji(r.pts)} {r.pts} pt{r.pts !== 1 ? 's' : ''}
-                </span>
+      <div className="space-y-2.5">
+        {rows.map(r => {
+          const d = getDisciplineLevel(r.pts);
+          return (
+            <div key={r.name} className="flex items-center gap-3">
+              <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                {r.name[0]?.toUpperCase()}
               </div>
-              {/* Progress bar — 8 pts = full red */}
-              <div className="w-full bg-gray-100 rounded-full h-1.5">
-                <div
-                  className={`h-1.5 rounded-full transition-all ${
-                    r.pts <= 2 ? 'bg-green-500' : r.pts <= 4 ? 'bg-yellow-400' : 'bg-red-500'
-                  }`}
-                  style={{ width: `${Math.min(100, (r.pts / 8) * 100)}%` }}
-                />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-sm font-medium text-gray-800 truncate">{r.name}</span>
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ml-2 flex-shrink-0 ${d.color} ${d.bg} ${d.border}`}>
+                    {pointsEmoji(r.pts)} {r.pts} pt{r.pts !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                {/* Progress bar — 8 pts = critical */}
+                <div className="w-full bg-gray-100 rounded-full h-1.5">
+                  <div
+                    className={`h-1.5 rounded-full transition-all ${
+                      r.pts < 2 ? 'bg-green-500'
+                      : r.pts < 4 ? 'bg-blue-500'
+                      : r.pts < 6 ? 'bg-yellow-400'
+                      : r.pts < 8 ? 'bg-orange-500'
+                      : 'bg-red-600'
+                    }`}
+                    style={{ width: `${Math.min(100, (r.pts / 8) * 100)}%` }}
+                  />
+                </div>
+                <p className={`text-[10px] mt-0.5 ${d.color} font-medium`}>{d.emoji} {d.label}</p>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
       {/* Legend */}
-      <div className="flex gap-3 mt-3 pt-3 border-t border-gray-100">
-        {[['🟢','0–2 pts: OK'],['🟡','3–4 pts: Warning'],['🔴','5+ pts: Critical']].map(([e,l]) => (
-          <span key={l} className="text-[10px] text-gray-400 flex items-center gap-1">{e} {l}</span>
+      <div className="flex gap-2 flex-wrap mt-3 pt-3 border-t border-gray-100">
+        {DISCIPLINE_LEVELS.map(d => (
+          <span key={d.label} className="text-[10px] text-gray-500 flex items-center gap-1">
+            {d.emoji} {d.min}–{d.max === Infinity ? '8+' : d.max}pts: {d.label}
+          </span>
         ))}
       </div>
     </div>
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN PAGE
+// ─────────────────────────────────────────────────────────────────────────────
 export default function CallIns() {
   const { callIns, addCallIn, deleteCallIn, associates } = useAppStore();
   const [showModal, setShowModal] = useState(false);
@@ -450,13 +853,14 @@ export default function CallIns() {
   const totalCallIns = callIns.length;
   const thisMonth    = callIns.filter(c => c.date?.startsWith(currentMonth)).length;
 
-  // Points totals
+  // Points totals (current month)
   const totalPtsThisMonth = callIns
     .filter(c => c.date?.startsWith(currentMonth))
-    .reduce((s, c) => s + (c.points ?? POINTS_BY_TYPE[c.type] ?? 0), 0);
+    .reduce((s, c) => s + getCallInPoints(c), 0);
 
-  const noShows = callIns.filter(c => c.type === 'No-Show').length;
-  const tardies = callIns.filter(c => c.type === 'Late/Tardy').length;
+  // Count by broad categories
+  const noShows  = callIns.filter(c => c.categoryId === 'absence' || c.type === 'No-Show').length;
+  const tardies  = callIns.filter(c => c.categoryId === 'tardiness' || c.type === 'Late/Tardy').length;
 
   // Day-of-week analysis
   const dayMap = { Sun:0, Mon:0, Tue:0, Wed:0, Thu:0, Fri:0, Sat:0 };
@@ -469,11 +873,16 @@ export default function CallIns() {
   });
   const worstDay = Object.entries(dayMap).sort((a,b) => b[1]-a[1])[0];
 
+  // All category ids for filter dropdown
+  const allCategoryOptions = ['All Types', ...PX_ATTENDANCE_POLICY.categories.map(c => c.id)];
+
   const filtered = callIns.filter(c => {
     const matchSearch = c.associateName?.toLowerCase().includes(search.toLowerCase()) || c.date?.includes(search);
     const matchMonth  = monthFilter === 'All Months' ||
       c.date?.includes(`-${String(MONTHS.indexOf(monthFilter)).padStart(2, '0')}-`);
-    const matchType   = typeFilter === 'All Types' || c.type === typeFilter;
+    const matchType   = typeFilter === 'All Types'
+      || c.categoryId === typeFilter
+      || c.type === typeFilter;
     return matchSearch && matchMonth && matchType;
   }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
@@ -494,10 +903,10 @@ export default function CallIns() {
         {/* Stats — 2-col mobile, 4-col desktop */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
-            { label: 'Total Logged',    count: totalCallIns,       icon: '📵', bg: 'bg-red-50',    color: 'text-red-500'    },
-            { label: 'This Month',      count: thisMonth,           icon: '📅', bg: 'bg-orange-50', color: 'text-orange-500' },
-            { label: 'No-Shows',        count: noShows,             icon: '🚫', bg: 'bg-red-50',    color: 'text-red-600'    },
-            { label: 'Late / Tardy',    count: tardies,             icon: '⏰', bg: 'bg-yellow-50', color: 'text-yellow-600' },
+            { label: 'Total Logged',  count: totalCallIns,     icon: '📵', bg: 'bg-red-50'     },
+            { label: 'This Month',    count: thisMonth,         icon: '📅', bg: 'bg-orange-50'  },
+            { label: 'Absences',      count: noShows,           icon: '🚫', bg: 'bg-red-50'     },
+            { label: 'Tardiness',     count: tardies,           icon: '⏰', bg: 'bg-yellow-50'  },
           ].map(({ label, count, icon, bg }) => (
             <div key={label} className={`${bg} rounded-xl p-3 flex items-center gap-3`}>
               <div className="text-2xl">{icon}</div>
@@ -512,14 +921,14 @@ export default function CallIns() {
         {/* Insight strip */}
         {callIns.length > 0 && (
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 text-center">
-              <p className="text-xs text-gray-400 mb-0.5">Points this month</p>
-              <p className={`text-xl font-bold ${totalPtsThisMonth >= 5 ? 'text-red-600' : totalPtsThisMonth >= 3 ? 'text-yellow-600' : 'text-green-600'}`}>
+            <div className={`rounded-xl p-3 shadow-sm border text-center ${getDisciplineLevel(totalPtsThisMonth).bg} ${getDisciplineLevel(totalPtsThisMonth).border}`}>
+              <p className="text-xs text-gray-400 mb-0.5">Pts this month</p>
+              <p className={`text-xl font-bold ${getDisciplineLevel(totalPtsThisMonth).color}`}>
                 {totalPtsThisMonth}
               </p>
             </div>
             <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 text-center">
-              <p className="text-xs text-gray-400 mb-0.5">Highest absence day</p>
+              <p className="text-xs text-gray-400 mb-0.5">Peak absence day</p>
               <p className="text-xl font-bold text-gray-700">
                 {worstDay?.[1] > 0 ? worstDay[0] : '—'}
               </p>
@@ -530,48 +939,54 @@ export default function CallIns() {
         {/* 90-day points leaderboard */}
         <PointsLeaderboard callIns={callIns} associates={associates} />
 
+        {/* Discipline scale (collapsible) */}
+        <DisciplineLegend />
+
         {/* Desktop: left=search+list, right=chart (sticky) */}
         <div className="lg:grid lg:grid-cols-[1fr_380px] lg:gap-6 space-y-4 lg:space-y-0">
           <div className="space-y-4">
-          {/* Search & Filters */}}
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white shadow-sm"
-            placeholder="Search by name or date..."
-            value={search} onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-        <div className="flex gap-2">
-          <select className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white shadow-sm"
-            value={monthFilter} onChange={e => setMonthFilter(e.target.value)}>
-            {MONTHS.map(m => <option key={m}>{m}</option>)}
-          </select>
-          <select className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white shadow-sm"
-            value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
-            <option>All Types</option>
-            {CALL_IN_TYPES.map(t => <option key={t.label}>{t.label}</option>)}
-          </select>
-        </div>
 
-        {/* Call-In list */}
-        {filtered.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm p-8 flex flex-col items-center text-gray-400">
-            <PhoneMissed size={40} className="mb-3 text-gray-200" />
-            <p className="font-medium text-gray-500">No Records Found</p>
-            <p className="text-xs mt-1 mb-4">Tap "+ Log Attendance" to record a call-in or tardy</p>
-            <button onClick={() => setShowModal(true)}
-              className="bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2">
-              <PhoneMissed size={16} /> Log Attendance
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {filtered.map(c => (
-              <CallInCard key={c.id} callIn={c} onDelete={deleteCallIn} />
-            ))}
-          </div>
-        )}
+            {/* Search & Filters */}
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white shadow-sm"
+                placeholder="Search by name or date..."
+                value={search} onChange={e => setSearch(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-2">
+              <select className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white shadow-sm"
+                value={monthFilter} onChange={e => setMonthFilter(e.target.value)}>
+                {MONTHS.map(m => <option key={m}>{m}</option>)}
+              </select>
+              <select className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white shadow-sm"
+                value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+                <option value="All Types">All Types</option>
+                {PX_ATTENDANCE_POLICY.categories.map(c => (
+                  <option key={c.id} value={c.id}>{c.icon} {c.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Call-In list */}
+            {filtered.length === 0 ? (
+              <div className="bg-white rounded-xl shadow-sm p-8 flex flex-col items-center text-gray-400">
+                <PhoneMissed size={40} className="mb-3 text-gray-200" />
+                <p className="font-medium text-gray-500">No Records Found</p>
+                <p className="text-xs mt-1 mb-4">Tap "+ Log Attendance" to record an attendance event</p>
+                <button onClick={() => setShowModal(true)}
+                  className="bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2">
+                  <PhoneMissed size={16} /> Log Attendance
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {filtered.map(c => (
+                  <CallInCard key={c.id} callIn={c} onDelete={deleteCallIn} />
+                ))}
+              </div>
+            )}
 
           </div>{/* end left col */}
 
@@ -596,6 +1011,44 @@ export default function CallIns() {
                 </ResponsiveContainer>
               )}
             </div>
+
+            {/* Category breakdown chart */}
+            {callIns.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm p-4">
+                <p className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                  <Shield size={16} className="text-primary" /> Category Breakdown
+                </p>
+                <div className="space-y-2">
+                  {PX_ATTENDANCE_POLICY.categories.map(cat => {
+                    const cnt = callIns.filter(c => c.categoryId === cat.id || (
+                      !c.categoryId && (
+                        (cat.id === 'absence' && (c.type === 'No-Show' || c.type === 'Unexcused')) ||
+                        (cat.id === 'tardiness' && c.type === 'Late/Tardy') ||
+                        (cat.id === 'protected' && c.type === 'Excused')
+                      )
+                    )).length;
+                    if (cnt === 0) return null;
+                    return (
+                      <div key={cat.id} className="flex items-center gap-2">
+                        <span className="text-sm w-5">{cat.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-0.5">
+                            <span className="text-xs text-gray-600 truncate">{cat.label}</span>
+                            <span className="text-xs font-bold text-gray-800 ml-2">{cnt}</span>
+                          </div>
+                          <div className="w-full bg-gray-100 rounded-full h-1.5">
+                            <div
+                              className="h-1.5 rounded-full bg-primary"
+                              style={{ width: `${Math.min(100, (cnt / callIns.length) * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>{/* end right col */}
         </div>{/* end desktop grid */}
 
