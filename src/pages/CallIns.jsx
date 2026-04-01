@@ -3,12 +3,13 @@ import { format, subDays, isAfter, differenceInDays } from 'date-fns';
 import {
   PhoneMissed, Plus, X, Search, BarChart2, User,
   Shield, Clock, AlertTriangle, CheckCircle2, ChevronDown,
-  FileText, Info, Award, TrendingDown, ChevronRight
+  FileText, Info, Award, TrendingDown, ChevronRight, Printer
 } from 'lucide-react';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { openPrintWindow, statsRowHtml, badgeHtml, disciplineColor } from '../lib/printReport';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PANDA EXPRESS ATTENDANCE POINT SYSTEM
@@ -849,6 +850,83 @@ export default function CallIns() {
   const [monthFilter, setMonthFilter] = useState('All Months');
   const [typeFilter,  setTypeFilter]  = useState('All Types');
 
+  const handlePrint = () => {
+    const list = callIns.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const totalPts = list.reduce((s, c) => s + getCallInPoints(c), 0);
+    const noShows  = list.filter(c => c.categoryId === 'absence' || c.type === 'No-Show').length;
+    const tardies  = list.filter(c => c.categoryId === 'tardiness' || c.type === 'Late/Tardy').length;
+    const protected_ = list.filter(c => c.categoryId === 'protected' || c.categoryId === 'emergency').length;
+    const html = `
+      ${statsRowHtml([
+        { value: list.length,  label: 'Total Records' },
+        { value: noShows,      label: 'Absences' },
+        { value: tardies,      label: 'Tardiness' },
+        { value: protected_,   label: 'Protected (0 pts)' },
+        { value: totalPts,     label: 'Total Points' },
+      ])}
+      <h2 class="section-title">Attendance Log</h2>
+      <table>
+        <thead><tr>
+          <th style="width:90px">Date</th>
+          <th>Associate</th>
+          <th>Category</th>
+          <th>Type / Subtype</th>
+          <th style="width:55px">Points</th>
+          <th>Reason</th>
+          <th style="width:80px">Logged By</th>
+        </tr></thead>
+        <tbody>
+          ${list.map(c => {
+            const pts = getCallInPoints(c);
+            const cat = getCallInCategory(c);
+            const sub = c.subtypeId ? SUBTYPE_MAP[c.subtypeId] : null;
+            const dc  = disciplineColor(pts);
+            return '<tr>' +
+              '<td>' + (c.date || '') + (c.time ? '<br/><span style="font-size:10px;color:#888">' + c.time + '</span>' : '') + '</td>' +
+              '<td><strong>' + (c.associateName || '') + '</strong></td>' +
+              '<td>' + (cat ? cat.icon + ' ' + cat.label : c.type || '') + '</td>' +
+              '<td>' + (sub ? sub.label : c.type || '') + '</td>' +
+              '<td>' + badgeHtml((pts === 0 ? '0' : '+' + pts) + ' pts', dc) + '</td>' +
+              '<td>' + (c.reason || '') + '</td>' +
+              '<td class="sub-label">' + (c.createdBy?.name || '') + '</td>' +
+            '</tr>';
+          }).join('')}
+        </tbody>
+      </table>
+
+      <h2 class="section-title">90-Day Points by Associate</h2>
+      <table>
+        <thead><tr><th>Associate</th><th>90-Day Points</th><th>Incidents</th><th>Discipline Level</th></tr></thead>
+        <tbody>
+          ${associates.map(a => {
+            const pts = get90DayPoints(callIns, a.id);
+            const cnt = get90DayCallIns(callIns, a.id).length;
+            if (cnt === 0) return '';
+            const d   = getDisciplineLevel(pts);
+            return '<tr>' +
+              '<td><strong>' + a.name + '</strong></td>' +
+              '<td>' + badgeHtml(pts + ' pts', disciplineColor(pts)) + '</td>' +
+              '<td>' + cnt + '</td>' +
+              '<td>' + d.emoji + ' ' + d.label + '</td>' +
+            '</tr>';
+          }).join('')}
+        </tbody>
+      </table>
+
+      <div class="legend">
+        <div class="legend-title">Progressive Discipline Scale</div>
+        <div class="legend-grid">
+          <div class="legend-item">✅ 0–1.9 pts: Good Standing</div>
+          <div class="legend-item">💬 2–3.9 pts: Coaching</div>
+          <div class="legend-item">📋 4–5.9 pts: First Written Warning</div>
+          <div class="legend-item">⚠️ 6–7.9 pts: Final Written Warning</div>
+          <div class="legend-item">🔴 8+ pts: Termination Eligible</div>
+          <div class="legend-item">🛡️ Protected absences = 0 points</div>
+        </div>
+      </div>`;
+    openPrintWindow({ title: 'Call-In & Attendance Report', subtitle: format(new Date(), 'MMMM yyyy'), html });
+  };
+
   const currentMonth = format(new Date(), 'yyyy-MM');
   const totalCallIns = callIns.length;
   const thisMonth    = callIns.filter(c => c.date?.startsWith(currentMonth)).length;
@@ -896,7 +974,7 @@ export default function CallIns() {
   return (
     <div className="min-h-screen bg-background">
       <Header title="Call-Ins" onAdd={() => setShowModal(true)} />
-      <DesktopPageHeader title="Call-In & Attendance" onAdd={() => setShowModal(true)} addLabel="+ Log Attendance" />
+      <DesktopPageHeader title="Call-In & Attendance" onAdd={() => setShowModal(true)} addLabel="+ Log Attendance" onPrint={handlePrint} />
 
       <div className="desktop-page-content p-4 lg:p-0 space-y-4">
 
@@ -947,13 +1025,21 @@ export default function CallIns() {
           <div className="space-y-4">
 
             {/* Search & Filters */}
-            <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white shadow-sm"
-                placeholder="Search by name or date..."
-                value={search} onChange={e => setSearch(e.target.value)}
-              />
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white shadow-sm"
+                  placeholder="Search by name or date..."
+                  value={search} onChange={e => setSearch(e.target.value)}
+                />
+              </div>
+              <button
+                onClick={handlePrint}
+                className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 flex-shrink-0"
+              >
+                <Printer size={14} /> Print
+              </button>
             </div>
             <div className="flex gap-2">
               <select className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white shadow-sm"

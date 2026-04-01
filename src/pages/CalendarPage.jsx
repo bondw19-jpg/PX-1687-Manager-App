@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, isToday, parseISO } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus, X, Calendar, RefreshCw, Clock, FileText, Trash2, User } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, X, Calendar, RefreshCw, Clock, FileText, Trash2, User, Printer } from 'lucide-react';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
+import { openPrintWindow, statsRowHtml, badgeHtml } from '../lib/printReport';
 
 const EVENT_TYPES = ['Meeting', 'Inspection', 'Training', 'Other'];
 const EVENT_COLORS = {
@@ -218,10 +219,57 @@ export default function CalendarPage() {
   const prevMonth = () => setCurrentDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1));
   const nextMonth = () => setCurrentDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1));
 
+  const EVENT_COLOR_MAP = { Meeting: 'blue', Inspection: 'red', Training: 'green', Other: 'gray' };
+
+  const handlePrint = () => {
+    const monthLabel = format(currentDate, 'MMMM yyyy');
+    const monthEvents = events
+      .filter(e => e.date.startsWith(format(currentDate, 'yyyy-MM')))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const html = `
+      ${statsRowHtml([
+        { value: events.length,         label: 'Total Events' },
+        { value: monthEvents.length,     label: 'This Month' },
+        { value: upcomingEvents.length,  label: 'Upcoming' },
+      ])}
+      <h2 class="section-title">${monthLabel} Events</h2>
+      <table>
+        <thead><tr><th style="width:90px">Date</th><th style="width:70px">Time</th><th>Title</th><th>Type</th><th>Notes</th><th style="width:90px">Created By</th></tr></thead>
+        <tbody>
+          ${monthEvents.map(e => '<tr>' +
+            '<td>' + e.date + '</td>' +
+            '<td>' + (e.time || '\u2014') + '</td>' +
+            '<td><strong>' + (e.title || '') + '</strong></td>' +
+            '<td>' + badgeHtml(e.type, EVENT_COLOR_MAP[e.type] || 'gray') + '</td>' +
+            '<td style="font-size:10px;color:#555">' + (e.notes || '') + '</td>' +
+            '<td class="sub-label">' + (e.createdBy?.name || '') + '</td>' +
+          '</tr>').join('')}
+        </tbody>
+      </table>
+
+      <h2 class="section-title">Upcoming Events</h2>
+      <table>
+        <thead><tr><th>Date</th><th>Time</th><th>Title</th><th>Type</th></tr></thead>
+        <tbody>
+          ${upcomingEvents.map(e => '<tr>' +
+            '<td>' + e.date + '</td>' +
+            '<td>' + (e.time || '\u2014') + '</td>' +
+            '<td><strong>' + (e.title || '') + '</strong></td>' +
+            '<td>' + badgeHtml(e.type, EVENT_COLOR_MAP[e.type] || 'gray') + '</td>' +
+          '</tr>').join('')}
+        </tbody>
+      </table>`;
+    openPrintWindow({
+      title: (activeTab === 'team' ? 'Team Calendar' : 'My Calendar') + ' Report',
+      subtitle: monthLabel,
+      html,
+    });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Header title="Calendar" onAdd={() => setShowAddModal(true)} />
-      <DesktopPageHeader title="Calendar" onAdd={() => setShowAddModal(true)} addLabel="+ Add Event" />
+      <DesktopPageHeader title="Calendar" onAdd={() => setShowAddModal(true)} addLabel="+ Add Event" onPrint={handlePrint} />
 
       <div className="desktop-page-content p-4 lg:p-0 space-y-4">
 

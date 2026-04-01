@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Plus, X, Trash2, Megaphone } from 'lucide-react';
+import { Plus, X, Trash2, Megaphone, Printer } from 'lucide-react';
 import { format } from 'date-fns';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
+import { openPrintWindow, badgeHtml } from '../lib/printReport';
 
 function AnnouncementModal({ onClose, onSave }) {
   const [form, setForm] = useState({ title: '', body: '', priority: 'Normal' });
@@ -75,6 +76,22 @@ export default function Announcements() {
   const { announcements, addAnnouncement, deleteAnnouncement } = useAppStore();
   const [showAdd, setShowAdd] = useState(false);
 
+  const handlePrint = () => {
+    const PCOL = { Normal: 'blue', Important: 'yellow', Urgent: 'red' };
+    const html = `
+      <h2 class="section-title">Announcements</h2>
+      ${announcements.map(ann => `
+        <div style="border:1px solid #e0e0e0;border-radius:6px;padding:10px 14px;margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            ${badgeHtml(ann.priority, PCOL[ann.priority] || 'blue')}
+            <span style="font-size:10px;color:#888">${ann.createdAt ? format(new Date(ann.createdAt), 'MMM d, yyyy') : ''}</span>
+          </div>
+          <p style="font-weight:bold;font-size:13px;margin-bottom:4px">${ann.title}</p>
+          ${ann.body ? '<p style="font-size:12px;color:#444">' + ann.body + '</p>' : ''}
+        </div>`).join('')}`;
+    openPrintWindow({ title: 'Announcements', subtitle: announcements.length + ' announcements', html });
+  };
+
   const handleDelete = (id, title) => {
     if (window.confirm(`Delete "${title}"? This cannot be undone.`)) {
       deleteAnnouncement(id);
@@ -95,7 +112,7 @@ export default function Announcements() {
   return (
     <div className="min-h-screen bg-background">
       <Header title="Announcements" onAdd={() => setShowAdd(true)} />
-      <DesktopPageHeader title="Announcements" onAdd={() => setShowAdd(true)} addLabel="+ New Announcement" />
+      <DesktopPageHeader title="Announcements" onAdd={() => setShowAdd(true)} addLabel="+ New Announcement" onPrint={handlePrint} />
 
       <div className="desktop-page-content p-4 lg:p-0 space-y-3">
         {announcements.length === 0 ? (

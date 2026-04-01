@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Plus, X, Search, Pencil, Trash2, Circle, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
+import { Plus, X, Search, Pencil, Trash2, Circle, CheckCircle2, AlertCircle, Clock, Printer } from 'lucide-react';
 import { format } from 'date-fns';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
+import { openPrintWindow, statsRowHtml, badgeHtml } from '../lib/printReport';
 
 const PRIORITIES = ['Low', 'Medium', 'High', 'Urgent'];
 const STATUSES = ['To Do', 'In Progress', 'Done'];
@@ -220,6 +221,36 @@ export default function Tasks() {
     if (window.confirm('Delete this task?')) deleteTask(id);
   };
 
+  const handlePrint = () => {
+    const PRIORITY_COLOR = { Low: 'gray', Medium: 'blue', High: 'yellow', Urgent: 'red' };
+    const STATUS_COLOR   = { 'To Do': 'gray', 'In Progress': 'yellow', Done: 'green' };
+    const html = `
+      ${statsRowHtml([
+        { value: todo.length,       label: 'To Do' },
+        { value: inProgress.length, label: 'In Progress' },
+        { value: done.length,       label: 'Done' },
+        { value: urgent.length,     label: 'Urgent' },
+      ])}
+      <h2 class="section-title">Task List</h2>
+      <table>
+        <thead><tr>
+          <th>Title</th><th>Status</th><th>Priority</th>
+          <th>Assignee</th><th>Due Date</th><th>Description</th>
+        </tr></thead>
+        <tbody>
+          ${tasks.map(t => '<tr>' +
+            '<td><strong>' + (t.status === 'Done' ? '<s>' + t.title + '</s>' : t.title) + '</strong></td>' +
+            '<td>' + badgeHtml(t.status, STATUS_COLOR[t.status] || 'gray') + '</td>' +
+            '<td>' + badgeHtml(t.priority, PRIORITY_COLOR[t.priority] || 'gray') + '</td>' +
+            '<td>' + (t.assignee || '\u2014') + '</td>' +
+            '<td>' + (t.dueDate || '\u2014') + '</td>' +
+            '<td style="font-size:10px;color:#555">' + (t.description || '') + '</td>' +
+          '</tr>').join('')}
+        </tbody>
+      </table>`;
+    openPrintWindow({ title: 'Tasks & To-Do Report', subtitle: tasks.length + ' tasks total', html });
+  };
+
   const toggleCollapse = (key) => {
     setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
   };
@@ -233,7 +264,7 @@ export default function Tasks() {
   return (
     <div className="min-h-screen bg-background">
       <Header title="Tasks & To-Do" onAdd={() => setShowAdd(true)} />
-      <DesktopPageHeader title="Tasks & To-Do" onAdd={() => setShowAdd(true)} addLabel="+ Add Task" />
+      <DesktopPageHeader title="Tasks & To-Do" onAdd={() => setShowAdd(true)} addLabel="+ Add Task" onPrint={handlePrint} />
 
       <div className="desktop-page-content p-4 lg:p-0 space-y-4">
         {/* Stats */}
@@ -255,14 +286,22 @@ export default function Tasks() {
         </div>
 
         {/* Search & Filters */}
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white shadow-sm"
-            placeholder="Search tasks..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white shadow-sm"
+              placeholder="Search tasks..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 flex-shrink-0"
+          >
+            <Printer size={14} /> Print
+          </button>
         </div>
         <div className="flex gap-2">
           <select

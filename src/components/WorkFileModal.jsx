@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Plus, Trash2, RefreshCw, Printer, User } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
+import { openPrintWindow, infoGridHtml, statsRowHtml } from '../lib/printReport';
 
 const KEY_LEGEND = [
   { key: 'A', desc: 'No call, no show' },
@@ -82,49 +83,68 @@ export default function WorkFileModal({ associate, onClose }) {
   };
 
   const handlePrint = () => {
-    const printContent = `
-      <html><head><title>Associate Work File</title>
-      <style>
-        body { font-family: Arial, sans-serif; padding: 20px; font-size: 12px; }
-        h2 { text-align: center; font-size: 16px; border-bottom: 2px solid #000; padding-bottom: 8px; }
-        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
-        .info-row { display: flex; gap: 8px; }
-        .info-label { font-weight: bold; min-width: 120px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-        th, td { border: 1px solid #000; padding: 6px; text-align: left; }
-        th { background: #f0f0f0; font-weight: bold; }
-        .legend { margin-top: 16px; font-size: 11px; }
-        .legend h3 { font-size: 12px; margin-bottom: 4px; }
-        .added-by { font-size: 10px; color: #666; font-style: italic; }
-      </style>
-      </head><body>
-      <h2>ASSOCIATE WORK FILE</h2>
-      <div class="info-grid">
-        <div class="info-row"><span class="info-label">Associate's Name:</span><span>${associate.name}</span></div>
-        <div class="info-row"><span class="info-label">Employee ID #:</span><span>${associate.employeeId || ''}</span></div>
-        <div class="info-row"><span class="info-label">Position / Title:</span><span>${associate.position || ''}</span></div>
-        <div class="info-row"><span class="info-label">Telephone:</span><span>${associate.telephone || ''}</span></div>
-        <div class="info-row"><span class="info-label">Birthday:</span><span>${associate.birthday || ''}</span></div>
-        <div class="info-row"><span class="info-label">Hire Date:</span><span>${associate.hireDate || ''}</span></div>
-        <div class="info-row"><span class="info-label">Status:</span><span>${associate.status || ''}</span></div>
-        ${existing?.savedBy ? `<div class="info-row"><span class="info-label">Last Saved By:</span><span>${existing.savedBy.name}</span></div>` : ''}
-      </div>
+    const filledRows = rows.filter(r => r.date || r.key || r.details);
+    const html = `
+      ${infoGridHtml([
+        ['Associate Name',  associate.name],
+        ['Employee ID',     associate.employeeId || '—'],
+        ['Position / Title',associate.position || '—'],
+        ['Telephone',       associate.telephone || '—'],
+        ['Birthday',        associate.birthday || '—'],
+        ['Hire Date',       associate.hireDate || '—'],
+        ['Status',          associate.status ? associate.status.charAt(0).toUpperCase() + associate.status.slice(1) : '—'],
+        ['Last Saved By',   existing?.savedBy?.name || '—'],
+      ])}
+
+      ${statsRowHtml([
+        { value: filledRows.length, label: 'Total Entries' },
+        { value: rows.filter(r => r.key === 'A').length, label: 'No Call No Show' },
+        { value: rows.filter(r => r.key === 'F').length, label: 'Tardiness' },
+        { value: rows.filter(r => r.key === 'G').length, label: 'Counseling' },
+      ])}
+
+      <h2 class="section-title">Work Log</h2>
       <table>
-        <thead><tr><th style="width:80px">DATE</th><th style="width:40px">KEY</th><th>TOPICS & DETAILS</th></tr></thead>
+        <thead>
+          <tr>
+            <th style="width:90px">DATE</th>
+            <th style="width:45px">KEY</th>
+            <th>TOPICS &amp; DETAILS</th>
+            <th style="width:110px">ADDED BY</th>
+          </tr>
+        </thead>
         <tbody>
-          ${rows.map(r => `<tr><td>${r.date}</td><td>${r.key}</td><td>${r.details}${r.addedBy ? `<br/><span class="added-by">Added by ${r.addedBy.name}</span>` : ''}</td></tr>`).join('')}
+          ${rows.map(r => `
+            <tr>
+              <td>${r.date || ''}</td>
+              <td><strong>${r.key || ''}</strong></td>
+              <td>${r.details || ''}</td>
+              <td class="sub-label">${r.addedBy?.name || ''}</td>
+            </tr>`).join('')}
         </tbody>
       </table>
+
       <div class="legend">
-        <h3>Key Note Legend:</h3>
-        ${KEY_LEGEND.map(k => `<span><b>${k.key}:</b> ${k.desc} &nbsp; </span>`).join('')}
+        <div class="legend-title">Key Note Legend</div>
+        <div class="legend-grid">
+          ${KEY_LEGEND.map(k => `
+            <div class="legend-item">
+              <span class="legend-key">${k.key}:</span> ${k.desc}
+            </div>`).join('')}
+        </div>
       </div>
-      </body></html>
+
+      <p style="margin-top:14px; font-size:10px; color:#888;">
+        Associate signature: _____________________________________________ &nbsp;&nbsp;
+        Manager signature: _____________________________________________
+      </p>
     `;
-    const win = window.open('', '_blank');
-    win.document.write(printContent);
-    win.document.close();
-    win.print();
+
+    openPrintWindow({
+      title:    'Associate Work File',
+      subtitle: `${associate.name} — ${associate.position || 'Associate'}`,
+      html,
+    });
   };
 
   return (

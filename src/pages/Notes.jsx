@@ -3,12 +3,13 @@ import {
   Plus, X, Search, Pin, PinOff, Pencil, Trash2, StickyNote,
   Image, FileText, Paperclip, ZoomIn, ZoomOut, Download,
   RotateCcw, ChevronLeft, ChevronRight, Eye, File,
-  Upload, FileImage, FileType, FileBadge, RefreshCw, User
+  Upload, FileImage, FileType, FileBadge, RefreshCw, User, Printer
 } from 'lucide-react';
 import { format } from 'date-fns';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
+import { openPrintWindow, statsRowHtml, badgeHtml } from '../lib/printReport';
 
 const CATEGORIES = ['All Categories', 'General', 'Operations', 'HR', 'Food Safety', 'Reminder', 'Other'];
 const CAT_COLORS = {
@@ -647,10 +648,43 @@ export default function Notes() {
   const handleDelete = id => { if (window.confirm('Delete this note?')) deleteNote(id); };
   const openLightbox = (attachments, index) => setLightbox({ attachments, index });
 
+  const handlePrint = () => {
+    const CAT_BADGE = {
+      General: 'blue', Operations: 'orange', HR: 'red',
+      'Food Safety': 'green', Reminder: 'yellow', Other: 'gray',
+    };
+    const list = filtered;
+    const pinned = list.filter(n => n.pinned).length;
+    const html = `
+      ${statsRowHtml([
+        { value: notes.length, label: 'Total Notes' },
+        { value: pinned,       label: 'Pinned' },
+        { value: list.filter(n => (n.attachments || []).length > 0).length, label: 'With Attachments' },
+      ])}
+      <h2 class="section-title">${activeTab === 'team' ? 'Team' : 'My'} Notes</h2>
+      ${list.map(n => `
+        <div style="border:1px solid #e0e0e0;border-radius:6px;padding:10px 14px;margin-bottom:10px;page-break-inside:avoid">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            ${n.pinned ? '<span style="color:#f59e0b;font-size:11px">&#x1F4CC; Pinned</span>' : ''}
+            ${badgeHtml(n.category || 'General', CAT_BADGE[n.category] || 'gray')}
+            <span style="font-size:10px;color:#888;margin-left:auto">${n.createdAt ? format(new Date(n.createdAt), 'MMM d, yyyy') : ''}</span>
+          </div>
+          <p style="font-weight:bold;font-size:13px;margin-bottom:4px">${n.title || '(No Title)'}</p>
+          ${n.body ? '<p style="font-size:11px;color:#444;white-space:pre-wrap">' + n.body + '</p>' : ''}
+          ${(n.attachments || []).length > 0 ? '<p style="font-size:10px;color:#888;margin-top:6px">&#x1F4CE; ' + n.attachments.length + ' attachment(s): ' + n.attachments.map(a => a.name).join(', ') + '</p>' : ''}
+          ${n.createdBy?.name ? '<p class="sub-label" style="margin-top:4px">Added by ' + n.createdBy.name + '</p>' : ''}
+        </div>`).join('')}`;
+    openPrintWindow({
+      title: (activeTab === 'team' ? 'Team Notes' : 'My Notes') + ' Report',
+      subtitle: list.length + ' notes',
+      html,
+    });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Header title="Notes" onAdd={() => setShowAddModal(true)} />
-      <DesktopPageHeader title="Notes" onAdd={() => setShowAddModal(true)} addLabel="+ New Note" />
+      <DesktopPageHeader title="Notes" onAdd={() => setShowAddModal(true)} addLabel="+ New Note" onPrint={handlePrint} />
 
       <div className="desktop-page-content p-4 lg:p-0 space-y-3 max-w-full">
         {/* Tabs */}
@@ -728,7 +762,7 @@ export default function Notes() {
           </div>
         )}
 
-        {/* Search + Filter row */}
+        {/* Search + Filter + Print row */}
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -746,6 +780,12 @@ export default function Notes() {
           >
             {CATEGORIES.map(c => <option key={c}>{c}</option>)}
           </select>
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 flex-shrink-0 lg:hidden"
+          >
+            <Printer size={14} />
+          </button>
         </div>
 
         {/* Count */}

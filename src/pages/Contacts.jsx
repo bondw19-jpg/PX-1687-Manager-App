@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Plus, X, Pencil, Trash2, Search, Phone, Mail } from 'lucide-react';
+import { Plus, X, Pencil, Trash2, Search, Phone, Mail, Printer } from 'lucide-react';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
+import { openPrintWindow, statsRowHtml } from '../lib/printReport';
 
 const CONTACT_ICONS = {
   building: '🏢',
@@ -129,21 +130,48 @@ export default function Contacts() {
     if (window.confirm('Delete this contact?')) deleteContact(id);
   };
 
+  const handlePrint = () => {
+    const html = `
+      ${statsRowHtml([{ value: contacts.length, label: 'Total Contacts' }])}
+      <h2 class="section-title">Quick Contacts Directory</h2>
+      <table>
+        <thead><tr><th>Name</th><th>Role</th><th>Phone</th><th>Email</th><th>Notes</th></tr></thead>
+        <tbody>
+          ${contacts.map(c => '<tr>' +
+            '<td><strong>' + (c.name || '') + '</strong></td>' +
+            '<td>' + (c.role || '\u2014') + '</td>' +
+            '<td>' + (c.phone || '\u2014') + '</td>' +
+            '<td>' + (c.email || '\u2014') + '</td>' +
+            '<td style="font-size:10px;color:#555">' + (c.description || '') + '</td>' +
+          '</tr>').join('')}
+        </tbody>
+      </table>`;
+    openPrintWindow({ title: 'Quick Contacts Directory', html });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Header title="Quick Contacts" onAdd={() => setShowAdd(true)} />
-      <DesktopPageHeader title="Quick Contacts" onAdd={() => setShowAdd(true)} addLabel="+ Add Contact" />
+      <DesktopPageHeader title="Quick Contacts" onAdd={() => setShowAdd(true)} addLabel="+ Add Contact" onPrint={handlePrint} />
 
       <div className="desktop-page-content p-4 lg:p-0 space-y-3">
-        {/* Search */}
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white shadow-sm"
-            placeholder="Search contacts..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+        {/* Search + Print */}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white shadow-sm"
+              placeholder="Search contacts..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 flex-shrink-0"
+          >
+            <Printer size={14} /> Print
+          </button>
         </div>
 
         {/* Contact Cards */}

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Eye, FileText, Pencil, Trash2, Search, Star, X, Plus, Phone, Calendar, User, Users, UserPlus, Shield, AlertTriangle } from 'lucide-react';
+import { Eye, FileText, Pencil, Trash2, Search, Star, X, Plus, Phone, Calendar, User, Users, UserPlus, Shield, AlertTriangle, Printer } from 'lucide-react';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import WorkFileModal from '../components/WorkFileModal';
 import { get90DayPoints, get90DayCallIns, pointsColor, pointsEmoji } from './CallIns';
+import { openPrintWindow, statsRowHtml, badgeHtml, disciplineColor, disciplineLabel } from '../lib/printReport';
 
 const POSITIONS = ['All Positions', 'FOH', 'BOH', 'Cook', 'Shift Lead', 'Manager'];
 const POSITION_COLORS = {
@@ -291,6 +292,50 @@ export default function Associates() {
   const [viewAssociate, setViewAssociate] = useState(null);
   const [workFileAssociate, setWorkFileAssociate] = useState(null);
 
+  const handlePrintRoster = () => {
+    const list = associates.filter(a => {
+      const ms = a.name?.toLowerCase().includes(search.toLowerCase());
+      const mst = statusFilter === 'All Status' ||
+        (statusFilter === 'Active' && a.status === 'active') ||
+        (statusFilter === 'Inactive' && a.status === 'inactive') ||
+        (statusFilter === 'On Leave' && a.status === 'on_leave');
+      const mp = positionFilter === 'All Positions' || a.position === positionFilter;
+      return ms && mst && mp;
+    });
+    const active   = list.filter(a => a.status === 'active').length;
+    const atRisk   = list.filter(a => (get90DayPoints(callIns, a.id) || 0) >= 4).length;
+    const html = `
+      ${statsRowHtml([
+        { value: list.length, label: 'Total Listed' },
+        { value: active,      label: 'Active' },
+        { value: list.length - active, label: 'Inactive / Leave' },
+        { value: atRisk,      label: 'At-Risk (4+ pts)' },
+      ])}
+      <h2 class="section-title">Associate Roster</h2>
+      <table>
+        <thead><tr>
+          <th>Name</th><th>Position</th><th>Employee ID</th>
+          <th>Status</th><th>Hire Date</th><th>90-Day Pts</th><th>Discipline Level</th>
+        </tr></thead>
+        <tbody>
+          ${list.map(a => {
+            const pts = get90DayPoints(callIns, a.id) || 0;
+            const dc  = disciplineColor(pts);
+            return '<tr>' +
+              '<td><strong>' + a.name + '</strong></td>' +
+              '<td>' + (a.position || '\u2014') + '</td>' +
+              '<td>' + (a.employeeId || '\u2014') + '</td>' +
+              '<td>' + badgeHtml(a.status === 'active' ? 'Active' : a.status === 'on_leave' ? 'On Leave' : 'Inactive', a.status === 'active' ? 'green' : 'gray') + '</td>' +
+              '<td>' + (a.hireDate || '\u2014') + '</td>' +
+              '<td>' + badgeHtml(pts + ' pts', dc) + '</td>' +
+              '<td>' + disciplineLabel(pts) + '</td>' +
+            '</tr>';
+          }).join('')}
+        </tbody>
+      </table>`;
+    openPrintWindow({ title: 'Associate Roster', subtitle: list.length + ' associates listed', html });
+  };
+
   const filtered = associates.filter(a => {
     const matchSearch = a.name?.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'All Status' ||
@@ -308,18 +353,26 @@ export default function Associates() {
   return (
     <div className="min-h-screen bg-background">
       <Header title="Associates" onAdd={() => setShowAddModal(true)} />
-      <DesktopPageHeader title="Associates" onAdd={() => setShowAddModal(true)} addLabel="+ Add Associate" />
+      <DesktopPageHeader title="Associates" onAdd={() => setShowAddModal(true)} addLabel="+ Add Associate" onPrint={handlePrintRoster} />
 
       <div className="desktop-page-content p-4 lg:p-0 space-y-3">
-        {/* Search */}
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white shadow-sm"
-            placeholder="Search associates..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+        {/* Search + Print Row */}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white shadow-sm"
+              placeholder="Search associates..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          <button
+            onClick={handlePrintRoster}
+            className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 flex-shrink-0"
+          >
+            <Printer size={14} /> Print
+          </button>
         </div>
 
         {/* Filters */}

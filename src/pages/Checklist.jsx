@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { format } from 'date-fns';
-import { CheckCircle2, Circle, Save, RotateCcw, History, ClipboardCheck } from 'lucide-react';
+import { CheckCircle2, Circle, Save, RotateCcw, History, ClipboardCheck, Printer } from 'lucide-react';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
+import { openPrintWindow, statsRowHtml } from '../lib/printReport';
 
 const SHIFTS = ['opening', 'mid', 'closing'];
 const SHIFT_LABELS = { opening: 'Opening', mid: 'Mid', closing: 'Closing' };
@@ -46,6 +47,29 @@ export default function Checklist() {
   const total = items.length;
   const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
 
+  const handlePrint = () => {
+    const shiftLabel = SHIFT_LABELS[activeTab] || activeTab;
+    const html = `
+      ${statsRowHtml([
+        { value: checked + '/' + total, label: shiftLabel + ' Completed' },
+        { value: pct + '%', label: 'Completion Rate' },
+        { value: todayLabel, label: 'Date' },
+      ])}
+      <h2 class="section-title">${SHIFT_ICONS[activeTab] || ''} ${shiftLabel} Shift Checklist — ${todayLabel}</h2>
+      <table>
+        <thead><tr><th style="width:40px">#</th><th>Task</th><th style="width:80px">Status</th></tr></thead>
+        <tbody>
+          ${items.map((item, i) => '<tr>' +
+            '<td>' + (i + 1) + '</td>' +
+            '<td style="' + (item.checked ? 'text-decoration:line-through;color:#888' : '') + '">' + item.text + '</td>' +
+            '<td>' + (item.checked ? '\u2705 Done' : '\u25a1 Pending') + '</td>' +
+          '</tr>').join('')}
+        </tbody>
+      </table>
+      <p style="margin-top:10px;font-size:11px;color:#888">Manager sign-off: ___________________________________  Date: _________________</p>`;
+    openPrintWindow({ title: shiftLabel + ' Shift Checklist', subtitle: todayLabel, html });
+  };
+
   // History: get saved checklists
   const historyEntries = Object.entries(checklists)
     .map(([key, items]) => {
@@ -60,7 +84,7 @@ export default function Checklist() {
   return (
     <div className="min-h-screen bg-background">
       <Header title="Shift Checklist" />
-      <DesktopPageHeader title="Shift Checklist" />
+      <DesktopPageHeader title="Shift Checklist" onPrint={handlePrint} />
 
       <div className="desktop-page-content p-4 lg:p-0 space-y-4">
         {/* Tabs */}
@@ -139,6 +163,12 @@ export default function Checklist() {
                     className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-xl text-xs font-medium text-gray-600"
                   >
                     <RotateCcw size={14} /> Reset
+                  </button>
+                  <button
+                    onClick={handlePrint}
+                    className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-xl text-xs font-medium text-gray-600"
+                  >
+                    <Printer size={14} /> Print
                   </button>
                 </div>
               </div>

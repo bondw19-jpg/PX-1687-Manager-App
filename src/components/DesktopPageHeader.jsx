@@ -1,8 +1,8 @@
 import React from 'react';
-import { Bell, Plus } from 'lucide-react';
+import { Bell, Plus, Printer } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 
-export default function DesktopPageHeader({ title, onAdd, addLabel = 'Add New' }) {
+export default function DesktopPageHeader({ title, onAdd, addLabel = 'Add New', onPrint, extra }) {
   const { storeName } = useAppStore();
 
   return (
@@ -17,6 +17,19 @@ export default function DesktopPageHeader({ title, onAdd, addLabel = 'Add New' }
           <Bell size={20} />
           <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-accent rounded-full border-2 border-white" />
         </button>
+
+        {/* Optional extra slot (e.g. print button) */}
+        {extra}
+
+        {onPrint && (
+          <button
+            onClick={onPrint}
+            className="flex items-center gap-2 border border-gray-200 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-xl text-sm font-semibold shadow-sm transition-colors"
+          >
+            <Printer size={16} />
+            Print / PDF
+          </button>
+        )}
 
         {onAdd && (
           <button
