@@ -356,3 +356,279 @@ export function disciplineLabel(pts) {
   if (pts < 8) return 'Final Written Warning';
   return 'Termination Eligible';
 }
+
+/**
+ * printAssociateAttendanceReport(associate, callIns)
+ *
+ * Generates and opens a per-associate attendance summary sheet.
+ * Intended to be handed to / reviewed WITH the associate so they
+ * understand exactly where they stand under the PX Attendance Point System.
+ *
+ * Includes:
+ *  - Associate info header
+ *  - Current standing card (effective points, discipline level)
+ *  - Clean-streak & recovery status
+ *  - Full incident log (90-day window, sorted newest first)
+ *  - Complete discipline scale explanation
+ *  - Acknowledgment / signature block
+ *
+ * @param {object} associate   - associate record from store
+ * @param {Array}  allCallIns  - full callIns array from store (will be filtered)
+ */
+export function printAssociateAttendanceReport(associate, allCallIns) {
+  // ── helpers ────────────────────────────────────────────────────────────────
+  const today   = new Date();
+  const cutoff  = new Date(today); cutoff.setDate(cutoff.getDate() - 90);
+
+  function safeDate(str) {
+    try { const d = new Date(str); return isNaN(d) ? null : d; } catch { return null; }
+  }
+
+  function getPoints(c) {
+    if (c.points !== undefined) return Number(c.points);
+    const SUBTYPE_PTS = {
+      tardy_minor: 0.5, tardy_moderate: 1, tardy_severe: 1.5,
+      early_partial: 1, early_walkout: 2,
+      absence_excused: 1, absence_unexcused: 2, absence_noshow: 3,
+    };
+    if (c.subtypeId && SUBTYPE_PTS[c.subtypeId] !== undefined) return SUBTYPE_PTS[c.subtypeId];
+    const LEGACY = { 'No-Show': 3, 'Unexcused': 2, 'Late/Tardy': 1, 'Excused': 0 };
+    return LEGACY[c.type] ?? 0;
+  }
+
+  function getCategoryLabel(c) {
+    const CAT = {
+      tardiness: '⏰ Tardiness', early_departure: '🚪 Early Departure',
+      absence: '🚫 Absence', protected: '🛡️ Protected (0 pts)',
+      emergency: '🏥 Emergency (0 pts)',
+    };
+    if (c.categoryId && CAT[c.categoryId]) return CAT[c.categoryId];
+    return c.type || 'Unknown';
+  }
+
+  function getSubtypeLabel(c) {
+    const MAP = {
+      tardy_minor: 'Minor (1–30 min late)', tardy_moderate: 'Moderate (31–60 min late)',
+      tardy_severe: 'Severe (60+ min late)', early_partial: 'Left early (with notice)',
+      early_walkout: 'Left early (without notice)', absence_excused: 'Excused absence',
+      absence_unexcused: 'Unexcused absence', absence_noshow: 'No-Show (no contact)',
+      protected_fmla: 'FMLA / Medical Leave', protected_jury: 'Jury Duty',
+      protected_military: 'Military Service', protected_bereavement: 'Bereavement',
+      protected_healthcode: 'Health Code Related', protected_other: 'Other Protected',
+      emergency_medical: 'Medical Emergency', emergency_accident: 'Accident / Police Report',
+      emergency_family: 'Family Emergency', emergency_discretion: 'Manager Discretion Waiver',
+    };
+    return (c.subtypeId && MAP[c.subtypeId]) ? MAP[c.subtypeId] : (c.type || '—');
+  }
+
+  function disciplineColorCss(pts) {
+    if (pts < 2) return { bg: '#f0fff4', border: '#86efac', text: '#15803d', label: '✅ Good Standing' };
+    if (pts < 4) return { bg: '#eff6ff', border: '#93c5fd', text: '#1d4ed8', label: '💬 Coaching' };
+    if (pts < 6) return { bg: '#fefce8', border: '#fde047', text: '#854d0e', label: '📋 First Written Warning' };
+    if (pts < 8) return { bg: '#fff7ed', border: '#fdba74', text: '#c2410c', label: '⚠️ Final Written Warning' };
+    return       { bg: '#fff1f2', border: '#fca5a5', text: '#b91c1c', label: '🔴 Termination Eligible' };
+  }
+
+  // ── filter & compute ──────────────────────────────────────────────────────
+  const incidents = allCallIns
+    .filter(c => c.associateId === associate.id)
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  const recent90 = incidents.filter(c => {
+    const d = safeDate(c.date);
+    return d && d >= cutoff;
+  });
+
+  const rawPts = recent90.reduce((s, c) => s + getPoints(c), 0);
+
+  // Clean-streak recovery
+  let recovery = 0, cleanDays = 0, streakLabel = '';
+  if (recent90.length > 0) {
+    const lastDate = recent90
+      .map(c => safeDate(c.date))
+      .filter(Boolean)
+      .reduce((latest, d) => (d > latest ? d : latest), new Date(0));
+    cleanDays = Math.floor((today - lastDate) / 86400000);
+    if (cleanDays >= 60)      { recovery = 1.0; streakLabel = `${cleanDays}-day clean streak → −1.0 pt recovery applied ✅`; }
+    else if (cleanDays >= 30) { recovery = 0.5; streakLabel = `${cleanDays}-day clean streak → −0.5 pt recovery applied ✅`; }
+    else {
+      const next = cleanDays < 30 ? 30 - cleanDays : 60 - cleanDays;
+      streakLabel = `${cleanDays}-day clean streak · ${next} more day${next !== 1 ? 's' : ''} until next recovery bonus`;
+    }
+  } else {
+    cleanDays = 90; streakLabel = '90+ days incident-free ✅';
+  }
+  const effectivePts = Math.max(0, Math.round((rawPts - recovery) * 10) / 10);
+  const dc = disciplineColorCss(effectivePts);
+
+  // ── build HTML ─────────────────────────────────────────────────────────────
+  const printDate = today.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  const incidentRows = recent90.length === 0
+    ? '<tr><td colspan="5" style="text-align:center;color:#888;padding:16px">No incidents in the past 90 days ✅</td></tr>'
+    : recent90.map(c => {
+        const pts = getPoints(c);
+        const isZero = pts === 0;
+        const ptColor = isZero ? '#15803d' : pts >= 3 ? '#b91c1c' : pts >= 2 ? '#c2410c' : pts >= 1 ? '#854d0e' : '#1d4ed8';
+        const ptBg    = isZero ? '#f0fff4' : pts >= 3 ? '#fee2e2' : pts >= 2 ? '#ffedd5' : pts >= 1 ? '#fefce8' : '#eff6ff';
+        return `<tr>
+          <td>${c.date || ''}${c.time ? '<br/><span style="font-size:10px;color:#888">' + c.time + '</span>' : ''}</td>
+          <td>${getCategoryLabel(c)}</td>
+          <td>${getSubtypeLabel(c)}</td>
+          <td>${c.reason || '—'}</td>
+          <td style="text-align:center">
+            <span style="display:inline-block;padding:2px 8px;border-radius:20px;font-weight:bold;font-size:11px;background:${ptBg};color:${ptColor}">
+              ${isZero ? '0 pts' : '+' + pts + ' pt' + (pts !== 1 ? 's' : '')}
+            </span>
+          </td>
+        </tr>`;
+      }).join('');
+
+  const allRows = incidents.filter(c => {
+    const d = safeDate(c.date);
+    return d && d < cutoff;
+  });
+  const expiredSection = allRows.length > 0 ? `
+    <h2 class="section-title" style="color:#999;border-color:#ddd">Expired Records (older than 90 days — 0 pts)</h2>
+    <table>
+      <thead><tr>
+        <th>Date</th><th>Category</th><th>Type</th><th style="width:60px">Original Pts</th>
+      </tr></thead>
+      <tbody>
+        ${allRows.map(c => `<tr style="color:#aaa">
+          <td>${c.date || ''}</td>
+          <td>${getCategoryLabel(c)}</td>
+          <td>${getSubtypeLabel(c)}</td>
+          <td style="text-align:center"><span style="text-decoration:line-through">${getPoints(c)} pts</span></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>` : '';
+
+  const html = `
+    <!-- Associate info -->
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;padding:12px 16px;background:#f9f9f9;border:1px solid #e0e0e0;border-radius:8px">
+      <div style="width:52px;height:52px;background:${BRAND_COLOR};border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;font-weight:bold;flex-shrink:0">
+        ${(associate.name || '?')[0].toUpperCase()}
+      </div>
+      <div>
+        <div style="font-size:16px;font-weight:bold;color:#111">${associate.name || 'Unknown'}</div>
+        <div style="font-size:11px;color:#666;margin-top:2px">
+          ${associate.position || 'Team Member'} &nbsp;·&nbsp;
+          Emp ID: ${associate.employeeId || '—'} &nbsp;·&nbsp;
+          Hire Date: ${associate.hireDate || '—'}
+        </div>
+        <div style="font-size:11px;color:#666;margin-top:1px">
+          Status: <strong>${(associate.status || 'active').charAt(0).toUpperCase() + (associate.status || 'active').slice(1)}</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Current standing card -->
+    <div style="border:2px solid ${dc.border};background:${dc.bg};border-radius:10px;padding:14px 18px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:11px;font-weight:bold;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Current Standing — 90-Day Rolling Window</div>
+          <div style="font-size:22px;font-weight:bold;color:${dc.text}">${dc.label}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:28px;font-weight:bold;color:${dc.text}">${effectivePts} <span style="font-size:14px">pts</span></div>
+          ${recovery > 0 ? `<div style="font-size:11px;color:#15803d;font-weight:bold">Raw ${rawPts} pts − ${recovery} recovery = ${effectivePts} pts</div>` : ''}
+        </div>
+      </div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid ${dc.border};font-size:11px;color:${dc.text}">
+        🕐 <strong>Clean streak:</strong> ${streakLabel}
+      </div>
+    </div>
+
+    <!-- Required action box (only if discipline > Good Standing) -->
+    ${effectivePts >= 2 ? `
+    <div style="border:1.5px solid #fca5a5;background:#fff7f7;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:11px">
+      <div style="font-weight:bold;color:#b91c1c;margin-bottom:4px">⚠️ Required Action</div>
+      <div style="color:#374151">
+        ${effectivePts >= 8 ? 'Associate is <strong>eligible for termination</strong> per PX attendance policy. Contact HR immediately.' :
+          effectivePts >= 6 ? 'A <strong>Final Written Warning</strong> must be issued and documented.' :
+          effectivePts >= 4 ? 'A <strong>First Written Warning</strong> must be issued and documented.' :
+          'Schedule a <strong>coaching conversation</strong> and document it in the work file.'}
+      </div>
+    </div>` : ''}
+
+    <!-- 90-day incident log -->
+    <h2 class="section-title">Attendance Incidents — Past 90 Days (${recent90.length} record${recent90.length !== 1 ? 's' : ''})</h2>
+    <table>
+      <thead><tr>
+        <th style="width:90px">Date</th>
+        <th style="width:140px">Category</th>
+        <th>Specific Type</th>
+        <th>Reason</th>
+        <th style="width:70px;text-align:center">Points</th>
+      </tr></thead>
+      <tbody>${incidentRows}</tbody>
+    </table>
+
+    ${expiredSection}
+
+    <!-- Discipline scale -->
+    <h2 class="section-title">PX Attendance Point System — How It Works</h2>
+    <table>
+      <thead><tr><th>Points</th><th>Standing</th><th>Action Required</th></tr></thead>
+      <tbody>
+        <tr><td>0 – 1.9</td><td>✅ Good Standing</td><td>No action required</td></tr>
+        <tr><td>2 – 3.9</td><td>💬 Coaching</td><td>Verbal coaching conversation with manager</td></tr>
+        <tr><td>4 – 5.9</td><td>📋 First Written Warning</td><td>Written warning issued and signed</td></tr>
+        <tr><td>6 – 7.9</td><td>⚠️ Final Written Warning</td><td>Final written warning issued and signed</td></tr>
+        <tr><td>8+</td><td>🔴 Termination Eligible</td><td>Eligible for termination per PX policy</td></tr>
+      </tbody>
+    </table>
+
+    <div class="legend">
+      <div class="legend-title">Point Values by Incident Type</div>
+      <div class="legend-grid">
+        <div class="legend-item">⏰ Tardiness Minor (1–30 min): <strong>0.5 pt</strong></div>
+        <div class="legend-item">⏰ Tardiness Moderate (31–60 min): <strong>1.0 pt</strong></div>
+        <div class="legend-item">⏰ Tardiness Severe (60+ min): <strong>1.5 pts</strong></div>
+        <div class="legend-item">🚪 Early Departure (with notice): <strong>1.0 pt</strong></div>
+        <div class="legend-item">🚪 Early Departure (no notice): <strong>2.0 pts</strong></div>
+        <div class="legend-item">🚫 Excused Absence: <strong>1.0 pt</strong></div>
+        <div class="legend-item">🚫 Unexcused Absence: <strong>2.0 pts</strong></div>
+        <div class="legend-item">🚫 No-Show (no contact): <strong>3.0 pts</strong></div>
+        <div class="legend-item">🛡️ FMLA / Jury / Military / Bereavement: <strong>0 pts</strong></div>
+        <div class="legend-item">🏥 Emergency (with documentation): <strong>0 pts</strong></div>
+        <div class="legend-item">♻️ 30-day clean streak: <strong>−0.5 pt recovery</strong></div>
+        <div class="legend-item">♻️ 60-day clean streak: <strong>−1.0 pt recovery</strong></div>
+        <div class="legend-item" style="grid-column:1/-1;color:#888">All points expire after 90 days on a rolling basis.</div>
+      </div>
+    </div>
+
+    <!-- Signature / acknowledgment block -->
+    <div style="margin-top:28px;border:1.5px solid #e0e0e0;border-radius:8px;padding:16px 20px">
+      <div style="font-weight:bold;font-size:12px;color:#555;margin-bottom:14px;text-transform:uppercase;letter-spacing:0.4px">
+        Associate Acknowledgment
+      </div>
+      <p style="font-size:11px;color:#555;margin-bottom:18px">
+        I acknowledge that I have reviewed my attendance record for the past 90 days and understand my current standing
+        under the Panda Express Attendance Point System. I understand the point values, the progressive discipline scale,
+        and the recovery bonus for incident-free periods.
+      </p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+        <div>
+          <div style="border-bottom:1px solid #333;margin-bottom:4px;height:28px"></div>
+          <div style="font-size:10px;color:#888">Associate Signature &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Date: _______________</div>
+        </div>
+        <div>
+          <div style="border-bottom:1px solid #333;margin-bottom:4px;height:28px"></div>
+          <div style="font-size:10px;color:#888">Manager Signature &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Date: _______________</div>
+        </div>
+      </div>
+      <div style="margin-top:14px">
+        <div style="border-bottom:1px solid #333;margin-bottom:4px;height:24px"></div>
+        <div style="font-size:10px;color:#888">Manager Printed Name &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Title: _______________</div>
+      </div>
+    </div>
+  `;
+
+  openPrintWindow({
+    title: `Attendance Review — ${associate.name || 'Associate'}`,
+    subtitle: `Printed ${printDate} · 90-Day Rolling Window`,
+    html,
+  });
+}

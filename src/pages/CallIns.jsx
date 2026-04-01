@@ -3,13 +3,13 @@ import { format, subDays, isAfter, differenceInDays } from 'date-fns';
 import {
   PhoneMissed, Plus, X, Search, BarChart2, User,
   Shield, Clock, AlertTriangle, CheckCircle2, ChevronDown,
-  FileText, Info, Award, TrendingDown, ChevronRight, Printer
+  FileText, Info, Award, TrendingDown, ChevronRight, Printer, Download
 } from 'lucide-react';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { openPrintWindow, statsRowHtml, badgeHtml, disciplineColor } from '../lib/printReport';
+import { openPrintWindow, statsRowHtml, badgeHtml, disciplineColor, printAssociateAttendanceReport } from '../lib/printReport';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PANDA EXPRESS ATTENDANCE POINT SYSTEM
@@ -527,7 +527,7 @@ function LogCallInModal({ onClose, onSave, associates }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // CALL-IN DETAIL MODAL
 // ─────────────────────────────────────────────────────────────────────────────
-function CallInDetailModal({ callIn, onClose, onDelete }) {
+function CallInDetailModal({ callIn, onClose, onDelete, associates, allCallIns }) {
   const category = getCallInCategory(callIn);
   const subtype  = callIn.subtypeId ? SUBTYPE_MAP[callIn.subtypeId] : null;
   const pts      = getCallInPoints(callIn);
@@ -545,6 +545,12 @@ function CallInDetailModal({ callIn, onClose, onDelete }) {
     }
   };
 
+  const handlePrintAssociate = () => {
+    const assoc = associates?.find(a => a.id === callIn.associateId)
+      || { id: callIn.associateId, name: callIn.associateName, position: '', employeeId: '', hireDate: '', status: 'active' };
+    printAssociateAttendanceReport(assoc, allCallIns || []);
+  };
+
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="bg-white rounded-t-2xl w-full max-w-[520px] animate-slide-up max-h-[92vh] flex flex-col">
@@ -552,7 +558,16 @@ function CallInDetailModal({ callIn, onClose, onDelete }) {
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-bold text-base text-gray-800">Attendance Record</h2>
-          <button onClick={onClose} className="p-2 text-gray-400 rounded-lg"><X size={20} /></button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handlePrintAssociate}
+              title="Print associate attendance summary"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-primary border border-primary/30 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
+            >
+              <Printer size={13} /> Associate Report
+            </button>
+            <button onClick={onClose} className="p-2 text-gray-400 rounded-lg"><X size={20} /></button>
+          </div>
         </div>
 
         <div className="p-4 space-y-4 overflow-y-auto flex-1">
@@ -707,7 +722,7 @@ function CallInDetailModal({ callIn, onClose, onDelete }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // CALL-IN CARD (tappable)
 // ─────────────────────────────────────────────────────────────────────────────
-function CallInCard({ callIn, onDelete }) {
+function CallInCard({ callIn, onDelete, associates, allCallIns }) {
   const [showDetail, setShowDetail] = useState(false);
   const category  = getCallInCategory(callIn);
   const subtype   = callIn.subtypeId ? SUBTYPE_MAP[callIn.subtypeId] : null;
@@ -771,6 +786,8 @@ function CallInCard({ callIn, onDelete }) {
           callIn={callIn}
           onClose={() => setShowDetail(false)}
           onDelete={onDelete}
+          associates={associates}
+          allCallIns={allCallIns}
         />
       )}
     </>
@@ -839,9 +856,77 @@ function DisciplineLegend() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ASSOCIATE ATTENDANCE REPORT PICKER
+// Quick-print widget: select an associate → print their personal report
+// ─────────────────────────────────────────────────────────────────────────────
+function AssociateReportPicker({ associates, callIns, onPrint }) {
+  const [selectedId, setSelectedId] = useState('');
+
+  const assoc = associates.find(a => a.id === selectedId);
+  const pts   = assoc ? getEffectivePoints(callIns, assoc.id) : null;
+  const streak = assoc ? getCleanStreak(callIns, assoc.id) : null;
+  const d     = pts !== null ? getDisciplineLevel(pts) : null;
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm p-4 border border-red-100">
+      <p className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
+        <Download size={16} className="text-primary" />
+        Print Associate Attendance Report
+      </p>
+      <p className="text-xs text-gray-400 mb-3">
+        Select an associate to generate a personalized attendance summary they can review and sign.
+        Includes their 90-day incidents, current standing, clean streak, and the full discipline scale.
+      </p>
+
+      <div className="flex gap-2 items-start">
+        <select
+          value={selectedId}
+          onChange={e => setSelectedId(e.target.value)}
+          className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white"
+        >
+          <option value="">— Select associate —</option>
+          {associates.map(a => (
+            <option key={a.id} value={a.id}>{a.name}</option>
+          ))}
+        </select>
+        <button
+          onClick={() => assoc && onPrint(assoc)}
+          disabled={!assoc}
+          className="flex items-center gap-1.5 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary-dark transition-colors flex-shrink-0"
+        >
+          <Printer size={15} /> Print
+        </button>
+      </div>
+
+      {/* Preview strip when associate is selected */}
+      {assoc && d && (
+        <div className={`mt-3 rounded-xl p-3 border flex items-center justify-between gap-3 ${d.bg} ${d.border}`}>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center text-white font-bold text-base flex-shrink-0">
+              {assoc.name[0]?.toUpperCase()}
+            </div>
+            <div>
+              <p className="text-sm font-bold text-gray-800">{assoc.name}</p>
+              <p className="text-xs text-gray-500">{assoc.position || 'Team Member'}</p>
+            </div>
+          </div>
+          <div className="text-right flex-shrink-0">
+            <span className={`text-sm font-bold ${d.color}`}>{d.emoji} {pts} pts</span>
+            <p className={`text-xs font-medium ${d.color}`}>{d.label}</p>
+            {streak && (
+              <p className="text-[10px] text-gray-400 mt-0.5">{streak.label}</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // POINTS LEADERBOARD
 // ─────────────────────────────────────────────────────────────────────────────
-function PointsLeaderboard({ callIns, associates }) {
+function PointsLeaderboard({ callIns, associates, onPrintAssociate }) {
   const rows = useMemo(() => {
     return associates
       .map(a => {
@@ -866,6 +951,7 @@ function PointsLeaderboard({ callIns, associates }) {
       <div className="space-y-2.5">
         {rows.map(r => {
           const d = getDisciplineLevel(r.pts);
+          const assoc = associates.find(a => a.name === r.name);
           return (
             <div key={r.name} className="flex items-center gap-3">
               <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
@@ -874,9 +960,20 @@ function PointsLeaderboard({ callIns, associates }) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-0.5">
                   <span className="text-sm font-medium text-gray-800 truncate">{r.name}</span>
-                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ml-2 flex-shrink-0 ${d.color} ${d.bg} ${d.border}`}>
-                    {pointsEmoji(r.pts)} {r.pts} pt{r.pts !== 1 ? 's' : ''}
-                  </span>
+                  <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
+                    {onPrintAssociate && assoc && (
+                      <button
+                        onClick={() => onPrintAssociate(assoc)}
+                        title={`Print ${r.name}'s attendance report`}
+                        className="p-1 text-gray-400 hover:text-primary hover:bg-red-50 rounded transition-colors"
+                      >
+                        <Printer size={12} />
+                      </button>
+                    )}
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${d.color} ${d.bg} ${d.border}`}>
+                      {pointsEmoji(r.pts)} {r.pts} pt{r.pts !== 1 ? 's' : ''}
+                    </span>
+                  </div>
                 </div>
                 {/* Progress bar — 8 pts = critical */}
                 <div className="w-full bg-gray-100 rounded-full h-1.5">
@@ -1022,6 +1119,11 @@ export default function CallIns() {
     openPrintWindow({ title: 'Call-In & Attendance Report', subtitle: format(new Date(), 'MMMM yyyy'), html });
   };
 
+  // Per-associate attendance report
+  const handlePrintAssociate = (assoc) => {
+    printAssociateAttendanceReport(assoc, callIns);
+  };
+
   const currentMonth = format(new Date(), 'yyyy-MM');
   const totalCallIns = callIns.length;
   const thisMonth    = callIns.filter(c => c.date?.startsWith(currentMonth)).length;
@@ -1109,8 +1211,11 @@ export default function CallIns() {
           </div>
         )}
 
+        {/* Per-associate attendance report picker */}
+        <AssociateReportPicker associates={associates} callIns={callIns} onPrint={handlePrintAssociate} />
+
         {/* 90-day points leaderboard */}
-        <PointsLeaderboard callIns={callIns} associates={associates} />
+        <PointsLeaderboard callIns={callIns} associates={associates} onPrintAssociate={handlePrintAssociate} />
 
         {/* Discipline scale (collapsible) */}
         <DisciplineLegend />
@@ -1164,7 +1269,7 @@ export default function CallIns() {
             ) : (
               <div className="space-y-2">
                 {filtered.map(c => (
-                  <CallInCard key={c.id} callIn={c} onDelete={deleteCallIn} />
+                  <CallInCard key={c.id} callIn={c} onDelete={deleteCallIn} associates={associates} allCallIns={callIns} />
                 ))}
               </div>
             )}
