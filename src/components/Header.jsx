@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { Menu, Plus, Bell } from 'lucide-react';
+import { Menu, Plus } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import SideDrawer from './SideDrawer';
 import { PreviewButton } from './PreviewUpdateBanner';
+import { useNotifications, BellButton, NotificationPanel } from './NotificationPanel';
 
 const PREVIEW_URL = 'https://4173-il9welzg75eglof37wb6r-ea026bf9.sandbox.novita.ai';
 
 export default function Header({ title, subtitle, showAdd = false, onAdd, rightIcon, onRightClick }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { storeName } = useAppStore();
+  const { alerts, unread, open: notifOpen, setOpen: setNotifOpen, markAllRead, markRead, readIds } = useNotifications();
 
   return (
     <>
@@ -43,10 +45,11 @@ export default function Header({ title, subtitle, showAdd = false, onAdd, rightI
               </button>
             ) : (
               <>
-                <button className="w-8 h-8 flex items-center justify-center text-white rounded-lg active:bg-white/20 relative">
-                  <Bell size={20} />
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-accent rounded-full" />
-                </button>
+                <BellButton
+                  variant="mobile"
+                  unread={unread}
+                  onClick={() => setNotifOpen(true)}
+                />
                 <PreviewButton previewUrl={PREVIEW_URL} />
               </>
             )}
@@ -61,6 +64,15 @@ export default function Header({ title, subtitle, showAdd = false, onAdd, rightI
       </div>
 
       <SideDrawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} />
+
+      <NotificationPanel
+        alerts={alerts}
+        open={notifOpen}
+        onClose={() => setNotifOpen(false)}
+        onMarkAllRead={markAllRead}
+        markRead={markRead}
+        readIds={readIds}
+      />
     </>
   );
 }
