@@ -41,16 +41,41 @@ function getCallInPoints(c) {
   return LEGACY[c.type] ?? 0;
 }
 
-function get90DayPoints(callIns, associateId) {
+function get90DayCallIns(callIns, associateId) {
   const cutoff = subDays(new Date(), 90);
-  return callIns
-    .filter(c => c.associateId === associateId && isAfter(new Date(c.date), cutoff))
-    .reduce((sum, c) => sum + getCallInPoints(c), 0);
+  return callIns.filter(
+    c => c.associateId === associateId && isAfter(new Date(c.date), cutoff)
+  );
+}
+
+/**
+ * getEffectivePoints — mirrors the logic in CallIns.jsx.
+ * Applies 30/60-day clean-streak recovery automatically:
+ *   60+ days clean → −1.0 pt
+ *   30–59 days clean → −0.5 pt
+ *   < 30 days clean → no deduction
+ */
+function getEffectivePoints(callIns, associateId) {
+  const recent = get90DayCallIns(callIns, associateId);
+  if (recent.length === 0) return 0;
+
+  const rawPts = recent.reduce((sum, c) => sum + getCallInPoints(c), 0);
+  if (rawPts <= 0) return 0;
+
+  const lastDate = recent
+    .map(c => new Date(c.date))
+    .reduce((latest, d) => (d > latest ? d : latest), new Date(0));
+
+  const cleanDays = differenceInDays(new Date(), lastDate);
+  let recovery = 0;
+  if (cleanDays >= 60) recovery = 1.0;
+  else if (cleanDays >= 30) recovery = 0.5;
+
+  return Math.max(0, Math.round((rawPts - recovery) * 10) / 10);
 }
 
 function get90DayCount(callIns, associateId) {
-  const cutoff = subDays(new Date(), 90);
-  return callIns.filter(c => c.associateId === associateId && isAfter(new Date(c.date), cutoff)).length;
+  return get90DayCallIns(callIns, associateId).length;
 }
 
 // ─── main generator ───────────────────────────────────────────────────────────
@@ -81,7 +106,7 @@ export function generateNotifications({
 
   // ── 1. ATTENDANCE: per-associate 90-day point thresholds ──────────────────
   associates.forEach(a => {
-    const pts   = get90DayPoints(callIns, a.id);
+    const pts   = getEffectivePoints(callIns, a.id);
     const count = get90DayCount(callIns, a.id);
     if (pts <= 0) return;
 

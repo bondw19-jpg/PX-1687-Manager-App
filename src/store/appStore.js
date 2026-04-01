@@ -244,7 +244,7 @@ export const useAppStore = create(
         //   8+ pts    → Termination Eligible
         // Also trigger on: 3 incidents, 5 incidents, 8 incidents in 90 days
         if (doc.associateId) {
-          const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 90);
+          const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 90); // 90-day rolling window
 
           // Resolve point value — supports new subtype system and legacy types
           const getDocPoints = (x) => {
@@ -268,8 +268,19 @@ export const useAppStore = create(
             x.associateId === doc.associateId && new Date(x.date) >= cutoff
           ), doc];
 
-          const pts   = recent.reduce((s, x) => s + getDocPoints(x), 0);
-          const count = recent.length;
+          const rawPts = recent.reduce((s, x) => s + getDocPoints(x), 0);
+          const count  = recent.length;
+
+          // ── Point Recovery: apply 30/60-day clean-streak deduction ──────────
+          // After adding the new incident the streak resets to 0, so recovery
+          // is 0 for the current save. But we still compute it correctly for
+          // any future re-evaluation reference in the work-file note.
+          const lastDate = recent
+            .map(x => new Date(x.date))
+            .reduce((latest, d) => (d > latest ? d : latest), new Date(0));
+          const cleanDays  = Math.floor((new Date() - lastDate) / 86400000);
+          const recovery   = cleanDays >= 60 ? 1.0 : cleanDays >= 30 ? 0.5 : 0;
+          const pts        = Math.max(0, Math.round((rawPts - recovery) * 10) / 10);
 
           // Determine discipline level
           const getDisciplineLabel = (p) => {
@@ -292,11 +303,12 @@ export const useAppStore = create(
               const subtypeLabel = doc.subtypeId
                 ? (doc.subtypeId.replace(/_/g, ' '))
                 : doc.type;
+              const recoveryNote = recovery > 0 ? ` (−${recovery} pt recovery applied)` : '';
               const newRow = {
                 id:      Date.now() + Math.random(),
                 date:    doc.date,
                 key:     catKey,
-                details: `Auto [PX Policy]: ${subtypeLabel} — ${count} incident${count !== 1 ? 's' : ''} / ${pts} pts in 90 days. Action: ${discipline.label}.${doc.reason ? ' Reason: ' + doc.reason : ''}`,
+                details: `Auto [PX Policy]: ${subtypeLabel} — ${count} incident${count !== 1 ? 's' : ''} / ${pts} pts in 90 days${recoveryNote}. Action: ${discipline.label}.${doc.reason ? ' Reason: ' + doc.reason : ''}`,
                 addedBy: u ? { uid: u.uid, name: firstName(u.name || u.email?.split('@')[0]) } : null,
               };
               const updatedFile = { ...existing, rows: [...(existing.rows || []), newRow], savedAt: new Date().toISOString() };

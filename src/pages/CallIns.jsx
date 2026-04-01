@@ -130,7 +130,7 @@ export function getCallInCategory(callIn) {
   return PX_ATTENDANCE_POLICY.categories.find(c => c.id === legacyMap[callIn.type]) || CALL_IN_TYPES[1];
 }
 
-// 90-day rolling window
+// 90-day rolling window — raw sum, no recovery applied
 export function get90DayPoints(callIns, associateId) {
   const cutoff = subDays(new Date(), 90);
   return callIns
@@ -143,6 +143,75 @@ export function get90DayCallIns(callIns, associateId) {
   return callIns.filter(
     c => c.associateId === associateId && isAfter(new Date(c.date), cutoff)
   );
+}
+
+/**
+ * getEffectivePoints(callIns, associateId) → number
+ *
+ * PX Attendance Point Recovery — fully automatic:
+ *   - Start with raw 90-day rolling points
+ *   - Find the most recent call-in date for this associate
+ *   - Count days since that incident (the "clean streak")
+ *   - Apply deduction:
+ *       60+ days clean → −1.0 pt  (capped at 0)
+ *       30–59 days clean → −0.5 pt (capped at 0)
+ *       < 30 days clean  → no deduction
+ *   - Associates with zero incidents always show 0
+ *
+ * This function is used everywhere discipline levels, leaderboard,
+ * notifications, and work-file triggers are evaluated.
+ */
+export function getEffectivePoints(callIns, associateId) {
+  const recent = get90DayCallIns(callIns, associateId);
+  if (recent.length === 0) return 0;
+
+  const rawPts = recent.reduce((sum, c) => sum + getCallInPoints(c), 0);
+  if (rawPts <= 0) return 0;
+
+  // Find the most recent incident date
+  const lastDate = recent
+    .map(c => new Date(c.date))
+    .reduce((latest, d) => (d > latest ? d : latest), new Date(0));
+
+  const cleanDays = differenceInDays(new Date(), lastDate);
+
+  let recovery = 0;
+  if (cleanDays >= 60) recovery = 1.0;
+  else if (cleanDays >= 30) recovery = 0.5;
+
+  return Math.max(0, Math.round((rawPts - recovery) * 10) / 10);
+}
+
+/**
+ * getCleanStreak(callIns, associateId) → { days, recovery, label }
+ * Returns clean-streak info for display in the UI.
+ */
+export function getCleanStreak(callIns, associateId) {
+  const recent = get90DayCallIns(callIns, associateId);
+  if (recent.length === 0) return { days: 90, recovery: 0, label: '90+ days clean ✅' };
+
+  const lastDate = recent
+    .map(c => new Date(c.date))
+    .reduce((latest, d) => (d > latest ? d : latest), new Date(0));
+
+  const days = differenceInDays(new Date(), lastDate);
+  let recovery = 0;
+  let label = '';
+
+  if (days >= 60) {
+    recovery = 1.0;
+    label = `${days}-day clean streak → −1.0 pt applied ✅`;
+  } else if (days >= 30) {
+    recovery = 0.5;
+    label = `${days}-day clean streak → −0.5 pt applied ✅`;
+  } else if (days > 0) {
+    const next = 30 - days;
+    label = `${days}-day clean streak · ${next} day${next !== 1 ? 's' : ''} until −0.5 pt recovery`;
+  } else {
+    label = 'Incident today — recovery streak reset';
+  }
+
+  return { days, recovery, label };
 }
 
 // Progressive discipline thresholds
@@ -776,9 +845,9 @@ function PointsLeaderboard({ callIns, associates }) {
   const rows = useMemo(() => {
     return associates
       .map(a => {
-        const pts   = get90DayPoints(callIns, a.id);
+        const pts   = getEffectivePoints(callIns, a.id);
         const count = get90DayCallIns(callIns, a.id).length;
-        return { name: a.name, pts, count };
+        return { name: a.name, pts, count, rawPts: get90DayPoints(callIns, a.id), streak: getCleanStreak(callIns, a.id) };
       })
       .filter(r => r.count > 0)
       .sort((a, b) => b.pts - a.pts)
@@ -822,14 +891,40 @@ function PointsLeaderboard({ callIns, associates }) {
                     style={{ width: `${Math.min(100, (r.pts / 8) * 100)}%` }}
                   />
                 </div>
-                <p className={`text-[10px] mt-0.5 ${d.color} font-medium`}>{d.emoji} {d.label}</p>
+                <div className="flex items-center justify-between mt-0.5">
+                  <p className={`text-[10px] ${d.color} font-medium`}>{d.emoji} {d.label}</p>
+                  {/* Recovery streak indicator */}
+                  {r.streak.recovery > 0 ? (
+                    <span className="text-[10px] text-green-600 font-semibold">
+                      🌿 −{r.streak.recovery} recovery ({r.streak.days}d clean)
+                    </span>
+                  ) : r.streak.days >= 0 && r.count > 0 ? (
+                    <span className="text-[10px] text-gray-400">
+                      {r.streak.days}d clean
+                    </span>
+                  ) : null}
+                </div>
+                {/* Show raw vs effective when recovery is active */}
+                {r.streak.recovery > 0 && (
+                  <p className="text-[10px] text-gray-400 mt-0.5">
+                    Raw: {r.rawPts} pts → Effective: <strong>{r.pts} pts</strong> after recovery
+                  </p>
+                )}
               </div>
             </div>
           );
         })}
       </div>
+      {/* Recovery rule reminder */}
+      <div className="mt-3 pt-3 border-t border-gray-100 flex items-start gap-1.5 text-[10px] text-gray-400">
+        <TrendingDown size={11} className="mt-0.5 text-green-500 shrink-0" />
+        <span>
+          Recovery: <strong className="text-green-600">−0.5 pt</strong> after 30 clean days ·{' '}
+          <strong className="text-green-600">−1.0 pt</strong> after 60 clean days · Applied automatically
+        </span>
+      </div>
       {/* Legend */}
-      <div className="flex gap-2 flex-wrap mt-3 pt-3 border-t border-gray-100">
+      <div className="flex gap-2 flex-wrap mt-2 pt-2 border-t border-gray-100">
         {DISCIPLINE_LEVELS.map(d => (
           <span key={d.label} className="text-[10px] text-gray-500 flex items-center gap-1">
             {d.emoji} {d.min}–{d.max === Infinity ? '8+' : d.max}pts: {d.label}
@@ -899,7 +994,7 @@ export default function CallIns() {
         <thead><tr><th>Associate</th><th>90-Day Points</th><th>Incidents</th><th>Discipline Level</th></tr></thead>
         <tbody>
           ${associates.map(a => {
-            const pts = get90DayPoints(callIns, a.id);
+            const pts = getEffectivePoints(callIns, a.id);
             const cnt = get90DayCallIns(callIns, a.id).length;
             if (cnt === 0) return '';
             const d   = getDisciplineLevel(pts);
