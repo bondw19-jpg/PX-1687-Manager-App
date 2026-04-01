@@ -2,9 +2,18 @@
  * notifications.js
  * Live notification generator for Panda Manager Hub — PX Store #1687
  *
- * Derives alerts purely from existing store data — no extra Firestore writes needed.
+ * Derives alerts purely from SHARED store data — no extra Firestore writes needed.
  * Called by useNotifications() hook; result is memoized so it's cheap to call on
  * every render from the bell icon.
+ *
+ * ─── PRIVACY RULES ────────────────────────────────────────────────────────────
+ * ✅ SHARED  (all managers on the store see these):
+ *    associates, callIns, tasks, teamEvents, announcements, workFiles, reviews
+ *
+ * 🔒 PRIVATE (never appears in shared notifications):
+ *    myEvents   — personal calendar, stored at users/{uid}/myEvents
+ *    myNotes    — personal notes,   stored at users/{uid}/myNotes
+ *    Any other data under users/{uid}/…
  *
  * Alert schema:
  *   { id, type, level, title, body, link, ts, icon }
@@ -44,35 +53,31 @@ function get90DayCount(callIns, associateId) {
   return callIns.filter(c => c.associateId === associateId && isAfter(new Date(c.date), cutoff)).length;
 }
 
-function disciplineLabel(pts) {
-  if (pts >= 8) return 'Termination Eligible 🔴';
-  if (pts >= 6) return 'Final Written Warning ⚠️';
-  if (pts >= 4) return 'First Written Warning 📋';
-  if (pts >= 2) return 'Coaching 💬';
-  return 'Good Standing ✅';
-}
-
 // ─── main generator ───────────────────────────────────────────────────────────
 
 /**
  * generateNotifications(state) → Alert[]
- * Pure function — takes a snapshot of store state and returns all current alerts.
- * Always re-runs on each call; callers should useMemo() over relevant slices.
+ *
+ * Pure function — takes a snapshot of SHARED store state only.
+ * myEvents and myNotes are intentionally NOT accepted as parameters
+ * so personal data can never accidentally leak into shared notifications.
+ *
+ * Callers should useMemo() over the relevant shared slices.
  */
 export function generateNotifications({
-  associates = [],
-  callIns = [],
-  tasks = [],
-  teamEvents = [],
-  myEvents = [],
+  associates    = [],
+  callIns       = [],
+  tasks         = [],
+  teamEvents    = [],   // ✅ SHARED — team calendar
+  // myEvents intentionally excluded — personal, never shared
   announcements = [],
-  workFiles = {},
-  reviews = [],
-  teamNotes = [],
+  workFiles     = {},
+  reviews       = [],
+  // myNotes intentionally excluded — personal, never shared
+  // teamNotes not used for notifications (content is internal)
 } = {}) {
   const alerts = [];
-  const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10);
+  const today  = new Date();
 
   // ── 1. ATTENDANCE: per-associate 90-day point thresholds ──────────────────
   associates.forEach(a => {
@@ -86,7 +91,7 @@ export function generateNotifications({
         type: 'attendance', level: 'critical',
         icon: '🔴',
         title: `${a.name} — Termination Eligible`,
-        body:  `${pts} attendance pts in 90 days (${count} incident${count !== 1 ? 's' : ''}). Immediate action required.`,
+        body:  `${pts} pts in 90 days (${count} incident${count !== 1 ? 's' : ''}). Immediate action required.`,
         link: '/callins',
         ts: Date.now(),
       });
@@ -123,12 +128,12 @@ export function generateNotifications({
     }
   });
 
-  // ── 2. TASKS: overdue + due today + urgent ────────────────────────────────
+  // ── 2. TASKS: overdue + due today + due soon + urgent ─────────────────────
   tasks.forEach(t => {
     if (t.status === 'Done') return;
     const due = safeDate(t.dueDate);
+
     if (!due) {
-      // Urgent tasks with no due date
       if (t.priority === 'Urgent') {
         alerts.push({
           id: `task-urgent-${t.id}`,
@@ -178,33 +183,34 @@ export function generateNotifications({
     }
   });
 
-  // ── 3. CALENDAR EVENTS: upcoming within 48 hours ─────────────────────────
-  const allEvents = [...teamEvents, ...myEvents];
-  allEvents.forEach(e => {
+  // ── 3. TEAM CALENDAR EVENTS: upcoming within 48 hours ────────────────────
+  // NOTE: Only teamEvents (shared) are included here.
+  //       myEvents (personal) are intentionally excluded — they are private
+  //       to the individual account and must never appear in shared notifications.
+  teamEvents.forEach(e => {
     const eventDate = safeDate(e.date);
     if (!eventDate) return;
     const daysUntil = differenceInDays(eventDate, today);
     if (daysUntil < 0 || daysUntil > 2) return;
 
     const label = daysUntil === 0 ? 'Today' : daysUntil === 1 ? 'Tomorrow' : `In ${daysUntil} days`;
-    const source = teamEvents.some(ev => ev.id === e.id) ? 'Team' : 'My';
     alerts.push({
       id: `event-${e.id}`,
       type: 'event', level: daysUntil === 0 ? 'warning' : 'info',
       icon: e.type === 'Inspection' ? '🔍' : e.type === 'Meeting' ? '📅' : e.type === 'Training' ? '📚' : '📆',
       title: `${label}: ${e.title}`,
-      body:  `${source} Calendar · ${e.type}${e.time ? ' at ' + e.time : ''}.`,
+      body:  `Team Calendar · ${e.type}${e.time ? ' at ' + e.time : ''}.`,
       link: '/calendar',
       ts: eventDate.getTime(),
     });
   });
 
-  // ── 4. ANNOUNCEMENTS: latest urgent/important (last 3 days) ──────────────
+  // ── 4. ANNOUNCEMENTS: urgent (3 days) / important (1 day) / normal (today)
   announcements.forEach(ann => {
     const created = safeDate(ann.createdAt);
     if (!created) return;
     const age = differenceInDays(today, created);
-    if (age > 3) return; // only show recent ones
+    if (age > 3) return;
 
     if (ann.priority === 'Urgent') {
       alerts.push({
@@ -245,10 +251,8 @@ export function generateNotifications({
     const assoc = associates.find(a => a.id === assocId);
     if (!assoc) return;
 
-    // Find auto-generated rows (from PX policy) created recently
     const recentAutoRows = (wf.rows || []).filter(r => {
       if (!r.details?.startsWith('Auto')) return false;
-      // Try to parse date from row
       const d = safeDate(r.date);
       if (!d) return false;
       return differenceInDays(today, d) <= 7;
@@ -268,7 +272,7 @@ export function generateNotifications({
     }
   });
 
-  // ── 6. PERFORMANCE REVIEWS: associates with no review in 90+ days ─────────
+  // ── 6. PERFORMANCE REVIEWS: no review or review due (90+ days) ───────────
   associates
     .filter(a => a.status === 'active')
     .forEach(a => {
@@ -277,7 +281,6 @@ export function generateNotifications({
         .sort((x, y) => new Date(y.createdAt) - new Date(x.createdAt))[0];
 
       if (!latestReview) {
-        // Only flag if the associate was hired 90+ days ago (or no hire date)
         const hired = safeDate(a.hireDate);
         const daysSinceHire = hired ? differenceInDays(today, hired) : 999;
         if (daysSinceHire >= 90) {
@@ -286,9 +289,9 @@ export function generateNotifications({
             type: 'review', level: 'info',
             icon: '⭐',
             title: `No Review on File: ${a.name}`,
-            body:  `No performance review recorded. Consider scheduling one.`,
+            body:  'No performance review recorded. Consider scheduling one.',
             link: '/reviews',
-            ts: Date.now() - 1000, // slightly older so attendance alerts sort first
+            ts: Date.now() - 1000,
           });
         }
       } else {
@@ -307,7 +310,7 @@ export function generateNotifications({
       }
     });
 
-  // ── Sort: critical first, then warning, then info/success, then by ts desc ─
+  // ── Sort: critical → warning → info → success, then by ts desc ───────────
   const ORDER = { critical: 0, warning: 1, info: 2, success: 3 };
   alerts.sort((a, b) => {
     const lvlDiff = (ORDER[a.level] ?? 9) - (ORDER[b.level] ?? 9);

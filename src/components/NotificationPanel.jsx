@@ -26,17 +26,20 @@ export function useNotifications() {
     catch { return new Set(); }
   });
 
+  // Only pull SHARED data from the store.
+  // myEvents and myNotes are intentionally excluded — they are private to
+  // each individual account and must never appear in shared notifications.
   const {
     associates, callIns, tasks,
-    teamEvents, myEvents, announcements,
+    teamEvents, announcements,
     workFiles, reviews,
   } = useAppStore();
 
   const alerts = useMemo(() => generateNotifications({
     associates, callIns, tasks,
-    teamEvents, myEvents, announcements,
+    teamEvents, announcements,
     workFiles, reviews,
-  }), [associates, callIns, tasks, teamEvents, myEvents, announcements, workFiles, reviews]);
+  }), [associates, callIns, tasks, teamEvents, announcements, workFiles, reviews]);
 
   const unread = useMemo(
     () => alerts.filter(a => !readIds.has(a.id)).length,
