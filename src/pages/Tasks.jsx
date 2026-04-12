@@ -79,7 +79,7 @@ function TaskModal({ task, associates, onClose, onSave }) {
                   onChange={e => setForm({ ...form, assignee: e.target.value })}
                 >
                   <option value="">Unassigned</option>
-                  {associates.map(a => (
+                  {[...associates].sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(a => (
                     <option key={a.id} value={a.name}>{a.name}</option>
                   ))}
                 </select>

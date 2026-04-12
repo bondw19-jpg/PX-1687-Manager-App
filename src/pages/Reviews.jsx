@@ -66,7 +66,7 @@ function ReviewModal({ review, associates, onClose, onSave }) {
                 value={form.associateId}
                 onChange={e => handleAssociateChange(e.target.value)}
               >
-                {associates.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                {[...associates].sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             ) : (
               <input

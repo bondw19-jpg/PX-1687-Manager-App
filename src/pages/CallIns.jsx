@@ -322,7 +322,7 @@ function LogCallInModal({ onClose, onSave, associates }) {
                 value={form.associateId}
                 onChange={e => handleAssocChange(e.target.value)}
               >
-                {associates.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                {[...associates].sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             ) : (
               <input
@@ -885,7 +885,7 @@ function AssociateReportPicker({ associates, callIns, onPrint }) {
           className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white"
         >
           <option value="">— Select associate —</option>
-          {associates.map(a => (
+          {[...associates].sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(a => (
             <option key={a.id} value={a.id}>{a.name}</option>
           ))}
         </select>
@@ -1090,7 +1090,7 @@ export default function CallIns() {
       <table>
         <thead><tr><th>Associate</th><th>90-Day Points</th><th>Incidents</th><th>Discipline Level</th></tr></thead>
         <tbody>
-          ${associates.map(a => {
+          ${[...associates].sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(a => {
             const pts = getEffectivePoints(callIns, a.id);
             const cnt = get90DayCallIns(callIns, a.id).length;
             if (cnt === 0) return '';

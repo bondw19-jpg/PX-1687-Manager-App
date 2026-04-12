@@ -350,15 +350,17 @@ export default function Associates() {
     openPrintWindow({ title: 'Associate Roster', subtitle: list.length + ' associates listed', html });
   };
 
-  const filtered = associates.filter(a => {
-    const matchSearch = a.name?.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === 'All Status' ||
-      (statusFilter === 'Active' && a.status === 'active') ||
-      (statusFilter === 'Inactive' && a.status === 'inactive') ||
-      (statusFilter === 'On Leave' && a.status === 'on_leave');
-    const matchPos = positionFilter === 'All Positions' || a.position === positionFilter;
-    return matchSearch && matchStatus && matchPos;
-  });
+  const filtered = associates
+    .filter(a => {
+      const matchSearch = a.name?.toLowerCase().includes(search.toLowerCase());
+      const matchStatus = statusFilter === 'All Status' ||
+        (statusFilter === 'Active' && a.status === 'active') ||
+        (statusFilter === 'Inactive' && a.status === 'inactive') ||
+        (statusFilter === 'On Leave' && a.status === 'on_leave');
+      const matchPos = positionFilter === 'All Positions' || a.position === positionFilter;
+      return matchSearch && matchStatus && matchPos;
+    })
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
   const handleDelete = (id) => {
     if (window.confirm('Delete this associate?')) deleteAssociate(id);
