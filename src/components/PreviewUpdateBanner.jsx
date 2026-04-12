@@ -8,10 +8,46 @@ import {
 // ─── Changelog Data ───────────────────────────────────────────────────────────
 export const UPDATES = [
   {
-    version: '2.1.0',
-    date: 'Mar 9, 2026',
+    version: '2.1.2',
+    date: 'Apr 12, 2026',
     label: 'Latest',
     labelColor: 'bg-green-500',
+    summary: 'Team Activity Feed on Dashboard, alphabetical associate lists, and bell icon removed in favour of the new feed.',
+    changes: [
+      { type: 'new',     text: 'Team Updates feed on Dashboard — see every call-in, task, announcement, note, review & calendar event in real time' },
+      { type: 'new',     text: 'Tap any feed card to view full details and navigate directly to the module' },
+      { type: 'new',     text: 'Per-user read tracking — cards disappear after you tap them; other managers still see unread cards until they tap' },
+      { type: 'new',     text: 'Work File deep-link — tapping a Work File feed card opens that associate\'s Work File modal directly' },
+      { type: 'improve', text: 'All associate lists and dropdowns now sorted A → Z across Associates, Call-Ins, Tasks & Reviews' },
+      { type: 'improve', text: 'Notification bell removed from header — Team Updates feed replaces it on the Dashboard' },
+      { type: 'fix',     text: 'Fixed work file "Go to" button staying on Dashboard (route was /associates, corrected to /team)' },
+      { type: 'fix',     text: 'Fixed read state not clearing when user uid resolved after login' },
+    ],
+  },
+  {
+    version: '2.1.1',
+    date: 'Apr 1, 2026',
+    label: 'Previous',
+    labelColor: 'bg-gray-400',
+    summary: 'Full PX Attendance Point System, auto point recovery, per-associate print reports, and Print/PDF across all modules.',
+    changes: [
+      { type: 'new',     text: 'PX Attendance Point System — Tardiness 0.5/1/1.5 pts, Early Dep 1/2 pts, Absence 1/2/3 pts, Protected 0 pts' },
+      { type: 'new',     text: 'Automatic 30/60-day clean-streak point recovery (−0.5 after 30 days, −1.0 after 60 days)' },
+      { type: 'new',     text: 'Progressive discipline: Coaching → First Written → Final Written → Termination Eligible' },
+      { type: 'new',     text: 'Per-associate printable attendance report with 90-day incident table, expired records & signature block' },
+      { type: 'new',     text: 'Print report entry points: associate picker, leaderboard row printer icon & call-in detail modal' },
+      { type: 'new',     text: 'Live Notification Bell (mobile + desktop) with slide-in panel and per-user read state' },
+      { type: 'new',     text: 'Print / PDF button added to all modules (Associates, Call-Ins, Notes, Tasks, Reviews, Contacts, Announcements, Checklist, Calendar)' },
+      { type: 'new',     text: 'Notes file & image attachments with upload progress bar' },
+      { type: 'improve', text: 'Call-Ins leaderboard shows effective (post-recovery) points with green recovery chip' },
+      { type: 'improve', text: 'Auto work-file entry created when discipline milestone is reached' },
+    ],
+  },
+  {
+    version: '2.1.0',
+    date: 'Mar 9, 2026',
+    label: 'Older',
+    labelColor: 'bg-gray-300',
     summary: 'Manager Hub fully launched with all core modules.',
     changes: [
       { type: 'new',  text: 'Dashboard with live stats, events & call-in feed' },
@@ -31,8 +67,8 @@ export const UPDATES = [
   {
     version: '2.0.0',
     date: 'Mar 8, 2026',
-    label: 'Previous',
-    labelColor: 'bg-gray-400',
+    label: 'Older',
+    labelColor: 'bg-gray-300',
     summary: 'Initial project scaffold and base configuration.',
     changes: [
       { type: 'new',  text: 'React 18 + Vite 5 project setup' },
@@ -197,10 +233,10 @@ export default function PreviewUpdateBanner({ previewUrl }) {
 
           <div className="flex-1 min-w-0 relative z-10">
             <p className="text-white font-bold text-xs leading-tight">
-              ✨ v2.1.0 — Manager Hub is Live!
+              ✨ v2.1.2 — Team Updates Feed + Alphabetical Lists
             </p>
             <p className="text-white/70 text-[11px] leading-tight mt-0.5">
-              11 new features including checklists, reviews & PWA support
+              Real-time team activity feed, deep-links & per-user read tracking
             </p>
           </div>
 

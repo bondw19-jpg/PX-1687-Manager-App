@@ -9,7 +9,7 @@ import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 
-const APP_VERSION  = '2.0.0';
+const APP_VERSION  = '2.1.2';
 const STORAGE_KEY  = 'panda-manager-storage';
 const BACKUPS_KEY  = 'panda-manager-backups';
 const EMERGENCY_KEY = 'panda-manager-backup'; // auto-written by appStore on every save
