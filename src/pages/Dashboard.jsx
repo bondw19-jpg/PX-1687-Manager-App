@@ -252,10 +252,7 @@ export default function Dashboard() {
           <StatCard icon={<Pin size={22} className="text-blue-500" />}       count={pinnedNotes}        label="Pinned Notes"         bgColor="bg-blue-50" />
         </div>
 
-        {/* Desktop 2-col layout */}
-        <div className="lg:grid lg:grid-cols-2 lg:gap-6 space-y-4 lg:space-y-0">
-
-        {/* Today's Events */}
+        {/* 1 — Today's Events (full width) */}
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
             <div className="flex items-center gap-2 font-semibold text-gray-800">
@@ -288,10 +285,7 @@ export default function Dashboard() {
                       onClick={() => setSelectedEvent(event)}
                       className="w-full flex items-center gap-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 active:bg-gray-200 transition-colors text-left"
                     >
-                      {/* Color dot */}
                       <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${colors.dot}`} />
-
-                      {/* Title + time */}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-gray-800 truncate">{event.title}</p>
                         <div className="flex items-center gap-1.5 mt-0.5">
@@ -316,8 +310,6 @@ export default function Dashboard() {
                           )}
                         </div>
                       </div>
-
-                      {/* Type badge + chevron */}
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colors.badge}`}>
                           {event.type || 'Event'}
@@ -332,7 +324,10 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Recent Call-Ins */}
+        {/* 2 — Team Updates Feed (full width) */}
+        <ActivityFeed />
+
+        {/* 3 — Recent Attendance Log (full width) */}
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
             <div className="flex items-center gap-2 font-semibold text-gray-800">
@@ -409,11 +404,6 @@ export default function Dashboard() {
             )}
           </div>
         </div>
-
-        </div>{/* end desktop 2-col */}
-
-        {/* Team Activity Feed — full width, below 2-col grid */}
-        <ActivityFeed />
 
         <div className="h-4" />
       </div>
