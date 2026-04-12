@@ -463,16 +463,19 @@ function ActivityDetailModal({ activity, onClose, onMarkRead }) {
 
 // ─── feed item row ────────────────────────────────────────────────────────────
 
-function FeedItem({ activity, isRead, onTap }) {
+function FeedItem({ activity, onTap }) {
   const leftBar = LEVEL_LEFT[activity.level] || LEVEL_LEFT.info;
 
   return (
     <button
       onClick={() => onTap(activity)}
-      className={`w-full text-left flex gap-3 px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors relative ${isRead ? '' : 'bg-blue-50/40'}`}
+      className="w-full text-left flex gap-3 px-4 py-3 border-b border-gray-100 hover:bg-gray-50 active:bg-gray-100 transition-colors relative"
     >
       {/* Level color bar */}
       <div className={`absolute left-0 top-0 bottom-0 w-1 ${leftBar}`} />
+
+      {/* Unread dot */}
+      <span className="w-2 h-2 rounded-full bg-primary mt-1.5 flex-shrink-0" />
 
       {/* Icon */}
       <span className="text-xl leading-none mt-0.5 flex-shrink-0">{activity.icon}</span>
@@ -480,7 +483,7 @@ function FeedItem({ activity, isRead, onTap }) {
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
-          <p className={`text-sm font-semibold leading-snug flex-1 min-w-0 ${isRead ? 'text-gray-500' : 'text-gray-900'}`}>
+          <p className="text-sm font-semibold leading-snug flex-1 min-w-0 text-gray-900">
             {activity.title}
           </p>
           <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold flex-shrink-0 ${TYPE_BADGE_COLORS[activity.type] || 'bg-gray-100 text-gray-600'}`}>
@@ -496,11 +499,6 @@ function FeedItem({ activity, isRead, onTap }) {
           <span className="text-[10px] text-gray-400">{timeAgo(new Date(activity.ts).toISOString())}</span>
         </div>
       </div>
-
-      {/* Unread dot */}
-      {!isRead && (
-        <span className="w-2 h-2 rounded-full bg-primary mt-1.5 flex-shrink-0" />
-      )}
     </button>
   );
 }
@@ -545,11 +543,17 @@ export default function ActivityFeed({ maxItems = 30, compact = false }) {
     teamNotes, reviews, teamEvents, workFiles,
   }), [callIns, associates, tasks, announcements, teamNotes, reviews, teamEvents, workFiles]);
 
+  // Only show unread items (read ones disappear after tap)
+  const unreadActivities = useMemo(
+    () => allActivities.filter(a => !readIds.has(a.id)),
+    [allActivities, readIds]
+  );
+
   // Filter by tab
   const filtered = useMemo(() => {
-    const base = activeTab === 'all' ? allActivities : allActivities.filter(a => a.type === activeTab);
+    const base = activeTab === 'all' ? unreadActivities : unreadActivities.filter(a => a.type === activeTab);
     return base.slice(0, maxItems);
-  }, [allActivities, activeTab, maxItems]);
+  }, [unreadActivities, activeTab, maxItems]);
 
   const unreadCount = useMemo(
     () => allActivities.filter(a => !readIds.has(a.id)).length,
@@ -623,7 +627,7 @@ export default function ActivityFeed({ maxItems = 30, compact = false }) {
               >
                 {t.label}
                 {t.key !== 'all' && (() => {
-                  const cnt = allActivities.filter(a => a.type === t.key).length;
+                  const cnt = unreadActivities.filter(a => a.type === t.key).length;
                   return cnt > 0 ? <span className={`ml-1 ${activeTab === t.key ? 'text-white/70' : 'text-gray-400'}`}>({cnt})</span> : null;
                 })()}
               </button>
@@ -638,7 +642,7 @@ export default function ActivityFeed({ maxItems = 30, compact = false }) {
               <Bell size={32} className="opacity-20" />
               <p className="text-sm font-medium">No recent activity</p>
               <p className="text-xs text-center px-8">
-                Updates from all modules will appear here
+                All caught up! New updates will appear here
               </p>
             </div>
           ) : (
@@ -646,7 +650,6 @@ export default function ActivityFeed({ maxItems = 30, compact = false }) {
               <FeedItem
                 key={a.id}
                 activity={a}
-                isRead={readIds.has(a.id)}
                 onTap={handleTap}
               />
             ))
@@ -656,7 +659,7 @@ export default function ActivityFeed({ maxItems = 30, compact = false }) {
         {/* Footer */}
         {filtered.length > 0 && (
           <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-100 text-[10px] text-gray-400 text-center">
-            Showing last 14 days · Tap any item for details · Read status is per-user
+            Tap any item to view details · It will clear for you after reading
           </div>
         )}
       </div>
