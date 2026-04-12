@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Eye, FileText, Pencil, Trash2, Search, Star, X, Plus, Phone, Calendar, User, Users, UserPlus, Shield, AlertTriangle, Printer } from 'lucide-react';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
@@ -284,6 +285,7 @@ function ViewAssociateModal({ associate, onClose }) {
 
 export default function Associates() {
   const { associates, addAssociate, updateAssociate, deleteAssociate, callIns, workFiles, saveWorkFile } = useAppStore();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All Status');
   const [positionFilter, setPositionFilter] = useState('All Positions');
@@ -291,6 +293,18 @@ export default function Associates() {
   const [editAssociate, setEditAssociate] = useState(null);
   const [viewAssociate, setViewAssociate] = useState(null);
   const [workFileAssociate, setWorkFileAssociate] = useState(null);
+
+  // Deep-link from Activity Feed: /associates?workfile=<id>
+  useEffect(() => {
+    const wfId = searchParams.get('workfile');
+    if (!wfId || associates.length === 0) return;
+    const assoc = associates.find(a => a.id === wfId);
+    if (assoc) {
+      setWorkFileAssociate(assoc);
+      // Remove the query param so back/refresh doesn't re-open
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, associates, setSearchParams]);
 
   const handlePrintRoster = () => {
     const list = associates.filter(a => {

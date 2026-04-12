@@ -21,7 +21,7 @@
  *   detail: object with all fields for the detail modal
  */
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format, formatDistanceToNow, parseISO, isValid } from 'date-fns';
 import {
@@ -306,7 +306,8 @@ function generateActivities({
             ['Details', row.details?.replace(/^Auto \[PX Policy\]: /, '') || '—'],
             ['Added By', row.addedBy?.name || '—'],
           ].filter(([, v]) => v && v !== '—'),
-          link: '/associates',
+          // Deep-link: associates page will read ?workfile=ID and open modal
+          link: `/associates?workfile=${assocId}`,
         },
       });
     });
@@ -522,11 +523,21 @@ export default function ActivityFeed({ maxItems = 30, compact = false }) {
   const navigate = useNavigate();
 
   const uid = user?.uid || 'guest';
+  const prevUidRef = useRef(uid);
 
   // Read state — per-user, persisted in localStorage
   const [readIds, setReadIds] = useState(() => loadReadIds(uid));
   const [activeTab, setActiveTab] = useState('all');
   const [selected, setSelected] = useState(null);
+
+  // When uid resolves (e.g. null → real uid after login), reload read state
+  // so marks saved under the real uid are respected immediately
+  useEffect(() => {
+    if (uid !== prevUidRef.current) {
+      prevUidRef.current = uid;
+      setReadIds(loadReadIds(uid));
+    }
+  }, [uid]);
 
   // Generate all activities
   const allActivities = useMemo(() => generateActivities({
