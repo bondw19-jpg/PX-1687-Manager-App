@@ -281,32 +281,63 @@ function generateActivities({
     });
   });
 
-  // ── 7. Work file auto-entries ───────────────────────────────────────────────
+  // ── 7. Work file entries (all manual + auto rows, plus save-level activity) ──
   Object.entries(workFiles).forEach(([assocId, wf]) => {
     const assoc = associates.find(a => a.id === assocId);
-    (wf.rows || []).forEach(row => {
-      const d = safeDate(row.date);
-      if (!d || d < cutoff) return;
-      if (!row.details?.startsWith('Auto')) return;
+    const assocName = assoc?.name || 'Associate';
+
+    // 7a. One "file updated" card based on savedAt — always fires when the file
+    //     is saved, even if the row's incident date is old.
+    const savedD = safeDate(wf.savedAt);
+    if (savedD && savedD >= cutoff) {
+      const filledRows = (wf.rows || []).filter(r => r.date || r.key || r.details);
       items.push({
-        id: `wf-${assocId}-${row.id || row.date}`,
+        id: `wf-save-${assocId}-${wf.savedAt}`,
         type: 'workfile',
         icon: '📁',
         level: 'warning',
-        title: `Work File: ${assoc?.name || 'Associate'}`,
-        body: row.details?.replace(/^Auto \[PX Policy\]: /, '').slice(0, 80) || 'Auto entry added',
-        author: row.addedBy?.name || 'System',
+        title: `Work File Updated: ${assocName}`,
+        body: `${filledRows.length} entr${filledRows.length === 1 ? 'y' : 'ies'} on file`,
+        author: wf.savedBy?.name || 'Manager',
+        ts: savedD.getTime(),
+        detail: {
+          headline: `Work File — ${assocName}`,
+          rows: [
+            ['Associate', assocName],
+            ['Saved By', wf.savedBy?.name || '—'],
+            ['Saved At', savedD.toLocaleString()],
+            ['Total Entries', String(filledRows.length)],
+          ].filter(([, v]) => v && v !== '—'),
+          link: `/team?workfile=${assocId}`,
+        },
+      });
+    }
+
+    // 7b. Individual row cards for rows whose incident date falls in the last 14 days
+    (wf.rows || []).forEach(row => {
+      const d = safeDate(row.date);
+      if (!d || d < cutoff) return;
+      // Skip rows with no meaningful content
+      if (!row.details && !row.key) return;
+      const cleanDetails = row.details?.replace(/^Auto \[PX Policy\]: /, '') || '';
+      items.push({
+        id: `wf-row-${assocId}-${row.id || row.date}`,
+        type: 'workfile',
+        icon: '📁',
+        level: 'warning',
+        title: `Work File: ${assocName}`,
+        body: (cleanDetails || `Key ${row.key}`).slice(0, 80),
+        author: row.addedBy?.name || wf.savedBy?.name || 'Manager',
         ts: d.getTime(),
         detail: {
-          headline: `Work File — ${assoc?.name || 'Associate'}`,
+          headline: `Work File — ${assocName}`,
           rows: [
-            ['Associate', assoc?.name || '—'],
+            ['Associate', assocName],
             ['Date', row.date || '—'],
             ['Key', row.key || '—'],
-            ['Details', row.details?.replace(/^Auto \[PX Policy\]: /, '') || '—'],
-            ['Added By', row.addedBy?.name || '—'],
+            ['Details', cleanDetails || '—'],
+            ['Added By', row.addedBy?.name || wf.savedBy?.name || '—'],
           ].filter(([, v]) => v && v !== '—'),
-          // Deep-link: associates page will read ?workfile=ID and open modal
           link: `/team?workfile=${assocId}`,
         },
       });
