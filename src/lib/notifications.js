@@ -291,7 +291,7 @@ export function generateNotifications({
         icon: '📁',
         title: `Work File Updated: ${assoc.name}`,
         body:  latest.details?.replace(/^Auto \[PX Policy\]: /, '') || 'New auto entry added.',
-        link: '/associates',
+        link: '/team',
         ts: safeDate(latest.date)?.getTime() || Date.now(),
       });
     }

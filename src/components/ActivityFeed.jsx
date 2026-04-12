@@ -307,7 +307,7 @@ function generateActivities({
             ['Added By', row.addedBy?.name || '—'],
           ].filter(([, v]) => v && v !== '—'),
           // Deep-link: associates page will read ?workfile=ID and open modal
-          link: `/associates?workfile=${assocId}`,
+          link: `/team?workfile=${assocId}`,
         },
       });
     });

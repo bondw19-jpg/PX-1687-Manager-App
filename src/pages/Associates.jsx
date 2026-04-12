@@ -294,7 +294,7 @@ export default function Associates() {
   const [viewAssociate, setViewAssociate] = useState(null);
   const [workFileAssociate, setWorkFileAssociate] = useState(null);
 
-  // Deep-link from Activity Feed: /associates?workfile=<id>
+  // Deep-link from Activity Feed: /team?workfile=<id>
   useEffect(() => {
     const wfId = searchParams.get('workfile');
     if (!wfId || associates.length === 0) return;
