@@ -47,10 +47,32 @@ export default function Login() {
     if (!email || !password) { setError('Please enter email and password.'); return; }
     setLoading(true);
     try {
-      const { signInWithEmailAndPassword } = await import('firebase/auth');
+      const { signInWithEmailAndPassword, signOut } = await import('firebase/auth');
       const auth = await getAuth();
       const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
       const u    = cred.user;
+
+      // ── Disabled-user check ─────────────────────────────────────────────
+      // Non-admin users: check if the Admin has disabled this account in Firestore.
+      if (u.email !== ADMIN_EMAIL) {
+        try {
+          const { getFirebaseModules } = await import('../lib/firebase');
+          const { db } = await getFirebaseModules();
+          const { doc, getDoc } = await import('firebase/firestore');
+          const presSnap = await getDoc(doc(db, 'stores', 'store_1687', 'presence', u.uid));
+          if (presSnap.exists() && presSnap.data().disabled === true) {
+            // Sign out immediately and show error
+            await signOut(auth);
+            setError('Your account has been disabled. Please contact your manager.');
+            setLoading(false);
+            return;
+          }
+        } catch {
+          // Firestore unreachable — allow login gracefully (offline mode)
+        }
+      }
+      // ───────────────────────────────────────────────────────────────────
+
       setUser({
         uid:     u.uid,
         email:   u.email,

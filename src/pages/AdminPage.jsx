@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Shield, Store, BarChart2, Users, ClipboardList, AlertTriangle,
   Activity, ChevronDown, ChevronUp, Save, Trash2, RefreshCw,
   CheckCircle2, XCircle, Plus, X, Edit3, Database, Wifi,
-  WifiOff, Lock, Eye, EyeOff, LogOut, ArrowLeft
+  WifiOff, Lock, Eye, EyeOff, LogOut, ArrowLeft,
+  UserCheck, UserX, UserCog, Copy, Link, Mail, Crown, ShieldCheck,
+  ShieldOff, Key, RotateCcw, Ban
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/appStore';
@@ -495,6 +497,400 @@ function ChecklistTemplates({ onToast }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SECTION 4b: User Management
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ROLES = [
+  { value: 'admin',   label: 'Admin',   color: 'bg-red-100 text-red-700',    icon: Crown },
+  { value: 'manager', label: 'Manager', color: 'bg-blue-100 text-blue-700',   icon: ShieldCheck },
+  { value: 'viewer',  label: 'Viewer',  color: 'bg-gray-100 text-gray-600',   icon: Eye },
+];
+
+function roleMeta(role) {
+  return ROLES.find(r => r.value === role) || ROLES[1];
+}
+
+function UserManagement({ onToast }) {
+  const { dbReady, dbMode, user: adminUser } = useAppStore();
+  const [users, setUsers]         = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [saving, setSaving]       = useState(null); // uid being saved
+  const [editRole, setEditRole]   = useState({}); // { uid: role }
+  const [confirm, setConfirm]     = useState(null);
+  const [inviteCode, setInviteCode] = useState('');
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
+  const unsubRef = useRef(() => {});
+
+  // ── Format helpers ────────────────────────────────────────────────────────
+  const formatLastSeen = (ts) => {
+    if (!ts) return 'Never';
+    const date = ts.toDate ? ts.toDate() : new Date(ts);
+    const diffMs = Date.now() - date.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1)  return 'just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24)  return `${diffHr}h ago`;
+    return date.toLocaleDateString();
+  };
+
+  const isOnline = (u) => {
+    if (!u.isOnline || !u.lastSeen) return false;
+    const d = u.lastSeen.toDate ? u.lastSeen.toDate() : new Date(u.lastSeen);
+    return (Date.now() - d.getTime()) < 3 * 60 * 1000;
+  };
+
+  // ── Load users from presence collection ──────────────────────────────────
+  useEffect(() => {
+    if (!dbReady || dbMode !== 'firestore') { setLoading(false); return; }
+    (async () => {
+      try {
+        const { getFirebaseModules } = await import('../lib/firebase');
+        const { db } = await getFirebaseModules();
+        const { collection, onSnapshot } = await import('firebase/firestore');
+        const ref = collection(db, 'stores', 'store_1687', 'presence');
+        unsubRef.current = onSnapshot(ref, snap => {
+          const list = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+          list.sort((a, b) => {
+            const aOn = isOnline(a) ? 1 : 0;
+            const bOn = isOnline(b) ? 1 : 0;
+            if (bOn !== aOn) return bOn - aOn;
+            // Admin first, then by name
+            const aAdmin = a.email === ADMIN_EMAIL ? 1 : 0;
+            const bAdmin = b.email === ADMIN_EMAIL ? 1 : 0;
+            if (bAdmin !== aAdmin) return bAdmin - aAdmin;
+            return (a.name || a.email || '').localeCompare(b.name || b.email || '');
+          });
+          setUsers(list);
+          setLoading(false);
+        }, err => {
+          onToast('Error loading users: ' + err.message, 'error');
+          setLoading(false);
+        });
+      } catch (e) {
+        onToast('Failed to load users: ' + e.message, 'error');
+        setLoading(false);
+      }
+    })();
+    return () => unsubRef.current();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbReady, dbMode]);
+
+  // ── Load current invite code ──────────────────────────────────────────────
+  const loadInviteCode = async () => {
+    setInviteLoading(true);
+    try {
+      const { getFirebaseModules } = await import('../lib/firebase');
+      const { db } = await getFirebaseModules();
+      const { doc, getDoc } = await import('firebase/firestore');
+      const snap = await getDoc(doc(db, 'stores', 'store_1687', 'config', 'invite'));
+      setInviteCode(snap.exists() ? snap.data().code || '' : '');
+    } catch (e) {
+      onToast('Could not load invite code', 'error');
+    }
+    setInviteLoading(false);
+  };
+
+  const generateInviteCode = async () => {
+    setInviteLoading(true);
+    try {
+      const { getFirebaseModules } = await import('../lib/firebase');
+      const { db } = await getFirebaseModules();
+      const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+      const code = Math.random().toString(36).slice(2, 8).toUpperCase();
+      await setDoc(doc(db, 'stores', 'store_1687', 'config', 'invite'), {
+        code,
+        createdBy: adminUser?.uid,
+        createdAt: serverTimestamp(),
+      });
+      setInviteCode(code);
+      onToast('New invite code generated!', 'success');
+    } catch (e) {
+      onToast('Failed to generate code: ' + e.message, 'error');
+    }
+    setInviteLoading(false);
+  };
+
+  // ── Update role ────────────────────────────────────────────────────────────
+  const saveRole = async (uid, role) => {
+    setSaving(uid);
+    try {
+      const { getFirebaseModules } = await import('../lib/firebase');
+      const { db } = await getFirebaseModules();
+      const { doc, updateDoc } = await import('firebase/firestore');
+      await updateDoc(doc(db, 'stores', 'store_1687', 'presence', uid), { role });
+      setEditRole(prev => { const n = { ...prev }; delete n[uid]; return n; });
+      onToast('Role updated!', 'success');
+    } catch (e) {
+      onToast('Failed to update role: ' + e.message, 'error');
+    }
+    setSaving(null);
+  };
+
+  // ── Toggle disabled ────────────────────────────────────────────────────────
+  const toggleDisabled = async (uid, currentlyDisabled) => {
+    setSaving(uid);
+    try {
+      const { getFirebaseModules } = await import('../lib/firebase');
+      const { db } = await getFirebaseModules();
+      const { doc, updateDoc } = await import('firebase/firestore');
+      await updateDoc(doc(db, 'stores', 'store_1687', 'presence', uid), {
+        disabled: !currentlyDisabled,
+      });
+      onToast(currentlyDisabled ? 'User re-enabled.' : 'User disabled — they cannot log in.', 'success');
+    } catch (e) {
+      onToast('Failed: ' + e.message, 'error');
+    }
+    setSaving(null);
+  };
+
+  // ── Remove from store ──────────────────────────────────────────────────────
+  const removeUser = async (uid, name) => {
+    setConfirm({
+      title: `Remove ${name}?`,
+      message: 'This removes them from the store. They can rejoin with the invite code.',
+      confirmLabel: 'Remove',
+      onConfirm: async () => {
+        setConfirm(null);
+        setSaving(uid);
+        try {
+          const { getFirebaseModules } = await import('../lib/firebase');
+          const { db } = await getFirebaseModules();
+          const { doc, deleteDoc } = await import('firebase/firestore');
+          await deleteDoc(doc(db, 'stores', 'store_1687', 'presence', uid));
+          onToast(`${name} removed from store.`, 'success');
+        } catch (e) {
+          onToast('Failed to remove: ' + e.message, 'error');
+        }
+        setSaving(null);
+      },
+    });
+  };
+
+  // ── Require Firestore ─────────────────────────────────────────────────────
+  if (!dbReady || dbMode !== 'firestore') {
+    return (
+      <div className="pt-4">
+        <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 flex items-center gap-2 text-sm text-amber-700">
+          <WifiOff size={16} />
+          <span>Connect cloud sync to manage users.</span>
+        </div>
+      </div>
+    );
+  }
+
+  const onlineCount = users.filter(isOnline).length;
+
+  return (
+    <div className="pt-3 space-y-4">
+
+      {/* ── Summary + Invite toggle ─────────────────────────────────────── */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-50 border border-green-100 px-2.5 py-1 rounded-full">
+            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse inline-block" />
+            {onlineCount} online now
+          </span>
+          <span className="text-xs text-gray-400">{users.length} total users</span>
+        </div>
+        <button
+          onClick={() => { setShowInvite(v => !v); if (!inviteCode) loadInviteCode(); }}
+          className="flex items-center gap-1.5 text-xs font-semibold bg-primary text-white px-3 py-1.5 rounded-xl"
+        >
+          <Link size={13} /> Invite Code
+        </button>
+      </div>
+
+      {/* ── Invite code panel ──────────────────────────────────────────── */}
+      {showInvite && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+          <div className="flex items-center gap-2 text-sm font-bold text-blue-800">
+            <Key size={15} /> Store Invite Code
+          </div>
+          <p className="text-xs text-blue-700">
+            Share this code with new managers. They enter it on first login to join this store.
+            Rotate it anytime to revoke old links.
+          </p>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 bg-white border border-blue-200 rounded-xl px-4 py-2.5 font-mono font-bold text-lg text-center tracking-widest text-blue-900">
+              {inviteLoading ? '···' : (inviteCode || 'No code yet')}
+            </div>
+            {inviteCode && (
+              <button
+                onClick={() => { navigator.clipboard.writeText(inviteCode); onToast('Invite code copied!', 'success'); }}
+                className="p-2.5 bg-white border border-blue-200 rounded-xl text-blue-600"
+              >
+                <Copy size={16} />
+              </button>
+            )}
+          </div>
+          <button
+            onClick={generateInviteCode}
+            disabled={inviteLoading}
+            className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-2.5 rounded-xl text-sm font-bold disabled:opacity-50"
+          >
+            <RotateCcw size={14} /> {inviteCode ? 'Rotate Code' : 'Generate Code'}
+          </button>
+        </div>
+      )}
+
+      {/* ── Users list ─────────────────────────────────────────────────── */}
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <RefreshCw size={20} className="animate-spin text-gray-400" />
+        </div>
+      ) : users.length === 0 ? (
+        <div className="text-center py-8 text-gray-400">
+          <Users size={32} className="mx-auto mb-2 text-gray-200" />
+          <p className="text-sm">No users yet.</p>
+          <p className="text-xs mt-1">Users appear here after they sign in.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {users.map(u => {
+            const online      = isOnline(u);
+            const isMe        = u.uid === adminUser?.uid;
+            const isAdmin     = u.email === ADMIN_EMAIL;
+            const disabled    = !!u.disabled;
+            const initial     = (u.name || u.email || '?')[0].toUpperCase();
+            const currentRole = editRole[u.uid] ?? u.role ?? 'manager';
+            const rm          = roleMeta(currentRole);
+            const RoleIcon    = rm.icon;
+            const isSaving    = saving === u.uid;
+            const hasRoleChange = editRole[u.uid] && editRole[u.uid] !== u.role;
+
+            return (
+              <div
+                key={u.uid}
+                className={`rounded-2xl border transition-colors ${
+                  disabled ? 'bg-gray-50 border-gray-200 opacity-60'
+                  : online  ? 'bg-green-50 border-green-100'
+                  : 'bg-white border-gray-100'
+                }`}
+              >
+                {/* ── Top row: avatar + name + status ── */}
+                <div className="flex items-center gap-3 px-3 py-3">
+                  {/* Avatar */}
+                  <div className="relative shrink-0">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm text-white ${
+                      isAdmin ? 'bg-red-500' : disabled ? 'bg-gray-400' : 'bg-primary'
+                    }`}>
+                      {initial}
+                    </div>
+                    <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${
+                      online ? 'bg-green-500' : 'bg-gray-300'
+                    }`} />
+                  </div>
+
+                  {/* Name + email */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-sm font-bold text-gray-800 truncate">
+                        {u.name || u.email?.split('@')[0] || 'Unknown'}
+                      </span>
+                      {isMe && <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-bold">You</span>}
+                      {isAdmin && <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full font-bold">ADMIN</span>}
+                      {disabled && <span className="text-[10px] bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded-full font-bold">DISABLED</span>}
+                    </div>
+                    <div className="text-xs text-gray-400 truncate">{u.email || u.uid}</div>
+                  </div>
+
+                  {/* Online / last seen */}
+                  <div className="shrink-0 text-right">
+                    <span className={`text-xs font-semibold ${online ? 'text-green-600' : 'text-gray-400'}`}>
+                      {online ? '● Online' : '○ Offline'}
+                    </span>
+                    <div className="text-[10px] text-gray-400 mt-0.5">{formatLastSeen(u.lastSeen)}</div>
+                  </div>
+                </div>
+
+                {/* ── Role + actions row ── */}
+                {!isAdmin && (
+                  <div className="px-3 pb-3 flex items-center gap-2 flex-wrap border-t border-gray-100 pt-2.5">
+
+                    {/* Role selector */}
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                      <RoleIcon size={13} className={rm.color.split(' ')[1]} />
+                      <select
+                        value={currentRole}
+                        disabled={isSaving || isMe}
+                        onChange={e => setEditRole(prev => ({ ...prev, [u.uid]: e.target.value }))}
+                        className={`text-xs font-semibold border rounded-lg px-2 py-1 bg-white flex-1 min-w-0 ${
+                          hasRoleChange ? 'border-primary text-primary' : 'border-gray-200 text-gray-600'
+                        }`}
+                      >
+                        {ROLES.filter(r => r.value !== 'admin').map(r => (
+                          <option key={r.value} value={r.value}>{r.label}</option>
+                        ))}
+                      </select>
+                      {hasRoleChange && (
+                        <button
+                          onClick={() => saveRole(u.uid, editRole[u.uid])}
+                          disabled={isSaving}
+                          className="flex items-center gap-1 bg-primary text-white text-xs font-bold px-2.5 py-1.5 rounded-lg shrink-0"
+                        >
+                          {isSaving ? <RefreshCw size={11} className="animate-spin" /> : <Save size={11} />}
+                          Save
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Disable / Enable */}
+                    {!isMe && (
+                      <button
+                        onClick={() => toggleDisabled(u.uid, disabled)}
+                        disabled={isSaving}
+                        className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg border shrink-0 ${
+                          disabled
+                            ? 'bg-green-50 border-green-200 text-green-700'
+                            : 'bg-yellow-50 border-yellow-200 text-yellow-700'
+                        }`}
+                      >
+                        {disabled ? <UserCheck size={12} /> : <Ban size={12} />}
+                        {disabled ? 'Enable' : 'Disable'}
+                      </button>
+                    )}
+
+                    {/* Remove */}
+                    {!isMe && (
+                      <button
+                        onClick={() => removeUser(u.uid, u.name || u.email)}
+                        disabled={isSaving}
+                        className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg border bg-red-50 border-red-200 text-red-600 shrink-0"
+                      >
+                        <Trash2 size={12} /> Remove
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Info note */}
+      <p className="text-[10px] text-gray-400 text-center">
+        Roles: Admin (full access) · Manager (all modules) · Viewer (read-only) ·
+        Disabled users cannot log in · Updates live
+      </p>
+
+      {/* Confirm dialog */}
+      {confirm && (
+        <ConfirmDialog
+          title={confirm.title}
+          message={confirm.message}
+          confirmLabel={confirm.confirmLabel}
+          onConfirm={confirm.onConfirm}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SECTION 5: Danger Zone
 // ─────────────────────────────────────────────────────────────────────────────
 function DangerZone({ onToast }) {
@@ -868,9 +1264,9 @@ export default function AdminPage() {
               <StoreSettings onToast={onToast} />
             </Section>
 
-            {/* Section 3: Who is Online */}
-            <Section icon={Users} title="Who is Online" color="text-green-600" defaultOpen={true}>
-              <SignedInUsers onToast={onToast} />
+            {/* Section 3: User Management */}
+            <Section icon={UserCog} title="User Management" color="text-indigo-600" defaultOpen={true}>
+              <UserManagement onToast={onToast} />
             </Section>
 
             {/* Section 5: App Health */}
@@ -889,6 +1285,11 @@ export default function AdminPage() {
             {/* Section 4: Checklist Templates */}
             <Section icon={ClipboardList} title="Checklist Templates" color="text-amber-600" defaultOpen={false}>
               <ChecklistTemplates onToast={onToast} />
+            </Section>
+
+            {/* Section 4b: Who is Online */}
+            <Section icon={Users} title="Who is Online" color="text-green-600" defaultOpen={false}>
+              <SignedInUsers onToast={onToast} />
             </Section>
 
             {/* Section 6: Danger Zone */}
