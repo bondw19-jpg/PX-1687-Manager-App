@@ -6,6 +6,7 @@ import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import PreviewUpdateBanner from '../components/PreviewUpdateBanner';
+import ActivityFeed from '../components/ActivityFeed';
 
 const PREVIEW_URL = 'https://4173-il9welzg75eglof37wb6r-ea026bf9.sandbox.novita.ai';
 
@@ -410,6 +411,9 @@ export default function Dashboard() {
         </div>
 
         </div>{/* end desktop 2-col */}
+
+        {/* Team Activity Feed — full width, below 2-col grid */}
+        <ActivityFeed />
 
         <div className="h-4" />
       </div>
