@@ -69,12 +69,12 @@ function EventDetailModal({ event, onClose }) {
       className="modal-overlay"
       onClick={e => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up">
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
         {/* Colored top bar */}
-        <div className={`h-1.5 w-full rounded-t-2xl ${colors.bar}`} />
+        <div className={`h-1.5 w-full rounded-t-2xl ${colors.bar} flex-shrink-0`} />
 
         {/* Header */}
-        <div className="flex items-start justify-between p-4 pb-3">
+        <div className="flex items-start justify-between p-4 pb-3 flex-shrink-0">
           <div className="flex-1 pr-3">
             <div className="flex items-center gap-2 mb-1">
               <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${colors.badge}`}>
@@ -97,7 +97,7 @@ function EventDetailModal({ event, onClose }) {
         </div>
 
         {/* Details */}
-        <div className="px-4 pb-6 space-y-3">
+        <div className="modal-body px-4 pb-6 space-y-3">
           {/* Date */}
           <div className="flex items-start gap-3">
             <div className="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">

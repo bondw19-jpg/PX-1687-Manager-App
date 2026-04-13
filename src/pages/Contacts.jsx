@@ -33,12 +33,12 @@ function ContactModal({ contact, onClose, onSave }) {
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up">
-        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-bold text-lg text-gray-800">{contact ? 'Edit Contact' : 'New Contact'}</h2>
           <button onClick={onClose} className="p-2 text-gray-400 rounded-lg"><X size={20} /></button>
         </div>
-        <div className="desktop-page-content p-4 lg:p-0 space-y-3">
+        <div className="modal-body p-4 space-y-3">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <div>
               <label className="text-xs font-semibold text-gray-600 mb-1 block">Name *</label>
@@ -103,6 +103,8 @@ function ContactModal({ contact, onClose, onSave }) {
               ))}
             </div>
           </div>
+        </div>
+        <div className="modal-footer">
           <button
             onClick={handleSave}
             className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-sm"

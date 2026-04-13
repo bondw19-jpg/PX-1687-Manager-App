@@ -86,9 +86,10 @@ body {
   .modal-overlay > div {
     border-radius: 1.25rem !important;
     animation: fadeScaleIn 0.2s ease-out !important;
-    /* On desktop: switch from fixed h-[90vh] back to max-height so it shrinks if content is short */
+    /* Desktop: let height shrink to content, but cap at 90vh */
     height: auto !important;
     max-height: 90vh !important;
+    padding-bottom: 0 !important; /* no safe-area needed on desktop */
   }
 
   /* Desktop page content — constrained width, centered */
@@ -196,6 +197,36 @@ input:focus, textarea:focus, select:focus {
   display: flex;
   align-items: flex-end;
   justify-content: center;
+}
+
+/* Mobile bottom-sheet inner panel — always anchored to bottom, never overflows viewport */
+.modal-overlay > div {
+  /* Use dynamic viewport height so iOS Safari address bar is accounted for */
+  max-height: 85dvh;
+  height: 85dvh;
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;          /* children must scroll, not the sheet itself */
+  border-radius: 1.25rem 1.25rem 0 0;
+  /* Respect iPhone home-bar safe area */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Modal body — scrollable flex child that fills remaining space */
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Modal footer — always pinned at bottom, never scrolls away */
+.modal-footer {
+  flex-shrink: 0;
+  border-top: 1px solid #f3f4f6;
+  padding: 1rem;
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 1rem));
 }
 
 /* Scrollable content area */

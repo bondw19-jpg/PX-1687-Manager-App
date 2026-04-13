@@ -73,8 +73,8 @@ function Toast({ message, type, onDone }) {
 // ── Confirm Dialog ────────────────────────────────────────────────────────────
 function ConfirmDialog({ title, message, confirmLabel = 'Confirm', danger = false, onConfirm, onCancel }) {
   return (
-    <div className="modal-overlay">
-      <div className="bg-white rounded-2xl w-full max-w-[360px] mx-4 p-6 shadow-xl animate-fade-scale-in">
+    <div className="modal-overlay" style={{alignItems:'center'}}>
+      <div className="bg-white rounded-2xl w-full max-w-[360px] mx-4 p-6 shadow-xl animate-fade-scale-in" style={{height:'auto',maxHeight:'90vh',display:'block'}}>
         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 ${danger ? 'bg-red-100' : 'bg-blue-100'}`}>
           {danger ? <AlertCircle size={24} className="text-red-600" /> : <Info size={24} className="text-blue-600" />}
         </div>

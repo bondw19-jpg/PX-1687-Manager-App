@@ -44,12 +44,12 @@ function TaskModal({ task, associates, onClose, onSave }) {
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-bold text-lg text-gray-800">{task ? 'Edit Task' : 'New Task'}</h2>
           <button onClick={onClose} className="p-2 text-gray-400 rounded-lg"><X size={20} /></button>
         </div>
-        <div className="overflow-y-auto flex-1 p-4 space-y-3">
+        <div className="modal-body p-4 space-y-3">
           <div>
             <label className="text-xs font-semibold text-gray-600 mb-1 block">Title *</label>
             <input
@@ -140,7 +140,7 @@ function TaskModal({ task, associates, onClose, onSave }) {
             </div>
           </div>
         </div>
-        <div className="p-4 border-t border-gray-100">
+        <div className="modal-footer">
           <button
             onClick={handleSave}
             className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-sm"

@@ -300,10 +300,10 @@ function LogCallInModal({ onClose, onSave, associates }) {
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full max-w-[520px] animate-slide-up max-h-[92vh] overflow-y-auto">
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
 
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
           <div>
             <h2 className="font-bold text-lg text-gray-800">Log Attendance Event</h2>
             <p className="text-xs text-gray-400">PX Attendance Point System</p>
@@ -311,7 +311,7 @@ function LogCallInModal({ onClose, onSave, associates }) {
           <button onClick={onClose} className="p-2 text-gray-400 rounded-lg"><X size={20} /></button>
         </div>
 
-        <div className="p-4 space-y-4">
+        <div className="modal-body p-4 space-y-4">
 
           {/* Associate */}
           <div>
@@ -514,6 +514,8 @@ function LogCallInModal({ onClose, onSave, associates }) {
             </ul>
           </div>
 
+        </div>
+        <div className="modal-footer">
           <button onClick={handleSave}
             className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-sm">
             Log Attendance Event
@@ -553,7 +555,7 @@ function CallInDetailModal({ callIn, onClose, onDelete, associates, allCallIns }
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full max-w-[520px] animate-slide-up max-h-[92vh] flex flex-col">
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
 
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
@@ -570,7 +572,7 @@ function CallInDetailModal({ callIn, onClose, onDelete, associates, allCallIns }
           </div>
         </div>
 
-        <div className="p-4 space-y-4 overflow-y-auto flex-1">
+        <div className="modal-body p-4 space-y-4">
 
           {/* Associate + category badges */}
           <div className="flex items-center gap-4">

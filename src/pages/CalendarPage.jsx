@@ -29,10 +29,10 @@ function EventDetailModal({ event, onClose, onDelete }) {
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up">
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
         {/* Header stripe */}
-        <div className={`h-2 w-full rounded-t-2xl ${colorClass}`} />
-        <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-gray-100">
+        <div className={`h-2 w-full rounded-t-2xl ${colorClass} flex-shrink-0`} />
+        <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-gray-100 flex-shrink-0">
           <span className={`text-xs font-bold px-2.5 py-1 rounded-full text-white ${colorClass}`}>
             {event.type}
           </span>
@@ -41,7 +41,7 @@ function EventDetailModal({ event, onClose, onDelete }) {
           </button>
         </div>
 
-        <div className="desktop-page-content p-4 lg:p-0 space-y-4">
+        <div className="modal-body p-4 space-y-4">
           {/* Title */}
           <h2 className="text-lg font-bold text-gray-800 leading-snug">{event.title}</h2>
 
@@ -113,12 +113,12 @@ function AddEventModal({ selectedDate, onClose, onSave }) {
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up">
-        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-bold text-lg text-gray-800">New Event</h2>
           <button onClick={onClose} className="p-2 text-gray-400 rounded-lg"><X size={20} /></button>
         </div>
-        <div className="p-4 space-y-3">
+        <div className="modal-body p-4 space-y-3">
           <div>
             <label className="text-xs font-semibold text-gray-600 mb-1 block">Title *</label>
             <input
@@ -172,6 +172,8 @@ function AddEventModal({ selectedDate, onClose, onSave }) {
               onChange={e => setForm({ ...form, notes: e.target.value })}
             />
           </div>
+        </div>
+        <div className="modal-footer">
           <button
             onClick={handleSave}
             className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-sm"

@@ -416,9 +416,9 @@ function ActivityDetailModal({ activity, onClose, onMarkRead }) {
       className="modal-overlay"
       onClick={e => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-white rounded-t-2xl w-full max-w-[520px] animate-slide-up max-h-[88vh] flex flex-col">
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
         {/* Colored top strip */}
-        <div className={`h-1.5 w-full rounded-t-2xl ${LEVEL_LEFT[activity.level] || LEVEL_LEFT.info}`} />
+        <div className={`h-1.5 w-full rounded-t-2xl ${LEVEL_LEFT[activity.level] || LEVEL_LEFT.info} flex-shrink-0`} />
 
         {/* Header */}
         <div className="flex items-start justify-between p-4 pb-3 border-b border-gray-100 flex-shrink-0">
@@ -440,7 +440,7 @@ function ActivityDetailModal({ activity, onClose, onMarkRead }) {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div className="modal-body p-4 space-y-3">
           {/* Full body text (announcements, notes) */}
           {activity.detail?.fullBody && (
             <div className="bg-gray-50 rounded-xl p-3 text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
@@ -471,7 +471,7 @@ function ActivityDetailModal({ activity, onClose, onMarkRead }) {
         </div>
 
         {/* Footer actions */}
-        <div className="flex-shrink-0 p-4 pt-0 flex gap-2">
+        <div className="modal-footer flex gap-2">
           {activity.detail?.link && (
             <button
               onClick={handleNavigate}

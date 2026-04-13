@@ -77,14 +77,14 @@ function EditNameModal({ currentName, onSave, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up">
-        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-bold text-gray-800">Edit Display Name</h2>
           <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg">
             <X size={20} />
           </button>
         </div>
-        <div className="p-5 space-y-4">
+        <div className="modal-body p-5 space-y-4">
           <div>
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">
               Full Name
@@ -163,14 +163,14 @@ function ChangePasswordModal({ onClose }) {
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up">
-        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-bold text-gray-800">Change Password</h2>
           <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg">
             <X size={20} />
           </button>
         </div>
-        <div className="p-5 space-y-3">
+        <div className="modal-body p-5 space-y-3">
           {success ? (
             <div className="text-center py-6 space-y-3">
               <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto">
@@ -269,14 +269,14 @@ function EditStoreNameModal({ currentName, onSave, onClose }) {
   const [val, setVal] = useState(currentName || '');
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up">
-        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-bold text-gray-800">Edit Store Name</h2>
           <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg">
             <X size={20} />
           </button>
         </div>
-        <div className="p-5 space-y-4">
+        <div className="modal-body p-5 space-y-4">
           <div>
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Store Name</label>
             <input

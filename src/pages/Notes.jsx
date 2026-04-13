@@ -378,14 +378,14 @@ function NoteModal({ note, onClose, onSave }) {
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full max-w-[600px] animate-slide-up max-h-[92vh] flex flex-col">
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-bold text-lg text-gray-800">{note ? 'Edit Note' : 'New Note'}</h2>
           <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg"><X size={20} /></button>
         </div>
 
-        <div className="p-4 space-y-4 overflow-y-auto flex-1">
+        <div className="modal-body p-4 space-y-4">
           {/* Title */}
           <div>
             <label className="text-xs font-semibold text-gray-600 mb-1 block">Title *</label>
@@ -445,7 +445,7 @@ function NoteModal({ note, onClose, onSave }) {
           </button>
         </div>
 
-        <div className="p-4 border-t border-gray-100 flex-shrink-0">
+        <div className="modal-footer">
           <button
             onClick={handleSave}
             className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-sm hover:bg-primary-dark transition-colors"

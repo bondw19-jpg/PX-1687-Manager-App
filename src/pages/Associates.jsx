@@ -54,8 +54,8 @@ function AssociateModal({ associate, onClose, onSave }) {
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-bold text-lg text-gray-800">
             {associate ? 'Edit Associate' : 'Add Associate'}
           </h2>
@@ -64,7 +64,7 @@ function AssociateModal({ associate, onClose, onSave }) {
           </button>
         </div>
 
-        <div className="overflow-y-auto p-4 space-y-3 flex-1">
+        <div className="modal-body p-4 space-y-3">
           <div>
             <label className="text-xs font-semibold text-gray-600 mb-1 block">Name *</label>
             <input
@@ -160,7 +160,7 @@ function AssociateModal({ associate, onClose, onSave }) {
           </div>
         </div>
 
-        <div className="p-4 border-t border-gray-100">
+        <div className="modal-footer">
           <button
             onClick={handleSave}
             className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-sm active:bg-primary-dark"
@@ -180,14 +180,14 @@ function ViewAssociateModal({ associate, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up max-h-[85vh] flex flex-col">
-        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-bold text-lg text-gray-800">Associate Details</h2>
           <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg">
             <X size={20} />
           </button>
         </div>
-        <div className="overflow-y-auto p-4 space-y-4">
+        <div className="modal-body p-4 space-y-4">
           <div className="flex items-center gap-4">
             <div className={`w-16 h-16 ${getColor(associate.name)} rounded-2xl flex items-center justify-center text-white text-2xl font-bold`}>
               {associate.name?.[0]?.toUpperCase()}

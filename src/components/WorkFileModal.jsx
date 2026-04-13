@@ -149,9 +149,9 @@ export default function WorkFileModal({ associate, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up max-h-[92vh] flex flex-col">
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
           <div className="flex items-center gap-2">
             <span className="text-lg">📋</span>
             <h2 className="font-bold text-gray-800">Associate Work File</h2>
@@ -161,7 +161,7 @@ export default function WorkFileModal({ associate, onClose }) {
           </button>
         </div>
 
-        <div className="overflow-y-auto flex-1">
+        <div className="modal-body">
           {/* Info Header */}
           <div className="p-4 bg-gray-50 border-b border-gray-100">
             <div className="text-center font-bold text-sm text-gray-800 mb-3 uppercase tracking-wide">
@@ -306,7 +306,7 @@ export default function WorkFileModal({ associate, onClose }) {
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 border-t border-gray-100 space-y-2">
+        <div className="modal-footer space-y-2">
           <div className="flex gap-2">
             <button
               onClick={onClose}
