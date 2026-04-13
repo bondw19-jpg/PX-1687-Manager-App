@@ -92,7 +92,17 @@ function UpdateModal({ onClose, previewUrl }) {
   const [expandedVersion, setExpandedVersion] = useState(UPDATES[0].version);
 
   const handlePreview = () => {
-    window.open(previewUrl, '_blank', 'noopener,noreferrer');
+    // Open in a mobile-sized popup (iPhone 14 Pro dimensions: 393×852)
+    // Centers the popup on the current screen
+    const w = 393;
+    const h = 852;
+    const left = Math.max(0, Math.round(window.screen.width  / 2 - w / 2));
+    const top  = Math.max(0, Math.round(window.screen.height / 2 - h / 2));
+    window.open(
+      previewUrl,
+      'px_preview',
+      `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes,noopener,noreferrer`
+    );
   };
 
   return (
