@@ -106,26 +106,17 @@ function UpdateModal({ onClose, previewUrl }) {
   };
 
   return (
-    <div
-      style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:9999,
-               display:'flex', flexDirection:'column', justifyContent:'flex-end', alignItems:'stretch' }}
-      onClick={e => e.target === e.currentTarget && onClose()}
-    >
-      {/* Sheet — fills bottom 85% of viewport, never taller */}
-      <div style={{ background:'#fff', borderRadius:'1.25rem 1.25rem 0 0',
-                    display:'flex', flexDirection:'column',
-                    height:'85dvh', maxHeight:'85dvh',
-                    width:'100%', maxWidth:'480px', margin:'0 auto',
-                    overflow:'hidden' }}>
+    <div className="modal-overlay" style={{zIndex:9999}} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
 
-        {/* ── Sticky Header ── */}
-        <div className="relative bg-gradient-to-br from-primary to-primary-dark p-5 text-white overflow-hidden flex-shrink-0">
+        {/* ── Header ── */}
+        <div className="relative bg-gradient-to-br from-primary to-primary-dark p-5 text-white overflow-hidden flex-shrink-0 rounded-t-2xl">
           <div className="absolute -top-4 -right-4 w-24 h-24 bg-white/10 rounded-full" />
           <div className="absolute -bottom-6 -left-6 w-20 h-20 bg-white/10 rounded-full" />
 
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-1.5 bg-white/20 hover:bg-white/30 rounded-xl transition-all"
+            className="absolute top-4 right-4 p-1.5 bg-white/20 hover:bg-white/30 rounded-xl transition-all z-10"
           >
             <X size={18} />
           </button>
@@ -156,8 +147,8 @@ function UpdateModal({ onClose, previewUrl }) {
           </div>
         </div>
 
-        {/* ── Scrollable Changelog (flex-1 + overflow-y scroll) ── */}
-        <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'1rem', gap:'0.75rem', display:'flex', flexDirection:'column' }}>
+        {/* ── Scrollable Changelog ── */}
+        <div className="modal-body p-4 space-y-3">
           {UPDATES.map((update) => {
             const isExpanded = expandedVersion === update.version;
             return (
@@ -204,9 +195,8 @@ function UpdateModal({ onClose, previewUrl }) {
           })}
         </div>
 
-        {/* ── Sticky Footer (always visible at bottom) ── */}
-        <div style={{ padding:'1rem', borderTop:'1px solid #f3f4f6', display:'flex', flexDirection:'column', gap:'0.5rem', flexShrink:0,
-                      paddingBottom:'max(1rem, env(safe-area-inset-bottom))' }}>
+        {/* ── Footer ── */}
+        <div className="modal-footer space-y-2">
           <button
             onClick={handlePreview}
             className="w-full bg-primary text-white py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:bg-primary-dark shadow-md shadow-red-100 transition-all"
