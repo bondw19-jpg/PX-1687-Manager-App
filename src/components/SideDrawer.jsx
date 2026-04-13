@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, PhoneMissed, Star, Calendar,
@@ -60,19 +61,19 @@ export default function SideDrawer({ isOpen, onClose }) {
     onClose();
   };
 
-  return (
+  const drawerContent = (
     <>
       {/* Overlay */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-50 animate-fade-in"
+          className="fixed inset-0 bg-black/50 z-[9998] animate-fade-in"
           onClick={onClose}
         />
       )}
 
       {/* Drawer */}
       <div
-        className={`fixed top-0 h-full w-[75%] max-w-[280px] bg-white z-50 shadow-2xl flex flex-col transition-transform duration-300 ease-out ${
+        className={`fixed top-0 h-full w-[75%] max-w-[280px] bg-white z-[9999] shadow-2xl flex flex-col transition-transform duration-300 ease-out ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
         style={{ left: 0 }}
@@ -152,4 +153,6 @@ export default function SideDrawer({ isOpen, onClose }) {
       </div>
     </>
   );
+
+  return createPortal(drawerContent, document.body);
 }

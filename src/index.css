@@ -86,10 +86,11 @@ body {
   .modal-overlay > div {
     border-radius: 1.25rem !important;
     animation: fadeScaleIn 0.2s ease-out !important;
-    /* Desktop: let height shrink to content, but cap at 90vh */
+    /* Desktop: shrink to content, cap at 90vh, centered with max-width */
     height: auto !important;
     max-height: 90vh !important;
-    padding-bottom: 0 !important; /* no safe-area needed on desktop */
+    max-width: 560px !important;
+    padding-bottom: 0 !important;
   }
 
   /* Desktop page content — constrained width, centered */
@@ -193,7 +194,7 @@ input:focus, textarea:focus, select:focus {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.5);
-  z-index: 50;
+  z-index: 200;              /* above banners, headers, nav bars */
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -201,16 +202,15 @@ input:focus, textarea:focus, select:focus {
 
 /* Mobile bottom-sheet inner panel — always anchored to bottom, never overflows viewport */
 .modal-overlay > div {
-  /* Use dynamic viewport height so iOS Safari address bar is accounted for */
-  max-height: 85dvh;
-  height: 85dvh;
-  width: 100%;
-  max-width: 520px;
+  /* dvh accounts for iOS Safari collapsible address bar */
+  max-height: 80dvh;
+  height: 80dvh;
+  width: 100%;               /* full width on mobile — no max-width */
   display: flex;
   flex-direction: column;
-  overflow: hidden;          /* children must scroll, not the sheet itself */
+  overflow: hidden;          /* children scroll, not the sheet */
   border-radius: 1.25rem 1.25rem 0 0;
-  /* Respect iPhone home-bar safe area */
+  /* Sit above iPhone home bar */
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 

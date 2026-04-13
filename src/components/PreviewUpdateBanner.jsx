@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X, Sparkles, GitBranch, Eye, ExternalLink,
   CheckCircle2, Clock, ArrowRight, ChevronDown, ChevronUp,
@@ -93,7 +94,6 @@ function UpdateModal({ onClose, previewUrl }) {
 
   const handlePreview = () => {
     // Open in a mobile-sized popup (iPhone 14 Pro dimensions: 393×852)
-    // Centers the popup on the current screen
     const w = 393;
     const h = 852;
     const left = Math.max(0, Math.round(window.screen.width  / 2 - w / 2));
@@ -105,10 +105,36 @@ function UpdateModal({ onClose, previewUrl }) {
     );
   };
 
-  return (
-    <div className="modal-overlay" style={{zIndex:9999}} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
-
+  // ── Render into document.body via portal so the Header's CSS transform
+  //    stacking context cannot clip or mis-position the fixed overlay.
+  const modalContent = (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.55)',
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'flex-end',
+        justifyContent: 'center',
+      }}
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <div
+        className="animate-slide-up"
+        style={{
+          background: '#fff',
+          borderRadius: '1.25rem 1.25rem 0 0',
+          width: '100%',
+          maxWidth: '480px',
+          height: '82dvh',
+          maxHeight: '82dvh',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        }}
+      >
         {/* ── Header ── */}
         <div className="relative bg-gradient-to-br from-primary to-primary-dark p-5 text-white overflow-hidden flex-shrink-0 rounded-t-2xl">
           <div className="absolute -top-4 -right-4 w-24 h-24 bg-white/10 rounded-full" />
@@ -195,7 +221,7 @@ function UpdateModal({ onClose, previewUrl }) {
           })}
         </div>
 
-        {/* ── Footer ── */}
+        {/* ── Footer — always pinned at bottom ── */}
         <div className="modal-footer space-y-2">
           <button
             onClick={handlePreview}
@@ -215,6 +241,8 @@ function UpdateModal({ onClose, previewUrl }) {
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }
 
 // ─── Preview Update Banner ─────────────────────────────────────────────────────
