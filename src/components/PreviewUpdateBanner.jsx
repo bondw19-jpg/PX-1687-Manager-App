@@ -107,7 +107,7 @@ function UpdateModal({ onClose, previewUrl }) {
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up h-[90vh] flex flex-col">
 
         {/* Modal Header */}
         <div className="relative bg-gradient-to-br from-primary to-primary-dark rounded-t-2xl p-5 text-white overflow-hidden">
@@ -149,7 +149,7 @@ function UpdateModal({ onClose, previewUrl }) {
         </div>
 
         {/* Scrollable Changelog */}
-        <div className="overflow-y-auto flex-1 p-4 space-y-3">
+        <div className="overflow-y-auto flex-1 min-h-0 p-4 space-y-3">
           {UPDATES.map((update) => {
             const isExpanded = expandedVersion === update.version;
             return (

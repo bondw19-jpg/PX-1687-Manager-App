@@ -86,7 +86,9 @@ body {
   .modal-overlay > div {
     border-radius: 1.25rem !important;
     animation: fadeScaleIn 0.2s ease-out !important;
-    max-height: 90vh;
+    /* On desktop: switch from fixed h-[90vh] back to max-height so it shrinks if content is short */
+    height: auto !important;
+    max-height: 90vh !important;
   }
 
   /* Desktop page content — constrained width, centered */
