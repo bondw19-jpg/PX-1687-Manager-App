@@ -236,15 +236,13 @@ export const useAppStore = create(
         set(s => ({ callIns: [doc, ...s.callIns] }));
         fsWrite('callIns', doc.id, doc);
 
-        // ── PX Progressive Discipline: Auto Work File entry ───────────────
-        // Thresholds per PX policy:
-        //   2–3.9 pts → Coaching
-        //   4–5.9 pts → First Written Warning
-        //   6–7.9 pts → Final Written Warning
-        //   8+ pts    → Termination Eligible
-        // Also trigger on: 3 incidents, 5 incidents, 8 incidents in 90 days
+        // ── Auto Work File entry: log EVERY non-protected attendance event ──
+        // Every call-in/attendance record (with points > 0) is automatically
+        // written to the associate's Work File so managers always have a paper
+        // trail — regardless of whether a discipline threshold has been crossed.
+        // Protected / emergency categories (0 pts) are skipped.
         if (doc.associateId) {
-          const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 90); // 90-day rolling window
+          const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 90);
 
           // Resolve point value — supports new subtype system and legacy types
           const getDocPoints = (x) => {
@@ -264,60 +262,61 @@ export const useAppStore = create(
             return LEGACY_KEY[x.type] || 'G';
           };
 
-          const recent = [...get().callIns.filter(x =>
-            x.associateId === doc.associateId && new Date(x.date) >= cutoff
-          ), doc];
+          const catKey = getCatKey(doc);
+          // Skip protected / emergency (0 pts, no catKey)
+          if (catKey) {
+            // Build the full 90-day window for this associate (include the new doc)
+            // Note: set() already ran above so get().callIns may already contain doc;
+            // de-duplicate by id to avoid double-counting.
+            const allRecent = get().callIns.filter(x =>
+              x.associateId === doc.associateId && new Date(x.date) >= cutoff
+            );
+            // Ensure the new doc is included exactly once
+            const recentMap = new Map(allRecent.map(x => [x.id, x]));
+            recentMap.set(doc.id, doc);
+            const recent = Array.from(recentMap.values());
 
-          const rawPts = recent.reduce((s, x) => s + getDocPoints(x), 0);
-          const count  = recent.length;
+            const rawPts = recent.reduce((s, x) => s + getDocPoints(x), 0);
+            const count  = recent.length;
 
-          // ── Point Recovery: apply 30/60-day clean-streak deduction ──────────
-          // After adding the new incident the streak resets to 0, so recovery
-          // is 0 for the current save. But we still compute it correctly for
-          // any future re-evaluation reference in the work-file note.
-          const lastDate = recent
-            .map(x => new Date(x.date))
-            .reduce((latest, d) => (d > latest ? d : latest), new Date(0));
-          const cleanDays  = Math.floor((new Date() - lastDate) / 86400000);
-          const recovery   = cleanDays >= 60 ? 1.0 : cleanDays >= 30 ? 0.5 : 0;
-          const pts        = Math.max(0, Math.round((rawPts - recovery) * 10) / 10);
+            // Point Recovery: streak resets when a new incident is logged,
+            // so recovery is effectively 0 right now — but compute for the note.
+            const lastDate = recent
+              .map(x => new Date(x.date))
+              .reduce((latest, d) => (d > latest ? d : latest), new Date(0));
+            const cleanDays = Math.floor((new Date() - lastDate) / 86400000);
+            const recovery  = cleanDays >= 60 ? 1.0 : cleanDays >= 30 ? 0.5 : 0;
+            const pts       = Math.max(0, Math.round((rawPts - recovery) * 10) / 10);
 
-          // Determine discipline level
-          const getDisciplineLabel = (p) => {
-            if (p >= 8)   return { label: 'Termination Eligible', key: 'T' };
-            if (p >= 6)   return { label: 'Final Written Warning', key: 'W' };
-            if (p >= 4)   return { label: 'First Written Warning', key: 'W' };
-            if (p >= 2)   return { label: 'Coaching', key: 'C' };
-            return null;
-          };
+            // Discipline label for context in the work-file entry
+            const getDisciplineLabel = (p) => {
+              if (p >= 8) return 'Termination Eligible';
+              if (p >= 6) return 'Final Written Warning';
+              if (p >= 4) return 'First Written Warning';
+              if (p >= 2) return 'Coaching';
+              return 'Below threshold';
+            };
 
-          const discipline = getDisciplineLabel(pts);
-          // Trigger on: new discipline milestone reached OR incident count milestones
-          const incidentMilestone = count === 3 || count === 5 || count === 8;
-          const ptsMilestone = pts === 2 || pts === 4 || pts === 6 || pts >= 8;
+            const subtypeLabel = doc.subtypeId
+              ? doc.subtypeId.replace(/_/g, ' ')
+              : doc.type;
+            const recoveryNote = recovery > 0 ? ` (−${recovery} pt recovery applied)` : '';
+            const disciplineNote = pts > 0 ? ` — ${getDisciplineLabel(pts)}` : '';
 
-          if (discipline && (incidentMilestone || ptsMilestone || pts >= 8)) {
-            const catKey = getCatKey(doc);
-            if (catKey) { // Don't auto-flag protected/emergency (0 pts) absences
-              const existing  = get().workFiles[doc.associateId] || { rows: [] };
-              const subtypeLabel = doc.subtypeId
-                ? (doc.subtypeId.replace(/_/g, ' '))
-                : doc.type;
-              const recoveryNote = recovery > 0 ? ` (−${recovery} pt recovery applied)` : '';
-              const newRow = {
-                id:      Date.now() + Math.random(),
-                date:    doc.date,
-                key:     catKey,
-                details: `Auto [PX Policy]: ${subtypeLabel} — ${count} incident${count !== 1 ? 's' : ''} / ${pts} pts in 90 days${recoveryNote}. Action: ${discipline.label}.${doc.reason ? ' Reason: ' + doc.reason : ''}`,
-                addedBy: u ? { uid: u.uid, name: firstName(u.name || u.email?.split('@')[0]) } : null,
-              };
-              const updatedFile = { ...existing, rows: [...(existing.rows || []), newRow], savedAt: new Date().toISOString() };
-              set(s => ({ workFiles: { ...s.workFiles, [doc.associateId]: updatedFile } }));
-              if (get().dbMode === 'firestore') {
-                import('../lib/firestoreSync')
-                  .then(({ fsSaveWorkFile }) => fsSaveWorkFile(doc.associateId, updatedFile))
-                  .catch(() => {});
-              }
+            const newRow = {
+              id:      Date.now() + Math.random(),
+              date:    doc.date,
+              key:     catKey,
+              details: `Auto [PX Policy]: ${subtypeLabel} — incident #${count} / ${pts} pts in 90 days${recoveryNote}${disciplineNote}.${doc.reason ? ' Reason: ' + doc.reason : ''}${doc.managerNote ? ' Note: ' + doc.managerNote : ''}`,
+              addedBy: u ? { uid: u.uid, name: firstName(u.name || u.email?.split('@')[0]) } : null,
+            };
+            const existing    = get().workFiles[doc.associateId] || { rows: [] };
+            const updatedFile = { ...existing, rows: [...(existing.rows || []), newRow], savedAt: new Date().toISOString() };
+            set(s => ({ workFiles: { ...s.workFiles, [doc.associateId]: updatedFile } }));
+            if (get().dbMode === 'firestore') {
+              import('../lib/firestoreSync')
+                .then(({ fsSaveWorkFile }) => fsSaveWorkFile(doc.associateId, updatedFile))
+                .catch(() => {});
             }
           }
         }
