@@ -252,7 +252,10 @@ export default function Dashboard() {
           <StatCard icon={<Pin size={22} className="text-blue-500" />}       count={pinnedNotes}        label="Pinned Notes"         bgColor="bg-blue-50" />
         </div>
 
-        {/* 1 — Today's Events (full width) */}
+        {/* 1 — Team Updates Feed (full width) */}
+        <ActivityFeed />
+
+        {/* 2 — Today's Events (full width) */}
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
             <div className="flex items-center gap-2 font-semibold text-gray-800">
@@ -323,9 +326,6 @@ export default function Dashboard() {
             )}
           </div>
         </div>
-
-        {/* 2 — Team Updates Feed (full width) */}
-        <ActivityFeed />
 
         {/* 3 — Recent Attendance Log (full width) */}
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
