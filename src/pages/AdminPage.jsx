@@ -891,102 +891,6 @@ function UserManagement({ onToast }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SECTION 5: Danger Zone
-// ─────────────────────────────────────────────────────────────────────────────
-function DangerZone({ onToast }) {
-  const store = useAppStore();
-  const [confirm, setConfirm] = useState(null); // { key, label, action }
-
-  const dangerActions = [
-    {
-      key: 'callIns',
-      label: 'Clear All Call-Ins',
-      description: 'Delete every call-in record.',
-      action: () => useAppStore.setState({ callIns: [] }),
-    },
-    {
-      key: 'teamNotes',
-      label: 'Clear All Team Notes',
-      description: 'Delete all shared team notes.',
-      action: () => useAppStore.setState({ teamNotes: [] }),
-    },
-    {
-      key: 'teamEvents',
-      label: 'Clear All Team Events',
-      description: 'Delete all shared calendar events.',
-      action: () => useAppStore.setState({ teamEvents: [] }),
-    },
-    {
-      key: 'reviews',
-      label: 'Clear All Reviews',
-      description: 'Delete all performance reviews.',
-      action: () => useAppStore.setState({ reviews: [] }),
-    },
-    {
-      key: 'tasks',
-      label: 'Clear All Tasks',
-      description: 'Delete all tasks and to-dos.',
-      action: () => useAppStore.setState({ tasks: [] }),
-    },
-    {
-      key: 'announcements',
-      label: 'Clear All Announcements',
-      description: 'Delete all announcements.',
-      action: () => useAppStore.setState({ announcements: [] }),
-    },
-    {
-      key: 'associates',
-      label: 'Clear All Associates',
-      description: '⚠️ This also removes all work files.',
-      action: () => useAppStore.setState({ associates: [], workFiles: {} }),
-      extra: true,
-    },
-  ];
-
-  const executeConfirm = () => {
-    if (!confirm) return;
-    confirm.action();
-    onToast(`${confirm.label} — done.`, 'success');
-    setConfirm(null);
-  };
-
-  return (
-    <div className="pt-4 space-y-2">
-      <div className="bg-red-50 border border-red-100 rounded-xl px-3 py-2.5 text-xs text-red-700 flex items-center gap-2 mb-3">
-        <AlertTriangle size={13} className="shrink-0" />
-        These actions delete data from the local store. If Firestore sync is active, Firestore data is NOT deleted — re-sync will restore it.
-      </div>
-      {dangerActions.map(action => (
-        <div
-          key={action.key}
-          className={`flex items-center justify-between gap-3 border rounded-xl px-3 py-3 ${action.extra ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-white'}`}
-        >
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold text-gray-800">{action.label}</div>
-            <div className="text-xs text-gray-400 mt-0.5">{action.description}</div>
-          </div>
-          <button
-            onClick={() => setConfirm(action)}
-            className="shrink-0 flex items-center gap-1 bg-red-100 hover:bg-red-200 text-red-700 px-3 py-2 rounded-xl text-xs font-bold transition-colors"
-          >
-            <Trash2 size={13} /> Clear
-          </button>
-        </div>
-      ))}
-      {confirm && (
-        <ConfirmDialog
-          title={confirm.label}
-          message={`${confirm.description} This cannot be undone from the local store.`}
-          confirmLabel="Yes, Delete"
-          onConfirm={executeConfirm}
-          onCancel={() => setConfirm(null)}
-        />
-      )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // SECTION 6: App Health
 // ─────────────────────────────────────────────────────────────────────────────
 function AppHealth() {
@@ -1287,10 +1191,7 @@ export default function AdminPage() {
               <ChecklistTemplates onToast={onToast} />
             </Section>
 
-            {/* Section 6: Danger Zone */}
-            <Section icon={AlertTriangle} title="Danger Zone" color="text-red-600" defaultOpen={false}>
-              <DangerZone onToast={onToast} />
-            </Section>
+
           </div>
         </div>
 
