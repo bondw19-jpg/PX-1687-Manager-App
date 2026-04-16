@@ -1287,11 +1287,6 @@ export default function AdminPage() {
               <ChecklistTemplates onToast={onToast} />
             </Section>
 
-            {/* Section 4b: Who is Online */}
-            <Section icon={Users} title="Who is Online" color="text-green-600" defaultOpen={false}>
-              <SignedInUsers onToast={onToast} />
-            </Section>
-
             {/* Section 6: Danger Zone */}
             <Section icon={AlertTriangle} title="Danger Zone" color="text-red-600" defaultOpen={false}>
               <DangerZone onToast={onToast} />
