@@ -29,7 +29,7 @@ const sections = [
     title: 'OPERATIONS',
     items: [
       { label: 'Calendar',         icon: Calendar,        path: '/calendar' },
-      { label: 'Shift Checklist',  icon: ClipboardCheck,  path: '/checklist' },
+      { label: 'Checklist',         icon: ClipboardCheck,  path: '/checklist' },
       { label: 'Notes',            icon: StickyNote,      path: '/notes' },
       { label: 'Tasks & To-Do',    icon: ListChecks,      path: '/tasks' },
     ]

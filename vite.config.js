@@ -69,7 +69,8 @@ export default defineConfig({
   // Dev server — binds to all interfaces so sandbox tunneling works
   server: {
     host: '0.0.0.0',
-    port: parseInt(process.env.PORT || '5173', 10),
+    port: parseInt(process.env.PORT || '4173', 10),
+    allowedHosts: 'all',
   },
 
   // Preview server — reads PORT from env for Cloud Run compatibility

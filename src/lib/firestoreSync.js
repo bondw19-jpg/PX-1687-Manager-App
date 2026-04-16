@@ -268,6 +268,27 @@ export async function fsSaveChecklist(date, shift, items) {
   }
 }
 
+export async function fsSaveCustomChecklist(cl) {
+  try {
+    const { setDoc, serverTimestamp, doc } = await import('firebase/firestore');
+    const db = await getDb();
+    const ref = doc(db, 'stores', STORE_ID, 'customChecklists', cl.id);
+    await setDoc(ref, { ...cl, _updatedAt: serverTimestamp() });
+  } catch (e) {
+    console.warn(`[FS] saveCustomChecklist(${cl.id}):`, e?.code || e?.message);
+  }
+}
+
+export async function fsDeleteCustomChecklist(id) {
+  try {
+    const { deleteDoc, doc } = await import('firebase/firestore');
+    const db = await getDb();
+    await deleteDoc(doc(db, 'stores', STORE_ID, 'customChecklists', id));
+  } catch (e) {
+    console.warn(`[FS] deleteCustomChecklist(${id}):`, e?.code || e?.message);
+  }
+}
+
 export async function fsSaveWorkFile(associateId, fileData) {
   try {
     const { setDoc, serverTimestamp, doc } = await import('firebase/firestore');
@@ -621,6 +642,13 @@ export async function initFirestoreSync(set, get) {
     // workFiles (shared)
     _unsubscribers.push(
       subscribeWorkFiles((map) => set({ workFiles: map }))
+    );
+
+    // customChecklists (shared)
+    _unsubscribers.push(
+      subscribeCollection('customChecklists', (items) => {
+        if (items.length > 0 || alreadyMigrated) set({ customChecklists: items });
+      })
     );
 
     // ── Private collections (users/{uid}/…) ──────────────────────────────────

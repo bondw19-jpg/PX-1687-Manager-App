@@ -358,6 +358,7 @@ export const useAppStore = create(
 
       // ── Checklists (SHARED) ───────────────────────────────────────────────
       checklists: {},
+      customChecklists: [],          // user-created checklists
       checklistDefaults: { opening: openingChecklist, mid: midChecklist, closing: closingChecklist },
       getChecklist: (date, shift) => {
         const key = `${date}_${shift}`;
@@ -370,6 +371,30 @@ export const useAppStore = create(
         if (get().dbMode === 'firestore') {
           import('../lib/firestoreSync')
             .then(({ fsSaveChecklist }) => fsSaveChecklist(date, shift, items))
+            .catch(() => {});
+        }
+      },
+
+      // Custom checklists CRUD
+      saveCustomChecklist: (cl) => {
+        // cl = { id, name, items: [{id, text, checked}], createdAt, updatedAt }
+        const enriched = { ...cl, updatedAt: new Date().toISOString() };
+        set(s => ({
+          customChecklists: s.customChecklists.some(c => c.id === enriched.id)
+            ? s.customChecklists.map(c => c.id === enriched.id ? enriched : c)
+            : [...s.customChecklists, enriched],
+        }));
+        if (get().dbMode === 'firestore') {
+          import('../lib/firestoreSync')
+            .then(({ fsSaveCustomChecklist }) => fsSaveCustomChecklist(enriched))
+            .catch(() => {});
+        }
+      },
+      deleteCustomChecklist: (id) => {
+        set(s => ({ customChecklists: s.customChecklists.filter(c => c.id !== id) }));
+        if (get().dbMode === 'firestore') {
+          import('../lib/firestoreSync')
+            .then(({ fsDeleteCustomChecklist }) => fsDeleteCustomChecklist(id))
             .catch(() => {});
         }
       },
@@ -581,6 +606,7 @@ export const useAppStore = create(
             .forEach(k => { if (!Array.isArray(state[k])) state[k] = []; });
           if (!state.checklists || typeof state.checklists !== 'object') state.checklists = {};
           if (!state.workFiles  || typeof state.workFiles  !== 'object') state.workFiles  = {};
+          if (!Array.isArray(state.customChecklists)) state.customChecklists = [];
         }
         return state;
       },
@@ -597,8 +623,9 @@ export const useAppStore = create(
         tasks:         Array.isArray(persisted?.tasks)         ? persisted.tasks         : current.tasks,
         contacts:      Array.isArray(persisted?.contacts)      ? persisted.contacts      : current.contacts,
         announcements: Array.isArray(persisted?.announcements) ? persisted.announcements : current.announcements,
-        checklists:    (persisted?.checklists && typeof persisted.checklists === 'object') ? persisted.checklists : current.checklists,
-        workFiles:     (persisted?.workFiles  && typeof persisted.workFiles  === 'object') ? persisted.workFiles  : current.workFiles,
+        checklists:       (persisted?.checklists && typeof persisted.checklists === 'object') ? persisted.checklists : current.checklists,
+        workFiles:        (persisted?.workFiles  && typeof persisted.workFiles  === 'object') ? persisted.workFiles  : current.workFiles,
+        customChecklists: Array.isArray(persisted?.customChecklists) ? persisted.customChecklists : current.customChecklists,
       }),
       partialize: (state) => {
         // Strip base64 dataUrl from note attachments before writing to
@@ -626,7 +653,8 @@ export const useAppStore = create(
           callIns:       state.callIns,
           teamEvents:    state.teamEvents,
           myEvents:      state.myEvents,
-          checklists:    state.checklists,
+          checklists:       state.checklists,
+          customChecklists: state.customChecklists,
           teamNotes:     stripDataUrls(state.teamNotes),
           myNotes:       stripDataUrls(state.myNotes),
           reviews:       state.reviews,
