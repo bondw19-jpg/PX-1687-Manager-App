@@ -218,7 +218,7 @@ function CustomChecklistModal({ checklist, onSave, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full animate-slide-up" style={{ display:'flex', flexDirection:'column', height:'85dvh', maxHeight:'85dvh', overflow:'hidden' }}>
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up flex flex-col" style={{ height:'85dvh', maxHeight:'85dvh', overflow:'hidden' }}>
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-bold text-lg text-gray-800">{isNew ? 'New Checklist' : 'Edit Checklist'}</h2>
@@ -333,7 +333,7 @@ function CustomChecklistDetail({ checklist, onUpdate, onBack }) {
       {/* Back + title card */}
       <div className="bg-white rounded-xl shadow-sm p-4">
         <button onClick={onBack} className="flex items-center gap-1 text-xs text-primary font-semibold mb-3">
-          ← Back to My Checklists
+          ← Back to Team Checklists
         </button>
         <div className="flex items-center justify-between mb-3">
           <div>
