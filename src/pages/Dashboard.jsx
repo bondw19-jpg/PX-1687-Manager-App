@@ -48,7 +48,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header title="Dashboard" />
+      <Header title="Dashboardddddd" />
 
       <PreviewUpdateBanner previewUrl={PREVIEW_URL} />
 
