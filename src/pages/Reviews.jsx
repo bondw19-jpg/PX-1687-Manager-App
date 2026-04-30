@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { Star, Plus, X, Search, Pencil, Trash2 } from 'lucide-react';
+import { Star, Plus, X, Search, Pencil, Trash2, Printer } from 'lucide-react';
 import { format } from 'date-fns';
 import Header from '../components/Header';
+import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
+import { openPrintWindow, statsRowHtml, starsHtml } from '../lib/printReport';
 
 const REVIEW_CATS = ['Attendance', 'Attitude', 'Performance', 'Teamwork', 'Food Safety'];
 
@@ -49,12 +51,12 @@ function ReviewModal({ review, associates, onClose, onSave }) {
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up max-h-[92vh] flex flex-col">
-        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-bold text-lg text-gray-800">{review ? 'Edit Review' : 'New Review'}</h2>
           <button onClick={onClose} className="p-2 text-gray-400 rounded-lg"><X size={20} /></button>
         </div>
-        <div className="overflow-y-auto flex-1 p-4 space-y-4">
+        <div className="modal-body p-4 space-y-4">
           {/* Associate */}
           <div>
             <label className="text-xs font-semibold text-gray-600 mb-1 block">Associate *</label>
@@ -64,7 +66,7 @@ function ReviewModal({ review, associates, onClose, onSave }) {
                 value={form.associateId}
                 onChange={e => handleAssociateChange(e.target.value)}
               >
-                {associates.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                {[...associates].sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             ) : (
               <input
@@ -77,7 +79,7 @@ function ReviewModal({ review, associates, onClose, onSave }) {
           </div>
 
           {/* Date & Overall */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <div>
               <label className="text-xs font-semibold text-gray-600 mb-1 block">Review Date</label>
               <input
@@ -122,7 +124,7 @@ function ReviewModal({ review, associates, onClose, onSave }) {
             />
           </div>
         </div>
-        <div className="p-4 border-t border-gray-100">
+        <div className="modal-footer">
           <button
             onClick={handleSave}
             className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-sm"
@@ -149,20 +151,61 @@ export default function Reviews() {
     if (window.confirm('Delete this review?')) deleteReview(id);
   };
 
+  const handlePrint = () => {
+    const list = filtered;
+    const avgRating = list.length
+      ? (list.reduce((s, r) => s + (r.overallRating || 0), 0) / list.length).toFixed(1)
+      : 0;
+    const html = `
+      ${statsRowHtml([
+        { value: list.length, label: 'Total Reviews' },
+        { value: avgRating + ' / 5', label: 'Average Rating' },
+        { value: list.filter(r => (r.overallRating || 0) >= 4).length, label: '4-5 Star' },
+        { value: list.filter(r => (r.overallRating || 0) <= 2).length, label: '1-2 Star' },
+      ])}
+      <h2 class="section-title">Performance Reviews</h2>
+      <table>
+        <thead><tr>
+          <th>Associate</th><th>Date</th><th>Overall</th>
+          <th>Attendance</th><th>Attitude</th><th>Performance</th><th>Teamwork</th><th>Food Safety</th>
+          <th>Comments</th>
+        </tr></thead>
+        <tbody>
+          ${list.map(r => '<tr>' +
+            '<td><strong>' + (r.associateName || '') + '</strong></td>' +
+            '<td>' + (r.date || '') + '</td>' +
+            '<td>' + starsHtml(r.overallRating || 0) + '</td>' +
+            (r.categories ? Object.values(r.categories).map(v => '<td style="text-align:center">' + starsHtml(v, 5) + '</td>').join('') : '<td colspan="5">\u2014</td>') +
+            '<td style="font-size:10px;color:#555">' + (r.comments || '') + '</td>' +
+          '</tr>').join('')}
+        </tbody>
+      </table>`;
+    openPrintWindow({ title: 'Performance Reviews Report', subtitle: list.length + ' reviews', html });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Header title="Performance Reviews" onAdd={() => setShowAdd(true)} />
+      <DesktopPageHeader title="Performance Reviews" onAdd={() => setShowAdd(true)} addLabel="+ New Review" onPrint={handlePrint} />
 
-      <div className="p-4 space-y-3">
-        {/* Search */}
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white shadow-sm"
-            placeholder="Search associate..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+      <div className="desktop-page-content p-4 lg:p-0 space-y-3">
+        {/* Search + Print */}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white shadow-sm"
+              placeholder="Search associate..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 flex-shrink-0"
+          >
+            <Printer size={14} /> Print
+          </button>
         </div>
 
         {/* Reviews */}
@@ -179,7 +222,7 @@ export default function Reviews() {
             </button>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {filtered.map(review => (
               <div key={review.id} className="bg-white rounded-xl shadow-sm p-4">
                 <div className="flex items-start gap-3">

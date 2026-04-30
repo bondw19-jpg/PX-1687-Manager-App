@@ -1,10 +1,21 @@
-import React, { useState } from 'react';
-import { Eye, FileText, Pencil, Trash2, Search, Star, X, Plus, Phone, Calendar, User, Users, UserPlus } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Eye, FileText, Pencil, Trash2, Search, Star, X, Plus, Phone, Calendar, User, Users, UserPlus, Shield, AlertTriangle, Printer } from 'lucide-react';
 import Header from '../components/Header';
+import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import WorkFileModal from '../components/WorkFileModal';
+import { get90DayPoints, get90DayCallIns, pointsColor, pointsEmoji } from './CallIns';
+import { openPrintWindow, statsRowHtml, badgeHtml, disciplineColor, disciplineLabel } from '../lib/printReport';
 
-const POSITIONS = ['All Positions', 'Team Member', 'Crew', 'Shift Lead', 'Manager', 'Other'];
+const POSITIONS = ['All Positions', 'FOH', 'BOH', 'Cook', 'Shift Lead', 'Manager'];
+const POSITION_COLORS = {
+  'FOH':        'bg-blue-50 text-blue-700 border-blue-200',
+  'BOH':        'bg-orange-50 text-orange-700 border-orange-200',
+  'Cook':       'bg-amber-50 text-amber-700 border-amber-200',
+  'Shift Lead': 'bg-purple-50 text-purple-700 border-purple-200',
+  'Manager':    'bg-red-50 text-primary border-red-200',
+};
 const STATUSES = ['All Status', 'Active', 'Inactive', 'On Leave'];
 const COLORS = ['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500'];
 
@@ -30,7 +41,7 @@ function StarRating({ rating, onRate }) {
 
 function AssociateModal({ associate, onClose, onSave }) {
   const [form, setForm] = useState(associate || {
-    name: '', employeeId: '', position: 'Team Member',
+    name: '', employeeId: '', position: 'FOH',
     telephone: '', birthday: '', hireDate: '',
     status: 'active', cleanStatus: 'clean', starRating: 0
   });
@@ -43,8 +54,8 @@ function AssociateModal({ associate, onClose, onSave }) {
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-bold text-lg text-gray-800">
             {associate ? 'Edit Associate' : 'Add Associate'}
           </h2>
@@ -53,7 +64,7 @@ function AssociateModal({ associate, onClose, onSave }) {
           </button>
         </div>
 
-        <div className="overflow-y-auto p-4 space-y-3 flex-1">
+        <div className="modal-body p-4 space-y-3">
           <div>
             <label className="text-xs font-semibold text-gray-600 mb-1 block">Name *</label>
             <input
@@ -80,7 +91,7 @@ function AssociateModal({ associate, onClose, onSave }) {
                 value={form.position}
                 onChange={e => setForm({...form, position: e.target.value})}
               >
-                {POSITIONS.slice(1).map(p => <option key={p}>{p}</option>)}
+                {POSITIONS.slice(1).map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
           </div>
@@ -149,7 +160,7 @@ function AssociateModal({ associate, onClose, onSave }) {
           </div>
         </div>
 
-        <div className="p-4 border-t border-gray-100">
+        <div className="modal-footer">
           <button
             onClick={handleSave}
             className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-sm active:bg-primary-dark"
@@ -163,16 +174,20 @@ function AssociateModal({ associate, onClose, onSave }) {
 }
 
 function ViewAssociateModal({ associate, onClose }) {
+  const { callIns } = useAppStore();
+  const pts  = get90DayPoints(callIns, associate.id);
+  const incidents = get90DayCallIns(callIns, associate.id);
+
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up max-h-[85vh] flex flex-col">
-        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-bold text-lg text-gray-800">Associate Details</h2>
           <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg">
             <X size={20} />
           </button>
         </div>
-        <div className="overflow-y-auto p-4 space-y-4">
+        <div className="modal-body p-4 space-y-4">
           <div className="flex items-center gap-4">
             <div className={`w-16 h-16 ${getColor(associate.name)} rounded-2xl flex items-center justify-center text-white text-2xl font-bold`}>
               {associate.name?.[0]?.toUpperCase()}
@@ -183,8 +198,55 @@ function ViewAssociateModal({ associate, onClose }) {
               <div className="mt-1">
                 <StarRating rating={associate.starRating || 0} />
               </div>
+              {associate.createdBy?.name && (
+                <p className="flex items-center gap-1 text-xs text-blue-500 mt-1">
+                  <User size={11} /> Added by {associate.createdBy.name}
+                </p>
+              )}
             </div>
           </div>
+
+          {/* Attendance Points Panel */}
+          <div className={`rounded-xl p-3 border ${pointsColor(pts)}`}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-bold flex items-center gap-1.5">
+                <Shield size={13} /> 90-Day Attendance Points
+              </p>
+              <span className="text-lg font-bold">{pointsEmoji(pts)} {pts} pt{pts !== 1 ? 's' : ''}</span>
+            </div>
+            {/* Progress bar */}
+            <div className="w-full bg-white/60 rounded-full h-2 mb-2">
+              <div className={`h-2 rounded-full ${pts <= 2 ? 'bg-green-500' : pts <= 4 ? 'bg-yellow-400' : 'bg-red-500'}`}
+                style={{ width: `${Math.min(100, (pts / 8) * 100)}%` }} />
+            </div>
+            <p className="text-[11px] opacity-80">
+              {pts === 0 ? 'No incidents in the last 90 days — great attendance!' :
+               pts <= 2 ? `${incidents.length} incident${incidents.length !== 1 ? 's' : ''} — within acceptable range` :
+               pts <= 4 ? `${incidents.length} incidents — verbal warning recommended` :
+               `${incidents.length} incidents — written warning / counseling required`}
+            </p>
+            {pts >= 5 && (
+              <div className="mt-2 flex items-center gap-1.5 text-[11px] font-semibold">
+                <AlertTriangle size={12} /> Action required — review Work File
+              </div>
+            )}
+          </div>
+
+          {/* Recent incidents list */}
+          {incidents.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Recent Incidents (90d)</p>
+              {incidents.slice(0, 5).map(c => (
+                <div key={c.id} className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${pointsColor(c.points ?? 0)}`}>
+                    +{c.points ?? 0}pt
+                  </span>
+                  <span className="text-xs text-gray-700 font-medium">{c.type}</span>
+                  <span className="text-xs text-gray-400 ml-auto">{c.date}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             {[
@@ -222,7 +284,8 @@ function ViewAssociateModal({ associate, onClose }) {
 }
 
 export default function Associates() {
-  const { associates, addAssociate, updateAssociate, deleteAssociate } = useAppStore();
+  const { associates, addAssociate, updateAssociate, deleteAssociate, callIns, workFiles, saveWorkFile } = useAppStore();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All Status');
   const [positionFilter, setPositionFilter] = useState('All Positions');
@@ -231,15 +294,73 @@ export default function Associates() {
   const [viewAssociate, setViewAssociate] = useState(null);
   const [workFileAssociate, setWorkFileAssociate] = useState(null);
 
-  const filtered = associates.filter(a => {
-    const matchSearch = a.name?.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === 'All Status' ||
-      (statusFilter === 'Active' && a.status === 'active') ||
-      (statusFilter === 'Inactive' && a.status === 'inactive') ||
-      (statusFilter === 'On Leave' && a.status === 'on_leave');
-    const matchPos = positionFilter === 'All Positions' || a.position === positionFilter;
-    return matchSearch && matchStatus && matchPos;
-  });
+  // Deep-link from Activity Feed: /team?workfile=<id>
+  useEffect(() => {
+    const wfId = searchParams.get('workfile');
+    if (!wfId || associates.length === 0) return;
+    const assoc = associates.find(a => a.id === wfId);
+    if (assoc) {
+      setWorkFileAssociate(assoc);
+      // Remove the query param so back/refresh doesn't re-open
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, associates, setSearchParams]);
+
+  const handlePrintRoster = () => {
+    const list = associates.filter(a => {
+      const ms = a.name?.toLowerCase().includes(search.toLowerCase());
+      const mst = statusFilter === 'All Status' ||
+        (statusFilter === 'Active' && a.status === 'active') ||
+        (statusFilter === 'Inactive' && a.status === 'inactive') ||
+        (statusFilter === 'On Leave' && a.status === 'on_leave');
+      const mp = positionFilter === 'All Positions' || a.position === positionFilter;
+      return ms && mst && mp;
+    });
+    const active   = list.filter(a => a.status === 'active').length;
+    const atRisk   = list.filter(a => (get90DayPoints(callIns, a.id) || 0) >= 4).length;
+    const html = `
+      ${statsRowHtml([
+        { value: list.length, label: 'Total Listed' },
+        { value: active,      label: 'Active' },
+        { value: list.length - active, label: 'Inactive / Leave' },
+        { value: atRisk,      label: 'At-Risk (4+ pts)' },
+      ])}
+      <h2 class="section-title">Associate Roster</h2>
+      <table>
+        <thead><tr>
+          <th>Name</th><th>Position</th><th>Employee ID</th>
+          <th>Status</th><th>Hire Date</th><th>90-Day Pts</th><th>Discipline Level</th>
+        </tr></thead>
+        <tbody>
+          ${list.map(a => {
+            const pts = get90DayPoints(callIns, a.id) || 0;
+            const dc  = disciplineColor(pts);
+            return '<tr>' +
+              '<td><strong>' + a.name + '</strong></td>' +
+              '<td>' + (a.position || '\u2014') + '</td>' +
+              '<td>' + (a.employeeId || '\u2014') + '</td>' +
+              '<td>' + badgeHtml(a.status === 'active' ? 'Active' : a.status === 'on_leave' ? 'On Leave' : 'Inactive', a.status === 'active' ? 'green' : 'gray') + '</td>' +
+              '<td>' + (a.hireDate || '\u2014') + '</td>' +
+              '<td>' + badgeHtml(pts + ' pts', dc) + '</td>' +
+              '<td>' + disciplineLabel(pts) + '</td>' +
+            '</tr>';
+          }).join('')}
+        </tbody>
+      </table>`;
+    openPrintWindow({ title: 'Associate Roster', subtitle: list.length + ' associates listed', html });
+  };
+
+  const filtered = associates
+    .filter(a => {
+      const matchSearch = a.name?.toLowerCase().includes(search.toLowerCase());
+      const matchStatus = statusFilter === 'All Status' ||
+        (statusFilter === 'Active' && a.status === 'active') ||
+        (statusFilter === 'Inactive' && a.status === 'inactive') ||
+        (statusFilter === 'On Leave' && a.status === 'on_leave');
+      const matchPos = positionFilter === 'All Positions' || a.position === positionFilter;
+      return matchSearch && matchStatus && matchPos;
+    })
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
   const handleDelete = (id) => {
     if (window.confirm('Delete this associate?')) deleteAssociate(id);
@@ -248,17 +369,26 @@ export default function Associates() {
   return (
     <div className="min-h-screen bg-background">
       <Header title="Associates" onAdd={() => setShowAddModal(true)} />
+      <DesktopPageHeader title="Associates" onAdd={() => setShowAddModal(true)} addLabel="+ Add Associate" onPrint={handlePrintRoster} />
 
-      <div className="p-4 space-y-3">
-        {/* Search */}
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white shadow-sm"
-            placeholder="Search associates..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+      <div className="desktop-page-content p-4 lg:p-0 space-y-3">
+        {/* Search + Print Row */}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white shadow-sm"
+              placeholder="Search associates..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          <button
+            onClick={handlePrintRoster}
+            className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 flex-shrink-0"
+          >
+            <Printer size={14} /> Print
+          </button>
         </div>
 
         {/* Filters */}
@@ -311,7 +441,8 @@ export default function Associates() {
             )}
           </div>
         ) : (
-          filtered.map(assoc => (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {filtered.map(assoc => (
             <div key={assoc.id} className="bg-white rounded-xl p-4 shadow-sm">
               <div className="flex items-start gap-3 mb-3">
                 <div className={`w-10 h-10 ${getColor(assoc.name)} rounded-xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0`}>
@@ -328,7 +459,7 @@ export default function Associates() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full border border-blue-100">
+                    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${POSITION_COLORS[assoc.position] || 'bg-gray-50 text-gray-600 border-gray-200'}`}>
                       {assoc.position}
                     </span>
                     <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${
@@ -343,6 +474,22 @@ export default function Associates() {
                   <div className="mt-1.5">
                     <StarRating rating={assoc.starRating || 0} onRate={(r) => updateAssociate(assoc.id, { starRating: r })} />
                   </div>
+                  {assoc.createdBy?.name && (
+                    <p className="flex items-center gap-1 text-[10px] text-blue-500 mt-1">
+                      <User size={9} /> Added by {assoc.createdBy.name}
+                    </p>
+                  )}
+                  {/* 90-day attendance points badge */}
+                  {(() => {
+                    const pts = get90DayPoints(callIns, assoc.id);
+                    const cnt = get90DayCallIns(callIns, assoc.id).length;
+                    if (cnt === 0) return null;
+                    return (
+                      <p className={`flex items-center gap-1 text-[10px] font-bold mt-1 px-1.5 py-0.5 rounded-full border w-fit ${pointsColor(pts)}`}>
+                        <Shield size={9} /> {pointsEmoji(pts)} {pts} pt{pts !== 1 ? 's' : ''} · {cnt} incident{cnt !== 1 ? 's' : ''} (90d)
+                      </p>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -374,7 +521,8 @@ export default function Associates() {
                 </button>
               </div>
             </div>
-          ))
+          ))}
+          </div>
         )}
 
         <div className="h-4" />

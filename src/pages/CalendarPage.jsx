@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, isToday, parseISO } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus, X, Calendar } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, X, Calendar, RefreshCw, Clock, FileText, Trash2, User, Printer } from 'lucide-react';
 import Header from '../components/Header';
+import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
+import { openPrintWindow, statsRowHtml, badgeHtml } from '../lib/printReport';
 
 const EVENT_TYPES = ['Meeting', 'Inspection', 'Training', 'Other'];
 const EVENT_COLORS = {
@@ -11,6 +13,88 @@ const EVENT_COLORS = {
   Training: 'bg-green-500',
   Other: 'bg-gray-400',
 };
+
+// ── Event Detail Modal ───────────────────────────────────────────────────────
+function EventDetailModal({ event, onClose, onDelete }) {
+  if (!event) return null;
+
+  const colorClass = EVENT_COLORS[event.type] || 'bg-gray-400';
+
+  const handleDelete = () => {
+    if (window.confirm('Delete this event?')) {
+      onDelete(event.id);
+      onClose();
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
+        {/* Header stripe */}
+        <div className={`h-2 w-full rounded-t-2xl ${colorClass} flex-shrink-0`} />
+        <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-gray-100 flex-shrink-0">
+          <span className={`text-xs font-bold px-2.5 py-1 rounded-full text-white ${colorClass}`}>
+            {event.type}
+          </span>
+          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="modal-body p-4 space-y-4">
+          {/* Title */}
+          <h2 className="text-lg font-bold text-gray-800 leading-snug">{event.title}</h2>
+
+          {/* Date & Time */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <Calendar size={15} className="text-primary shrink-0" />
+              <span>{event.date}</span>
+            </div>
+            {event.time && (
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Clock size={15} className="text-primary shrink-0" />
+                <span>{event.time}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Creator */}
+          {event.createdBy?.name && (
+            <div className="flex items-center gap-2 text-xs text-blue-600 font-medium bg-blue-50 rounded-xl px-3 py-2">
+              <User size={13} className="shrink-0" />
+              Added by <strong>{event.createdBy.name}</strong>
+            </div>
+          )}
+
+          {/* Notes / Description */}
+          {event.notes ? (
+            <div className="bg-gray-50 rounded-xl px-3 py-3">
+              <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 mb-1.5">
+                <FileText size={13} />
+                Notes
+              </div>
+              <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{event.notes}</p>
+            </div>
+          ) : (
+            <div className="bg-gray-50 rounded-xl px-3 py-3 text-xs text-gray-400 italic">
+              No notes added for this event.
+            </div>
+          )}
+
+          {/* Delete button */}
+          <button
+            onClick={handleDelete}
+            className="w-full flex items-center justify-center gap-2 border border-red-200 text-red-500 hover:bg-red-50 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+          >
+            <Trash2 size={15} />
+            Delete Event
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function AddEventModal({ selectedDate, onClose, onSave }) {
   const [form, setForm] = useState({
@@ -29,12 +113,12 @@ function AddEventModal({ selectedDate, onClose, onSave }) {
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up">
-        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-bold text-lg text-gray-800">New Event</h2>
           <button onClick={onClose} className="p-2 text-gray-400 rounded-lg"><X size={20} /></button>
         </div>
-        <div className="p-4 space-y-3">
+        <div className="modal-body p-4 space-y-3">
           <div>
             <label className="text-xs font-semibold text-gray-600 mb-1 block">Title *</label>
             <input
@@ -88,6 +172,8 @@ function AddEventModal({ selectedDate, onClose, onSave }) {
               onChange={e => setForm({ ...form, notes: e.target.value })}
             />
           </div>
+        </div>
+        <div className="modal-footer">
           <button
             onClick={handleSave}
             className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-sm"
@@ -101,11 +187,15 @@ function AddEventModal({ selectedDate, onClose, onSave }) {
 }
 
 export default function CalendarPage() {
-  const { teamEvents, myEvents, addTeamEvent, deleteTeamEvent, addMyEvent, deleteMyEvent } = useAppStore();
+  const { teamEvents, myEvents, addTeamEvent, deleteTeamEvent, addMyEvent, deleteMyEvent, dbMode, dbReady, dbConnecting, needsRelogin, connectFirestore, user } = useAppStore();
+  const isCloudSync = dbReady && dbMode === 'firestore';
+  const isRealUser  = user && user.uid && user.uid !== 'demo_user';
+  const isSyncing   = isRealUser && !isCloudSync;
   const [activeTab, setActiveTab] = useState('team');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [detailEvent, setDetailEvent]   = useState(null); // event tapped in upcoming list
 
   const events = activeTab === 'team' ? teamEvents : myEvents;
   const addEvent = activeTab === 'team' ? addTeamEvent : addMyEvent;
@@ -131,12 +221,64 @@ export default function CalendarPage() {
   const prevMonth = () => setCurrentDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1));
   const nextMonth = () => setCurrentDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1));
 
+  const EVENT_COLOR_MAP = { Meeting: 'blue', Inspection: 'red', Training: 'green', Other: 'gray' };
+
+  const handlePrint = () => {
+    const monthLabel = format(currentDate, 'MMMM yyyy');
+    const monthEvents = events
+      .filter(e => e.date.startsWith(format(currentDate, 'yyyy-MM')))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const html = `
+      ${statsRowHtml([
+        { value: events.length,         label: 'Total Events' },
+        { value: monthEvents.length,     label: 'This Month' },
+        { value: upcomingEvents.length,  label: 'Upcoming' },
+      ])}
+      <h2 class="section-title">${monthLabel} Events</h2>
+      <table>
+        <thead><tr><th style="width:90px">Date</th><th style="width:70px">Time</th><th>Title</th><th>Type</th><th>Notes</th><th style="width:90px">Created By</th></tr></thead>
+        <tbody>
+          ${monthEvents.map(e => '<tr>' +
+            '<td>' + e.date + '</td>' +
+            '<td>' + (e.time || '\u2014') + '</td>' +
+            '<td><strong>' + (e.title || '') + '</strong></td>' +
+            '<td>' + badgeHtml(e.type, EVENT_COLOR_MAP[e.type] || 'gray') + '</td>' +
+            '<td style="font-size:10px;color:#555">' + (e.notes || '') + '</td>' +
+            '<td class="sub-label">' + (e.createdBy?.name || '') + '</td>' +
+          '</tr>').join('')}
+        </tbody>
+      </table>
+
+      <h2 class="section-title">Upcoming Events</h2>
+      <table>
+        <thead><tr><th>Date</th><th>Time</th><th>Title</th><th>Type</th></tr></thead>
+        <tbody>
+          ${upcomingEvents.map(e => '<tr>' +
+            '<td>' + e.date + '</td>' +
+            '<td>' + (e.time || '\u2014') + '</td>' +
+            '<td><strong>' + (e.title || '') + '</strong></td>' +
+            '<td>' + badgeHtml(e.type, EVENT_COLOR_MAP[e.type] || 'gray') + '</td>' +
+          '</tr>').join('')}
+        </tbody>
+      </table>`;
+    openPrintWindow({
+      title: (activeTab === 'team' ? 'Team Calendar' : 'My Calendar') + ' Report',
+      subtitle: monthLabel,
+      html,
+    });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Header title="Calendar" onAdd={() => setShowAddModal(true)} />
+      <DesktopPageHeader title="Calendar" onAdd={() => setShowAddModal(true)} addLabel="+ Add Event" onPrint={handlePrint} />
 
-      <div className="p-4 space-y-4">
-        {/* Tabs */}
+      <div className="desktop-page-content p-4 lg:p-0 space-y-4">
+
+        {/* Desktop: left=tabs+calendar+sync, right=upcoming (sticky) */}
+        <div className="lg:grid lg:grid-cols-[1fr_360px] lg:gap-6 space-y-4 lg:space-y-0">
+          <div className="space-y-4">
+          {/* Tabs */}
         <div className="flex bg-gray-100 rounded-xl p-1">
           <button
             onClick={() => setActiveTab('team')}
@@ -162,9 +304,48 @@ export default function CalendarPage() {
           <span>
             <strong>{activeTab === 'team' ? 'Team Calendar' : 'My Calendar'}</strong>
             {' — '}
-            {activeTab === 'team' ? 'events visible to all team members' : 'private to you only'}
+            {activeTab === 'team'
+              ? (isCloudSync ? '☁️ synced across all devices' : 'events visible to all team members')
+              : (isCloudSync ? '🔒 private · backed up to your account' : 'private to you only')
+            }
           </span>
         </div>
+
+        {/* ── Syncing banner (My Calendar tab, real user, not yet connected) ── */}
+        {activeTab === 'my' && isRealUser && (
+          <div className={`rounded-xl px-3 py-2.5 flex items-center justify-between gap-2 text-xs ${
+            isCloudSync
+              ? 'bg-green-50 border border-green-100 text-green-700'
+              : needsRelogin
+              ? 'bg-red-50 border border-red-100 text-red-700'
+              : 'bg-amber-50 border border-amber-100 text-amber-700'
+          }`}>
+            <div className="flex items-center gap-2">
+              {isCloudSync ? (
+                <span>☁️ <strong>Cloud sync active</strong> — {myEvents?.length || 0} event{myEvents?.length !== 1 ? 's' : ''} backed up to your account</span>
+              ) : needsRelogin ? (
+                <span>🔐 <strong>Session expired</strong> — please sign out and sign in again to sync your calendar</span>
+              ) : dbConnecting ? (
+                <>
+                  <RefreshCw size={13} className="animate-spin shrink-0" />
+                  <span><strong>Connecting to cloud…</strong> Loading your private events</span>
+                </>
+              ) : (
+                <span>⚠️ <strong>Not synced yet</strong> — tap to load {myEvents?.length || 0} event{myEvents?.length !== 1 ? 's' : ''} from cloud</span>
+              )}
+            </div>
+            {!isCloudSync && !needsRelogin && (
+              <button
+                onClick={() => connectFirestore()}
+                disabled={dbConnecting}
+                className="shrink-0 flex items-center gap-1 bg-amber-100 hover:bg-amber-200 disabled:opacity-50 text-amber-800 px-2 py-1 rounded-lg font-semibold transition-colors"
+              >
+                <RefreshCw size={11} className={dbConnecting ? 'animate-spin' : ''} />
+                {dbConnecting ? 'Syncing…' : 'Sync to Cloud'}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Calendar */}
         <div className="bg-white rounded-xl shadow-sm p-4">
@@ -233,6 +414,10 @@ export default function CalendarPage() {
           </div>
         </div>
 
+          </div>{/* end left col */}
+
+          {/* Right col — upcoming events sticky */}
+          <div className="lg:sticky lg:top-4">
         {/* Upcoming Events */}
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 font-semibold text-gray-800">
@@ -250,25 +435,35 @@ export default function CalendarPage() {
           ) : (
             <div className="divide-y divide-gray-50">
               {upcomingEvents.map(event => (
-                <div key={event.id} className="flex items-center gap-3 px-4 py-3">
+                <button
+                  key={event.id}
+                  onClick={() => setDetailEvent(event)}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 active:bg-gray-100 transition-colors text-left"
+                >
                   <div className={`w-2 h-10 rounded-full flex-shrink-0 ${EVENT_COLORS[event.type] || 'bg-gray-400'}`} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-800 truncate">{event.title}</p>
-                    <p className="text-xs text-gray-500">{event.date}{event.time ? ` at ${event.time}` : ''}</p>
+                    <p className="text-xs text-gray-500">
+                      {event.date}{event.time ? ` at ${event.time}` : ''}
+                      {event.notes ? <span className="ml-2 text-gray-400">· has notes</span> : ''}
+                      {event.createdBy?.name && activeTab === 'team' && (
+                        <span className="ml-2 text-blue-500">· by {event.createdBy.name}</span>
+                      )}
+                    </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     <span className={`text-xs px-2 py-0.5 rounded-full text-white ${EVENT_COLORS[event.type] || 'bg-gray-400'}`}>
                       {event.type}
                     </span>
-                    <button onClick={() => deleteEvent(event.id)} className="p-1 text-gray-300 hover:text-red-500">
-                      <X size={14} />
-                    </button>
+                    <ChevronRight size={14} className="text-gray-300" />
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}
         </div>
+          </div>{/* end right col */}
+        </div>{/* end desktop grid */}
 
         <div className="h-4" />
       </div>
@@ -278,6 +473,14 @@ export default function CalendarPage() {
           selectedDate={selectedDate}
           onClose={() => { setShowAddModal(false); setSelectedDate(null); }}
           onSave={addEvent}
+        />
+      )}
+
+      {detailEvent && (
+        <EventDetailModal
+          event={detailEvent}
+          onClose={() => setDetailEvent(null)}
+          onDelete={(id) => { deleteEvent(id); setDetailEvent(null); }}
         />
       )}
     </div>

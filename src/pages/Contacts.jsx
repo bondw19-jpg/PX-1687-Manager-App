@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { Plus, X, Pencil, Trash2, Search, Phone, Mail } from 'lucide-react';
+import { Plus, X, Pencil, Trash2, Search, Phone, Mail, Printer } from 'lucide-react';
 import Header from '../components/Header';
+import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
+import { openPrintWindow, statsRowHtml } from '../lib/printReport';
 
 const CONTACT_ICONS = {
   building: '🏢',
@@ -31,13 +33,13 @@ function ContactModal({ contact, onClose, onSave }) {
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up">
-        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-bold text-lg text-gray-800">{contact ? 'Edit Contact' : 'New Contact'}</h2>
           <button onClick={onClose} className="p-2 text-gray-400 rounded-lg"><X size={20} /></button>
         </div>
-        <div className="p-4 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+        <div className="modal-body p-4 space-y-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <div>
               <label className="text-xs font-semibold text-gray-600 mb-1 block">Name *</label>
               <input
@@ -101,6 +103,8 @@ function ContactModal({ contact, onClose, onSave }) {
               ))}
             </div>
           </div>
+        </div>
+        <div className="modal-footer">
           <button
             onClick={handleSave}
             className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-sm"
@@ -128,23 +132,52 @@ export default function Contacts() {
     if (window.confirm('Delete this contact?')) deleteContact(id);
   };
 
+  const handlePrint = () => {
+    const html = `
+      ${statsRowHtml([{ value: contacts.length, label: 'Total Contacts' }])}
+      <h2 class="section-title">Quick Contacts Directory</h2>
+      <table>
+        <thead><tr><th>Name</th><th>Role</th><th>Phone</th><th>Email</th><th>Notes</th></tr></thead>
+        <tbody>
+          ${contacts.map(c => '<tr>' +
+            '<td><strong>' + (c.name || '') + '</strong></td>' +
+            '<td>' + (c.role || '\u2014') + '</td>' +
+            '<td>' + (c.phone || '\u2014') + '</td>' +
+            '<td>' + (c.email || '\u2014') + '</td>' +
+            '<td style="font-size:10px;color:#555">' + (c.description || '') + '</td>' +
+          '</tr>').join('')}
+        </tbody>
+      </table>`;
+    openPrintWindow({ title: 'Quick Contacts Directory', html });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Header title="Quick Contacts" onAdd={() => setShowAdd(true)} />
+      <DesktopPageHeader title="Quick Contacts" onAdd={() => setShowAdd(true)} addLabel="+ Add Contact" onPrint={handlePrint} />
 
-      <div className="p-4 space-y-3">
-        {/* Search */}
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white shadow-sm"
-            placeholder="Search contacts..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+      <div className="desktop-page-content p-4 lg:p-0 space-y-3">
+        {/* Search + Print */}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white shadow-sm"
+              placeholder="Search contacts..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 flex-shrink-0"
+          >
+            <Printer size={14} /> Print
+          </button>
         </div>
 
         {/* Contact Cards */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
         {filtered.map(contact => (
           <div key={contact.id} className="bg-white rounded-xl shadow-sm p-4">
             <div className="flex items-center gap-3 mb-2">
@@ -200,6 +233,7 @@ export default function Contacts() {
             </div>
           </div>
         ))}
+        </div>
 
         {filtered.length === 0 && (
           <div className="bg-white rounded-xl p-8 flex flex-col items-center text-gray-400">

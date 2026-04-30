@@ -1,0 +1,1 @@
+import{t as r,j as n}from"./format-4Bc0T3h8.js";function o(t,e){const a=r(t);return isNaN(e)?n(t,NaN):(a.setDate(a.getDate()+e),a)}function u(t,e){const a=r(t),s=r(e);return a.getTime()>s.getTime()}function c(t,e){return o(t,-90)}export{u as i,c as s};

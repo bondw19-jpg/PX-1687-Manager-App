@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { X, Plus, Trash2, RefreshCw, Printer } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { X, Plus, Trash2, RefreshCw, Printer, User } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
+import { openPrintWindow, infoGridHtml, statsRowHtml } from '../lib/printReport';
 
 const KEY_LEGEND = [
   { key: 'A', desc: 'No call, no show' },
@@ -15,23 +16,54 @@ const KEY_LEGEND = [
   { key: 'J', desc: 'Break violation' },
 ];
 
-function emptyRow() {
-  return { id: Date.now() + Math.random(), date: '', key: '', details: '' };
+function emptyRow(user) {
+  return {
+    id: Date.now() + Math.random(),
+    date: '',
+    key: '',
+    details: '',
+    addedBy: user ? { uid: user.uid, name: user.name || user.email?.split('@')[0] || 'Unknown' } : null,
+  };
+}
+
+// Auto-expanding textarea — grows with content, never shows scrollbar
+function AutoTextarea({ value, onChange, placeholder, className }) {
+  const ref = useRef(null);
+
+  // Resize whenever value changes
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      className={className}
+      style={{ overflow: 'hidden', minHeight: '28px' }}
+    />
+  );
 }
 
 export default function WorkFileModal({ associate, onClose }) {
-  const { workFiles, saveWorkFile } = useAppStore();
+  const { workFiles, saveWorkFile, user } = useAppStore();
   const existing = workFiles[associate.id];
 
   const [rows, setRows] = useState(
-    existing?.rows || [emptyRow(), emptyRow(), emptyRow()]
+    existing?.rows || [emptyRow(user), emptyRow(user), emptyRow(user)]
   );
 
-  const addRow = () => setRows(prev => [...prev, emptyRow()]);
+  const addRow = () => setRows(prev => [...prev, emptyRow(user)]);
 
   const clearRows = () => {
     if (window.confirm('Clear all rows?')) {
-      setRows([emptyRow(), emptyRow(), emptyRow()]);
+      setRows([emptyRow(user), emptyRow(user), emptyRow(user)]);
     }
   };
 
@@ -40,7 +72,9 @@ export default function WorkFileModal({ associate, onClose }) {
   };
 
   const removeRow = (id) => {
-    setRows(prev => prev.filter(r => r.id !== id));
+    if (window.confirm('Remove this work file row? This cannot be undone.')) {
+      setRows(prev => prev.filter(r => r.id !== id));
+    }
   };
 
   const handleSave = () => {
@@ -49,55 +83,75 @@ export default function WorkFileModal({ associate, onClose }) {
   };
 
   const handlePrint = () => {
-    // Simple print approach
-    const printContent = `
-      <html><head><title>Associate Work File</title>
-      <style>
-        body { font-family: Arial, sans-serif; padding: 20px; font-size: 12px; }
-        h2 { text-align: center; font-size: 16px; border-bottom: 2px solid #000; padding-bottom: 8px; }
-        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
-        .info-row { display: flex; gap: 8px; }
-        .info-label { font-weight: bold; min-width: 120px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-        th, td { border: 1px solid #000; padding: 6px; text-align: left; }
-        th { background: #f0f0f0; font-weight: bold; }
-        .legend { margin-top: 16px; font-size: 11px; }
-        .legend h3 { font-size: 12px; margin-bottom: 4px; }
-      </style>
-      </head><body>
-      <h2>ASSOCIATE WORK FILE</h2>
-      <div class="info-grid">
-        <div class="info-row"><span class="info-label">Associate's Name:</span><span>${associate.name}</span></div>
-        <div class="info-row"><span class="info-label">Employee ID #:</span><span>${associate.employeeId || ''}</span></div>
-        <div class="info-row"><span class="info-label">Position / Title:</span><span>${associate.position || ''}</span></div>
-        <div class="info-row"><span class="info-label">Telephone:</span><span>${associate.telephone || ''}</span></div>
-        <div class="info-row"><span class="info-label">Birthday:</span><span>${associate.birthday || ''}</span></div>
-        <div class="info-row"><span class="info-label">Hire Date:</span><span>${associate.hireDate || ''}</span></div>
-        <div class="info-row"><span class="info-label">Status:</span><span>${associate.status || ''}</span></div>
-      </div>
+    const filledRows = rows.filter(r => r.date || r.key || r.details);
+    const html = `
+      ${infoGridHtml([
+        ['Associate Name',  associate.name],
+        ['Employee ID',     associate.employeeId || '—'],
+        ['Position / Title',associate.position || '—'],
+        ['Telephone',       associate.telephone || '—'],
+        ['Birthday',        associate.birthday || '—'],
+        ['Hire Date',       associate.hireDate || '—'],
+        ['Status',          associate.status ? associate.status.charAt(0).toUpperCase() + associate.status.slice(1) : '—'],
+        ['Last Saved By',   existing?.savedBy?.name || '—'],
+      ])}
+
+      ${statsRowHtml([
+        { value: filledRows.length, label: 'Total Entries' },
+        { value: rows.filter(r => r.key === 'A').length, label: 'No Call No Show' },
+        { value: rows.filter(r => r.key === 'F').length, label: 'Tardiness' },
+        { value: rows.filter(r => r.key === 'G').length, label: 'Counseling' },
+      ])}
+
+      <h2 class="section-title">Work Log</h2>
       <table>
-        <thead><tr><th style="width:80px">DATE</th><th style="width:40px">KEY</th><th>TOPICS & DETAILS</th></tr></thead>
+        <thead>
+          <tr>
+            <th style="width:90px">DATE</th>
+            <th style="width:45px">KEY</th>
+            <th>TOPICS &amp; DETAILS</th>
+            <th style="width:110px">ADDED BY</th>
+          </tr>
+        </thead>
         <tbody>
-          ${rows.map(r => `<tr><td>${r.date}</td><td>${r.key}</td><td>${r.details}</td></tr>`).join('')}
+          ${rows.map(r => `
+            <tr>
+              <td>${r.date || ''}</td>
+              <td><strong>${r.key || ''}</strong></td>
+              <td>${r.details || ''}</td>
+              <td class="sub-label">${r.addedBy?.name || ''}</td>
+            </tr>`).join('')}
         </tbody>
       </table>
+
       <div class="legend">
-        <h3>Key Note Legend:</h3>
-        ${KEY_LEGEND.map(k => `<span><b>${k.key}:</b> ${k.desc} &nbsp; </span>`).join('')}
+        <div class="legend-title">Key Note Legend</div>
+        <div class="legend-grid">
+          ${KEY_LEGEND.map(k => `
+            <div class="legend-item">
+              <span class="legend-key">${k.key}:</span> ${k.desc}
+            </div>`).join('')}
+        </div>
       </div>
-      </body></html>
+
+      <p style="margin-top:14px; font-size:10px; color:#888;">
+        Associate signature: _____________________________________________ &nbsp;&nbsp;
+        Manager signature: _____________________________________________
+      </p>
     `;
-    const win = window.open('', '_blank');
-    win.document.write(printContent);
-    win.document.close();
-    win.print();
+
+    openPrintWindow({
+      title:    'Associate Work File',
+      subtitle: `${associate.name} — ${associate.position || 'Associate'}`,
+      html,
+    });
   };
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up max-h-[92vh] flex flex-col">
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
           <div className="flex items-center gap-2">
             <span className="text-lg">📋</span>
             <h2 className="font-bold text-gray-800">Associate Work File</h2>
@@ -107,7 +161,7 @@ export default function WorkFileModal({ associate, onClose }) {
           </button>
         </div>
 
-        <div className="overflow-y-auto flex-1">
+        <div className="modal-body">
           {/* Info Header */}
           <div className="p-4 bg-gray-50 border-b border-gray-100">
             <div className="text-center font-bold text-sm text-gray-800 mb-3 uppercase tracking-wide">
@@ -142,6 +196,20 @@ export default function WorkFileModal({ associate, onClose }) {
                 <span className="text-gray-500 text-xs w-28 flex-shrink-0">Status:</span>
                 <span className="font-medium text-gray-800 capitalize">{associate.status || '—'}</span>
               </div>
+              {/* Last saved by */}
+              {existing?.savedBy?.name && (
+                <div className="col-span-2 flex items-center gap-1.5 mt-1 pt-2 border-t border-gray-200">
+                  <User size={11} className="text-gray-400 flex-shrink-0" />
+                  <span className="text-xs text-gray-500">
+                    Last saved by <span className="font-semibold text-gray-700">{existing.savedBy.name}</span>
+                    {existing.savedAt && (
+                      <span className="text-gray-400 ml-1">
+                        · {new Date(existing.savedAt).toLocaleDateString()}
+                      </span>
+                    )}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -169,39 +237,51 @@ export default function WorkFileModal({ associate, onClose }) {
 
               {/* Rows */}
               {rows.map((row, idx) => (
-                <div key={row.id} className={`grid grid-cols-[90px_50px_1fr] border-t border-gray-100 group ${
+                <div key={row.id} className={`grid grid-cols-[90px_50px_1fr] border-t border-gray-100 group items-start ${
                   idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'
                 }`}>
-                  <div className="border-r border-gray-100">
+                  {/* DATE */}
+                  <div className="border-r border-gray-100 self-stretch">
                     <input
-                      className="w-full px-2 py-1.5 text-xs bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-primary"
+                      className="w-full h-full px-2 py-1.5 text-xs bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-primary"
                       placeholder="MM/DD/YY"
                       value={row.date}
                       onChange={e => updateRow(row.id, 'date', e.target.value)}
                     />
                   </div>
-                  <div className="border-r border-gray-100">
+                  {/* KEY */}
+                  <div className="border-r border-gray-100 self-stretch">
                     <input
-                      className="w-full px-2 py-1.5 text-xs bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-primary uppercase"
+                      className="w-full h-full px-2 py-1.5 text-xs bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-primary uppercase"
                       placeholder="A-J"
                       maxLength={2}
                       value={row.key}
                       onChange={e => updateRow(row.id, 'key', e.target.value.toUpperCase())}
                     />
                   </div>
-                  <div className="flex items-center">
-                    <input
-                      className="flex-1 px-2 py-1.5 text-xs bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-primary"
-                      placeholder="Details..."
-                      value={row.details}
-                      onChange={e => updateRow(row.id, 'details', e.target.value)}
-                    />
-                    <button
-                      onClick={() => removeRow(row.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-red-400 hover:text-red-600 transition-opacity mr-1"
-                    >
-                      <Trash2 size={12} />
-                    </button>
+                  {/* TOPICS & DETAILS */}
+                  <div className="flex flex-col min-h-[32px]">
+                    <div className="flex items-start flex-1">
+                      <AutoTextarea
+                        className="flex-1 px-2 py-1.5 text-xs bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-primary resize-none leading-relaxed"
+                        placeholder="Details..."
+                        value={row.details}
+                        onChange={e => updateRow(row.id, 'details', e.target.value)}
+                      />
+                      <button
+                        onClick={() => removeRow(row.id)}
+                        className="opacity-0 group-hover:opacity-100 p-1 mt-1 text-red-400 hover:text-red-600 transition-opacity mr-1 flex-shrink-0"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                    {/* Added by chip */}
+                    {row.addedBy?.name && (
+                      <div className="flex items-center gap-1 px-2 pb-1">
+                        <User size={9} className="text-gray-300 flex-shrink-0" />
+                        <span className="text-[10px] text-gray-400 leading-none">{row.addedBy.name}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -213,7 +293,7 @@ export default function WorkFileModal({ associate, onClose }) {
                 onClick={addRow}
                 className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-xl text-xs font-medium text-gray-700 hover:bg-gray-50"
               >
-                <Plus size={14} /> Add Rows
+                <Plus size={14} /> Add Row
               </button>
               <button
                 onClick={clearRows}
@@ -226,7 +306,7 @@ export default function WorkFileModal({ associate, onClose }) {
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 border-t border-gray-100 space-y-2">
+        <div className="modal-footer space-y-2">
           <div className="flex gap-2">
             <button
               onClick={onClose}

@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { Plus, X, Search, Pencil, Trash2, Circle, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
+import { Plus, X, Search, Pencil, Trash2, Circle, CheckCircle2, AlertCircle, Clock, Printer } from 'lucide-react';
 import { format } from 'date-fns';
 import Header from '../components/Header';
+import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
+import { openPrintWindow, statsRowHtml, badgeHtml } from '../lib/printReport';
 
 const PRIORITIES = ['Low', 'Medium', 'High', 'Urgent'];
 const STATUSES = ['To Do', 'In Progress', 'Done'];
@@ -42,12 +44,12 @@ function TaskModal({ task, associates, onClose, onSave }) {
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-bold text-lg text-gray-800">{task ? 'Edit Task' : 'New Task'}</h2>
           <button onClick={onClose} className="p-2 text-gray-400 rounded-lg"><X size={20} /></button>
         </div>
-        <div className="overflow-y-auto flex-1 p-4 space-y-3">
+        <div className="modal-body p-4 space-y-3">
           <div>
             <label className="text-xs font-semibold text-gray-600 mb-1 block">Title *</label>
             <input
@@ -67,7 +69,7 @@ function TaskModal({ task, associates, onClose, onSave }) {
               onChange={e => setForm({ ...form, description: e.target.value })}
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <div>
               <label className="text-xs font-semibold text-gray-600 mb-1 block">Assignee</label>
               {associates.length > 0 ? (
@@ -77,7 +79,7 @@ function TaskModal({ task, associates, onClose, onSave }) {
                   onChange={e => setForm({ ...form, assignee: e.target.value })}
                 >
                   <option value="">Unassigned</option>
-                  {associates.map(a => (
+                  {[...associates].sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(a => (
                     <option key={a.id} value={a.name}>{a.name}</option>
                   ))}
                 </select>
@@ -138,7 +140,7 @@ function TaskModal({ task, associates, onClose, onSave }) {
             </div>
           </div>
         </div>
-        <div className="p-4 border-t border-gray-100">
+        <div className="modal-footer">
           <button
             onClick={handleSave}
             className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-sm"
@@ -219,6 +221,36 @@ export default function Tasks() {
     if (window.confirm('Delete this task?')) deleteTask(id);
   };
 
+  const handlePrint = () => {
+    const PRIORITY_COLOR = { Low: 'gray', Medium: 'blue', High: 'yellow', Urgent: 'red' };
+    const STATUS_COLOR   = { 'To Do': 'gray', 'In Progress': 'yellow', Done: 'green' };
+    const html = `
+      ${statsRowHtml([
+        { value: todo.length,       label: 'To Do' },
+        { value: inProgress.length, label: 'In Progress' },
+        { value: done.length,       label: 'Done' },
+        { value: urgent.length,     label: 'Urgent' },
+      ])}
+      <h2 class="section-title">Task List</h2>
+      <table>
+        <thead><tr>
+          <th>Title</th><th>Status</th><th>Priority</th>
+          <th>Assignee</th><th>Due Date</th><th>Description</th>
+        </tr></thead>
+        <tbody>
+          ${tasks.map(t => '<tr>' +
+            '<td><strong>' + (t.status === 'Done' ? '<s>' + t.title + '</s>' : t.title) + '</strong></td>' +
+            '<td>' + badgeHtml(t.status, STATUS_COLOR[t.status] || 'gray') + '</td>' +
+            '<td>' + badgeHtml(t.priority, PRIORITY_COLOR[t.priority] || 'gray') + '</td>' +
+            '<td>' + (t.assignee || '\u2014') + '</td>' +
+            '<td>' + (t.dueDate || '\u2014') + '</td>' +
+            '<td style="font-size:10px;color:#555">' + (t.description || '') + '</td>' +
+          '</tr>').join('')}
+        </tbody>
+      </table>`;
+    openPrintWindow({ title: 'Tasks & To-Do Report', subtitle: tasks.length + ' tasks total', html });
+  };
+
   const toggleCollapse = (key) => {
     setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
   };
@@ -232,10 +264,11 @@ export default function Tasks() {
   return (
     <div className="min-h-screen bg-background">
       <Header title="Tasks & To-Do" onAdd={() => setShowAdd(true)} />
+      <DesktopPageHeader title="Tasks & To-Do" onAdd={() => setShowAdd(true)} addLabel="+ Add Task" onPrint={handlePrint} />
 
-      <div className="p-4 space-y-4">
+      <div className="desktop-page-content p-4 lg:p-0 space-y-4">
         {/* Stats */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
             { label: 'To Do', count: todo.length, bg: 'bg-gray-100', icon: '⚫' },
             { label: 'In Progress', count: inProgress.length, bg: 'bg-yellow-50', icon: '🟡' },
@@ -253,14 +286,22 @@ export default function Tasks() {
         </div>
 
         {/* Search & Filters */}
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white shadow-sm"
-            placeholder="Search tasks..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white shadow-sm"
+              placeholder="Search tasks..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 flex-shrink-0"
+          >
+            <Printer size={14} /> Print
+          </button>
         </div>
         <div className="flex gap-2">
           <select

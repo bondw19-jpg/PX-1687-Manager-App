@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X, Sparkles, GitBranch, Eye, ExternalLink,
   CheckCircle2, Clock, ArrowRight, ChevronDown, ChevronUp,
@@ -8,10 +9,46 @@ import {
 // ─── Changelog Data ───────────────────────────────────────────────────────────
 export const UPDATES = [
   {
-    version: '2.1.0',
-    date: 'Mar 9, 2026',
+    version: '2.1.2',
+    date: 'Apr 12, 2026',
     label: 'Latest',
     labelColor: 'bg-green-500',
+    summary: 'Team Activity Feed on Dashboard, alphabetical associate lists, and bell icon removed in favour of the new feed.',
+    changes: [
+      { type: 'new',     text: 'Team Updates feed on Dashboard — see every call-in, task, announcement, note, review & calendar event in real time' },
+      { type: 'new',     text: 'Tap any feed card to view full details and navigate directly to the module' },
+      { type: 'new',     text: 'Per-user read tracking — cards disappear after you tap them; other managers still see unread cards until they tap' },
+      { type: 'new',     text: 'Work File deep-link — tapping a Work File feed card opens that associate\'s Work File modal directly' },
+      { type: 'improve', text: 'All associate lists and dropdowns now sorted A → Z across Associates, Call-Ins, Tasks & Reviews' },
+      { type: 'improve', text: 'Notification bell removed from header — Team Updates feed replaces it on the Dashboard' },
+      { type: 'fix',     text: 'Fixed work file "Go to" button staying on Dashboard (route was /associates, corrected to /team)' },
+      { type: 'fix',     text: 'Fixed read state not clearing when user uid resolved after login' },
+    ],
+  },
+  {
+    version: '2.1.1',
+    date: 'Apr 1, 2026',
+    label: 'Previous',
+    labelColor: 'bg-gray-400',
+    summary: 'Full PX Attendance Point System, auto point recovery, per-associate print reports, and Print/PDF across all modules.',
+    changes: [
+      { type: 'new',     text: 'PX Attendance Point System — Tardiness 0.5/1/1.5 pts, Early Dep 1/2 pts, Absence 1/2/3 pts, Protected 0 pts' },
+      { type: 'new',     text: 'Automatic 30/60-day clean-streak point recovery (−0.5 after 30 days, −1.0 after 60 days)' },
+      { type: 'new',     text: 'Progressive discipline: Coaching → First Written → Final Written → Termination Eligible' },
+      { type: 'new',     text: 'Per-associate printable attendance report with 90-day incident table, expired records & signature block' },
+      { type: 'new',     text: 'Print report entry points: associate picker, leaderboard row printer icon & call-in detail modal' },
+      { type: 'new',     text: 'Live Notification Bell (mobile + desktop) with slide-in panel and per-user read state' },
+      { type: 'new',     text: 'Print / PDF button added to all modules (Associates, Call-Ins, Notes, Tasks, Reviews, Contacts, Announcements, Checklist, Calendar)' },
+      { type: 'new',     text: 'Notes file & image attachments with upload progress bar' },
+      { type: 'improve', text: 'Call-Ins leaderboard shows effective (post-recovery) points with green recovery chip' },
+      { type: 'improve', text: 'Auto work-file entry created when discipline milestone is reached' },
+    ],
+  },
+  {
+    version: '2.1.0',
+    date: 'Mar 9, 2026',
+    label: 'Older',
+    labelColor: 'bg-gray-300',
     summary: 'Manager Hub fully launched with all core modules.',
     changes: [
       { type: 'new',  text: 'Dashboard with live stats, events & call-in feed' },
@@ -31,8 +68,8 @@ export const UPDATES = [
   {
     version: '2.0.0',
     date: 'Mar 8, 2026',
-    label: 'Previous',
-    labelColor: 'bg-gray-400',
+    label: 'Older',
+    labelColor: 'bg-gray-300',
     summary: 'Initial project scaffold and base configuration.',
     changes: [
       { type: 'new',  text: 'React 18 + Vite 5 project setup' },
@@ -56,22 +93,56 @@ function UpdateModal({ onClose, previewUrl }) {
   const [expandedVersion, setExpandedVersion] = useState(UPDATES[0].version);
 
   const handlePreview = () => {
-    window.open(previewUrl, '_blank', 'noopener,noreferrer');
+    // Open in a mobile-sized popup (iPhone 14 Pro dimensions: 393×852)
+    const w = 393;
+    const h = 852;
+    const left = Math.max(0, Math.round(window.screen.width  / 2 - w / 2));
+    const top  = Math.max(0, Math.round(window.screen.height / 2 - h / 2));
+    window.open(
+      previewUrl,
+      'px_preview',
+      `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes,noopener,noreferrer`
+    );
   };
 
-  return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl w-full max-w-[480px] animate-slide-up max-h-[90vh] flex flex-col">
-
-        {/* Modal Header */}
-        <div className="relative bg-gradient-to-br from-primary to-primary-dark rounded-t-2xl p-5 text-white overflow-hidden">
-          {/* decorative circles */}
+  // ── Render into document.body via portal so the Header's CSS transform
+  //    stacking context cannot clip or mis-position the fixed overlay.
+  const modalContent = (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.55)',
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'flex-end',
+        justifyContent: 'center',
+      }}
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <div
+        className="animate-slide-up"
+        style={{
+          background: '#fff',
+          borderRadius: '1.25rem 1.25rem 0 0',
+          width: '100%',
+          maxWidth: '480px',
+          height: '82dvh',
+          maxHeight: '82dvh',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        }}
+      >
+        {/* ── Header ── */}
+        <div className="relative bg-gradient-to-br from-primary to-primary-dark p-5 text-white overflow-hidden flex-shrink-0 rounded-t-2xl">
           <div className="absolute -top-4 -right-4 w-24 h-24 bg-white/10 rounded-full" />
           <div className="absolute -bottom-6 -left-6 w-20 h-20 bg-white/10 rounded-full" />
 
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-1.5 bg-white/20 hover:bg-white/30 rounded-xl transition-all"
+            className="absolute top-4 right-4 p-1.5 bg-white/20 hover:bg-white/30 rounded-xl transition-all z-10"
           >
             <X size={18} />
           </button>
@@ -102,13 +173,12 @@ function UpdateModal({ onClose, previewUrl }) {
           </div>
         </div>
 
-        {/* Scrollable Changelog */}
-        <div className="overflow-y-auto flex-1 p-4 space-y-3">
+        {/* ── Scrollable Changelog ── */}
+        <div className="modal-body p-4 space-y-3">
           {UPDATES.map((update) => {
             const isExpanded = expandedVersion === update.version;
             return (
               <div key={update.version} className="border border-gray-100 rounded-xl overflow-hidden">
-                {/* Version header */}
                 <button
                   onClick={() => setExpandedVersion(isExpanded ? null : update.version)}
                   className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-all text-left"
@@ -129,7 +199,6 @@ function UpdateModal({ onClose, previewUrl }) {
                   }
                 </button>
 
-                {/* Change list */}
                 {isExpanded && (
                   <div className="divide-y divide-gray-50">
                     <p className="px-4 py-2 text-xs text-gray-500 italic">{update.summary}</p>
@@ -152,8 +221,8 @@ function UpdateModal({ onClose, previewUrl }) {
           })}
         </div>
 
-        {/* CTA Footer */}
-        <div className="p-4 border-t border-gray-100 space-y-2">
+        {/* ── Footer — always pinned at bottom ── */}
+        <div className="modal-footer space-y-2">
           <button
             onClick={handlePreview}
             className="w-full bg-primary text-white py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:bg-primary-dark shadow-md shadow-red-100 transition-all"
@@ -172,6 +241,8 @@ function UpdateModal({ onClose, previewUrl }) {
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }
 
 // ─── Preview Update Banner ─────────────────────────────────────────────────────
@@ -197,10 +268,10 @@ export default function PreviewUpdateBanner({ previewUrl }) {
 
           <div className="flex-1 min-w-0 relative z-10">
             <p className="text-white font-bold text-xs leading-tight">
-              ✨ v2.1.0 — Manager Hub is Live!
+              ✨ v2.1.2 — Team Updates Feed + Alphabetical Lists
             </p>
             <p className="text-white/70 text-[11px] leading-tight mt-0.5">
-              11 new features including checklists, reviews & PWA support
+              Real-time team activity feed, deep-links & per-user read tracking
             </p>
           </div>
 

@@ -1,0 +1,23 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Shared store data ─────────────────────────────────────────────────────
+    // Any authenticated user can read and write shared store collections.
+    match /stores/{storeId}/{collection}/{docId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // ── Private per-user data ─────────────────────────────────────────────────
+    // Only the owner (matching UID) can read or write their private notes
+    // and calendar events.
+    match /users/{userId}/{collection}/{docId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Deny everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

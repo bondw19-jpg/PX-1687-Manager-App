@@ -9,12 +9,13 @@
 
 body {
   font-family: 'Inter', sans-serif;
-  background-color: #F3F4F6;
+  background-color: #E5E7EB;
   margin: 0;
   padding: 0;
   overscroll-behavior: none;
 }
 
+/* ── Mobile: single-column centered card ── */
 #root {
   max-width: 480px;
   margin: 0 auto;
@@ -24,16 +25,122 @@ body {
   overflow-x: hidden;
 }
 
+/* Sidebar hidden on mobile by default — shown via media query below */
+#desktop-sidebar {
+  display: none;
+}
+
+/* ── Desktop: full-width sidebar + content layout ── */
+@media (min-width: 1024px) {
+  body {
+    background-color: #E5E7EB;
+  }
+
+  #root {
+    max-width: 100%;
+    display: flex;
+    min-height: 100vh;
+    overflow-x: unset;
+  }
+
+  /* Sidebar (desktop nav) */
+  #desktop-sidebar {
+    display: flex;
+  }
+
+  /* Hide mobile header on desktop */
+  .mobile-header {
+    display: none !important;
+  }
+
+  /* Hide bottom nav on desktop */
+  .bottom-nav {
+    display: none !important;
+  }
+
+  /* Content area on desktop */
+  .desktop-content {
+    margin-left: 260px;
+    flex: 1;
+    min-height: 100vh;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  /* Page wrapper on desktop — no extra top/bottom padding */
+  .layout-main {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  /* Desktop page header bar */
+  .desktop-page-header {
+    display: flex;
+  }
+
+  /* Modal centered on desktop instead of bottom sheet */
+  .modal-overlay {
+    align-items: center !important;
+  }
+
+  .modal-overlay > div {
+    border-radius: 1.25rem !important;
+    animation: fadeScaleIn 0.2s ease-out !important;
+    /* Desktop: shrink to content, cap at 90vh, centered with max-width */
+    height: auto !important;
+    max-height: 90vh !important;
+    max-width: 560px !important;
+    padding-bottom: 0 !important;
+  }
+
+  /* Desktop page content — constrained width, centered */
+  .desktop-page-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1.5rem 2rem 2rem;
+  }
+
+  /* Desktop 2-column layout helper */
+  .desktop-two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  /* Desktop 3-column layout helper */
+  .desktop-three-col {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+    align-items: start;
+  }
+
+  /* Desktop left panel (wider) */
+  .desktop-col-left {
+    grid-column: 1;
+  }
+
+  /* Desktop right panel (narrower) */
+  .desktop-col-right {
+    grid-column: 2;
+  }
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
-  width: 4px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background: #D1D5DB;
-  border-radius: 2px;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #9CA3AF;
 }
 
 /* Safe area for iOS */
@@ -41,67 +148,85 @@ body {
   padding-bottom: env(safe-area-inset-bottom, 16px);
 }
 
-/* Animations */
+/* ── Animations ── */
 @keyframes slideInLeft {
   from { transform: translateX(-100%); }
-  to { transform: translateX(0); }
+  to   { transform: translateX(0); }
 }
-
 @keyframes fadeIn {
   from { opacity: 0; }
-  to { opacity: 1; }
+  to   { opacity: 1; }
 }
-
 @keyframes slideUp {
   from { transform: translateY(100%); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+@keyframes fadeScaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
 }
 
-.animate-slide-in-left {
-  animation: slideInLeft 0.25s ease-out;
-}
-
-.animate-fade-in {
-  animation: fadeIn 0.2s ease-out;
-}
-
-.animate-slide-up {
-  animation: slideUp 0.3s ease-out;
-}
+.animate-slide-in-left { animation: slideInLeft 0.25s ease-out; }
+.animate-fade-in       { animation: fadeIn 0.2s ease-out; }
+.animate-slide-up      { animation: slideUp 0.3s ease-out; }
+.animate-fade-scale-in { animation: fadeScaleIn 0.2s ease-out; }
 
 /* Bottom nav active tab */
-.tab-active {
-  color: #C8102E;
-}
+.tab-active { color: #C8102E; }
 
 /* Card hover */
-.card-hover {
-  transition: box-shadow 0.2s;
-}
-.card-hover:active {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
+.card-hover { transition: box-shadow 0.2s; }
+.card-hover:active { box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
 
 /* Input focus */
 input:focus, textarea:focus, select:focus {
   outline: none;
   border-color: #C8102E;
-  box-shadow: 0 0 0 2px rgba(200, 16, 46, 0.2);
+  box-shadow: 0 0 0 2px rgba(200, 16, 46, 0.15);
 }
 
 /* Star rating */
 .star-filled { color: #F5A623; }
-.star-empty { color: #D1D5DB; }
+.star-empty  { color: #D1D5DB; }
 
-/* Modal overlay */
+/* Modal overlay — mobile: bottom sheet */
 .modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.5);
-  z-index: 50;
+  z-index: 200;              /* above banners, headers, nav bars */
   display: flex;
   align-items: flex-end;
   justify-content: center;
+}
+
+/* Mobile bottom-sheet inner panel — always anchored to bottom, never overflows viewport */
+.modal-overlay > div {
+  /* dvh accounts for iOS Safari collapsible address bar */
+  max-height: 80dvh;
+  height: 80dvh;
+  width: 100%;               /* full width on mobile — no max-width */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;          /* children scroll, not the sheet */
+  border-radius: 1.25rem 1.25rem 0 0;
+  /* Sit above iPhone home bar */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Modal body — scrollable flex child that fills remaining space */
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Modal footer — always pinned at bottom, never scrolls away */
+.modal-footer {
+  flex-shrink: 0;
+  border-top: 1px solid #f3f4f6;
+  padding: 1rem;
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 1rem));
 }
 
 /* Scrollable content area */
@@ -109,3 +234,5 @@ input:focus, textarea:focus, select:focus {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
+
+
