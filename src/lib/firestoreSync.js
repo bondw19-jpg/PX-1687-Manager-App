@@ -385,7 +385,7 @@ export async function batchImportToFirestore(data, uid) {
   // Shared collections
   const SHARED_COLLS = [
     'associates', 'callIns', 'teamEvents',
-    'teamNotes', 'reviews', 'tasks', 'contacts', 'announcements',
+    'teamNotes', 'reviews', 'tasks', 'uniforms', 'uniformInventory', 'managerUniformStock', 'associateUniformItems', 'contacts', 'announcements',
   ];
   for (const coll of SHARED_COLLS) {
     const items = data[coll];
@@ -442,7 +442,7 @@ export async function batchForceToFirestore(data, uid) {
 
   const SHARED_COLLS = [
     'associates', 'callIns', 'teamEvents',
-    'teamNotes', 'reviews', 'tasks', 'contacts', 'announcements',
+    'teamNotes', 'reviews', 'tasks', 'uniforms', 'uniformInventory', 'managerUniformStock', 'associateUniformItems', 'contacts', 'announcements',
   ];
   for (const coll of SHARED_COLLS) {
     const items = data[coll];
@@ -588,6 +588,10 @@ export async function initFirestoreSync(set, get) {
       teamNotes:     'teamNotes',
       reviews:       'reviews',
       tasks:         'tasks',
+      uniforms:      'uniforms',
+      uniformInventory: 'uniformInventory',
+      managerUniformStock: 'managerUniformStock',
+      associateUniformItems: 'associateUniformItems',
       contacts:      'contacts',
       announcements: 'announcements',
     };
@@ -721,7 +725,7 @@ export async function initFirestoreSync(set, get) {
           const data   = parsed?.state ?? parsed;
           const hasData = [
             'associates', 'callIns', 'teamNotes', 'myNotes', 'myEvents',
-            'reviews', 'tasks', 'contacts', 'announcements',
+            'reviews', 'tasks', 'uniforms', 'uniformInventory', 'managerUniformStock', 'associateUniformItems', 'contacts', 'announcements',
           ].some(k => Array.isArray(data[k]) && data[k].length > 0);
 
           if (hasData) {

@@ -11,6 +11,7 @@ const CalendarPage  = lazy(() => import('./pages/CalendarPage'));
 const Checklist     = lazy(() => import('./pages/Checklist'));
 const Notes         = lazy(() => import('./pages/Notes'));
 const Reviews       = lazy(() => import('./pages/Reviews'));
+const Uniforms      = lazy(() => import('./pages/Uniforms'));
 const Tasks         = lazy(() => import('./pages/Tasks'));
 const Contacts      = lazy(() => import('./pages/Contacts'));
 const Announcements = lazy(() => import('./pages/Announcements'));
@@ -110,6 +111,7 @@ export default function App() {
             <Route path="/checklist"     element={<Layout><Checklist /></Layout>} />
             <Route path="/notes"         element={<Layout><Notes /></Layout>} />
             <Route path="/reviews"       element={<Layout><Reviews /></Layout>} />
+            <Route path="/uniforms"      element={<Layout><Uniforms /></Layout>} />
             <Route path="/tasks"         element={<Layout><Tasks /></Layout>} />
             <Route path="/contacts"      element={<Layout><Contacts /></Layout>} />
             <Route path="/announcements" element={<Layout><Announcements /></Layout>} />

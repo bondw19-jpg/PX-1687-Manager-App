@@ -47,6 +47,10 @@ function countRecords(data) {
     teamNotes:     s.teamNotes?.length     || 0,
     myNotes:       s.myNotes?.length       || 0,
     tasks:         s.tasks?.length         || 0,
+    uniforms:      s.uniforms?.length      || 0,
+    uniformInventory: s.uniformInventory?.length || 0,
+    managerUniformStock: s.managerUniformStock?.length || 0,
+    associateUniformItems: s.associateUniformItems?.length || 0,
     reviews:       s.reviews?.length       || 0,
     teamEvents:    s.teamEvents?.length    || 0,
     announcements: s.announcements?.length || 0,
@@ -139,6 +143,10 @@ function BackupCard({ backup, onRestore, onDelete }) {
             { label: 'Call-Ins',   val: counts.callIns },
             { label: 'Notes',      val: counts.teamNotes + counts.myNotes },
             { label: 'Tasks',      val: counts.tasks },
+            { label: 'Uniforms',   val: counts.uniforms },
+            { label: 'Uniform Inv.', val: counts.uniformInventory },
+            { label: 'Mgr Stock',  val: counts.managerUniformStock },
+            { label: 'Assoc. Items', val: counts.associateUniformItems },
             { label: 'Reviews',    val: counts.reviews },
           ].map(({ label, val }) => (
             <span key={label} className="text-xs bg-gray-50 border border-gray-100 text-gray-600 px-2 py-1 rounded-lg">
@@ -607,7 +615,7 @@ export default function BackupManager() {
               <p className="text-xs text-amber-700 mt-0.5">
                 The app found an auto-saved emergency backup with{' '}
                 <strong>{emergencyData.total} records</strong>{' '}
-                ({emergencyData.counts.associates} associates, {emergencyData.counts.callIns} call-ins, {emergencyData.counts.teamNotes + emergencyData.counts.myNotes} notes).
+                ({emergencyData.counts.associates} associates, {emergencyData.counts.callIns} call-ins, {emergencyData.counts.teamNotes + emergencyData.counts.myNotes} notes, {emergencyData.counts.associateUniformItems || 0} associate uniform items).
                 Tap below to restore your lost data.
               </p>
               <button

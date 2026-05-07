@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Home, Users, PhoneMissed, Calendar, ClipboardCheck,
-  StickyNote, Star, ListChecks, BookUser, ShieldCheck
+  StickyNote, Star, ListChecks, BookUser, ShieldCheck, Shirt
 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 
@@ -16,6 +16,7 @@ const tabs = [
   { id: 'checklist', label: 'Checklist', icon: ClipboardCheck,path: '/checklist' },
   { id: 'notes',     label: 'Notes',     icon: StickyNote,    path: '/notes' },
   { id: 'reviews',   label: 'Reviews',   icon: Star,          path: '/reviews' },
+  { id: 'uniforms',  label: 'Uniforms',  icon: Shirt,         path: '/uniforms' },
   { id: 'tasks',     label: 'Tasks',     icon: ListChecks,    path: '/tasks' },
   { id: 'contacts',  label: 'Contacts',  icon: BookUser,      path: '/contacts' },
 ];
@@ -30,7 +31,7 @@ export default function BottomNav() {
 
   // For admin: replace the last tab (Contacts) with Admin tab
   const visibleTabs = isAdmin
-    ? [...tabs.slice(0, 8), adminTab]
+    ? [...tabs.slice(0, 9), adminTab]
     : tabs;
 
   return (

@@ -531,6 +531,93 @@ export const useAppStore = create(
         fsDel('tasks', id);
       },
 
+      // ── Uniforms ──────────────────────────────────────────────────────────
+      uniforms: [],
+      uniformInventory: [],
+      managerUniformStock: [],
+      associateUniformItems: [],
+      addUniformCheck: (entry) => {
+        const u = get().user;
+        const doc = {
+          ...entry,
+          id: `uniform_${Date.now()}`,
+          createdAt: new Date().toISOString(),
+          createdBy: u ? { uid: u.uid, name: firstName(u.name || u.email?.split('@')[0]) } : null,
+        };
+        set(s => ({ uniforms: [doc, ...(s.uniforms || [])] }));
+        fsWrite('uniforms', doc.id, doc);
+
+        // Automatically preserve non-compliant uniform events in the Associate Work File.
+        if (doc.associateId && doc.issueType !== 'compliant' && doc.status !== 'compliant') {
+          const newRow = {
+            id: Date.now() + Math.random(),
+            date: doc.date,
+            key: 'C',
+            details: `Auto [Uniform Tracker]: ${doc.item || 'Uniform'} — ${doc.issueType?.replace(/_/g, ' ') || 'issue'}${doc.sizeRequest ? ' | Request: ' + doc.sizeRequest : ''}${doc.actionTaken ? ' | Action: ' + doc.actionTaken : ''}${doc.notes ? ' | Notes: ' + doc.notes : ''}`,
+            addedBy: u ? { uid: u.uid, name: firstName(u.name || u.email?.split('@')[0]) } : null,
+          };
+          const existing = get().workFiles[doc.associateId] || { rows: [] };
+          const updatedFile = { ...existing, rows: [...(existing.rows || []), newRow], savedAt: new Date().toISOString() };
+          set(s => ({ workFiles: { ...s.workFiles, [doc.associateId]: updatedFile } }));
+          if (get().dbMode === 'firestore') {
+            import('../lib/firestoreSync')
+              .then(({ fsSaveWorkFile }) => fsSaveWorkFile(doc.associateId, updatedFile))
+              .catch(() => {});
+          }
+        }
+      },
+      updateUniformCheck: (id, d) => {
+        const payload = { ...d, updatedAt: new Date().toISOString() };
+        set(s => ({ uniforms: (s.uniforms || []).map(r => r.id === id ? { ...r, ...payload } : r) }));
+        fsUpdate('uniforms', id, payload);
+      },
+      deleteUniformCheck: (id) => {
+        set(s => ({ uniforms: (s.uniforms || []).filter(r => r.id !== id) }));
+        fsDel('uniforms', id);
+      },
+      addUniformInventoryItem: (entry) => {
+        const doc = { ...entry, id: `uniform_inventory_${Date.now()}`, createdAt: new Date().toISOString() };
+        set(s => ({ uniformInventory: [doc, ...(s.uniformInventory || [])] }));
+        fsWrite('uniformInventory', doc.id, doc);
+      },
+      updateUniformInventoryItem: (id, d) => {
+        const payload = { ...d, updatedAt: new Date().toISOString() };
+        set(s => ({ uniformInventory: (s.uniformInventory || []).map(r => r.id === id ? { ...r, ...payload } : r) }));
+        fsUpdate('uniformInventory', id, payload);
+      },
+      deleteUniformInventoryItem: (id) => {
+        set(s => ({ uniformInventory: (s.uniformInventory || []).filter(r => r.id !== id) }));
+        fsDel('uniformInventory', id);
+      },
+      addManagerUniformStock: (entry) => {
+        const doc = { ...entry, id: `manager_uniform_stock_${Date.now()}`, createdAt: new Date().toISOString() };
+        set(s => ({ managerUniformStock: [doc, ...(s.managerUniformStock || [])] }));
+        fsWrite('managerUniformStock', doc.id, doc);
+      },
+      updateManagerUniformStock: (id, d) => {
+        const payload = { ...d, updatedAt: new Date().toISOString() };
+        set(s => ({ managerUniformStock: (s.managerUniformStock || []).map(r => r.id === id ? { ...r, ...payload } : r) }));
+        fsUpdate('managerUniformStock', id, payload);
+      },
+      deleteManagerUniformStock: (id) => {
+        set(s => ({ managerUniformStock: (s.managerUniformStock || []).filter(r => r.id !== id) }));
+        fsDel('managerUniformStock', id);
+      },
+      addAssociateUniformItem: (entry) => {
+        const doc = { ...entry, id: `associate_uniform_item_${Date.now()}`, createdAt: new Date().toISOString() };
+        set(s => ({ associateUniformItems: [doc, ...(s.associateUniformItems || [])] }));
+        fsWrite('associateUniformItems', doc.id, doc);
+      },
+      updateAssociateUniformItem: (id, d) => {
+        const payload = { ...d, updatedAt: new Date().toISOString() };
+        set(s => ({ associateUniformItems: (s.associateUniformItems || []).map(r => r.id === id ? { ...r, ...payload } : r) }));
+        fsUpdate('associateUniformItems', id, payload);
+      },
+      deleteAssociateUniformItem: (id) => {
+        set(s => ({ associateUniformItems: (s.associateUniformItems || []).filter(r => r.id !== id) }));
+        fsDel('associateUniformItems', id);
+      },
+
       // ── Contacts ──────────────────────────────────────────────────────────
       contacts: defaultContacts,
       addContact: (c) => {
@@ -602,7 +689,7 @@ export const useAppStore = create(
           state.myNotes   = addAtt(state.myNotes);
         }
         if ((fromVersion ?? -1) < 3) {
-          ['associates','callIns','teamEvents','myEvents','teamNotes','myNotes','reviews','tasks','contacts','announcements']
+          ['associates','callIns','teamEvents','myEvents','teamNotes','myNotes','reviews','tasks','uniforms','uniformInventory','managerUniformStock','associateUniformItems','contacts','announcements']
             .forEach(k => { if (!Array.isArray(state[k])) state[k] = []; });
           if (!state.checklists || typeof state.checklists !== 'object') state.checklists = {};
           if (!state.workFiles  || typeof state.workFiles  !== 'object') state.workFiles  = {};
@@ -622,6 +709,10 @@ export const useAppStore = create(
         reviews:       Array.isArray(persisted?.reviews)       ? persisted.reviews       : current.reviews,
         tasks:         Array.isArray(persisted?.tasks)         ? persisted.tasks         : current.tasks,
         contacts:      Array.isArray(persisted?.contacts)      ? persisted.contacts      : current.contacts,
+        uniforms:      Array.isArray(persisted?.uniforms)      ? persisted.uniforms      : current.uniforms,
+        uniformInventory: Array.isArray(persisted?.uniformInventory) ? persisted.uniformInventory : current.uniformInventory,
+        managerUniformStock: Array.isArray(persisted?.managerUniformStock) ? persisted.managerUniformStock : current.managerUniformStock,
+        associateUniformItems: Array.isArray(persisted?.associateUniformItems) ? persisted.associateUniformItems : current.associateUniformItems,
         announcements: Array.isArray(persisted?.announcements) ? persisted.announcements : current.announcements,
         checklists:       (persisted?.checklists && typeof persisted.checklists === 'object') ? persisted.checklists : current.checklists,
         workFiles:        (persisted?.workFiles  && typeof persisted.workFiles  === 'object') ? persisted.workFiles  : current.workFiles,
@@ -659,6 +750,10 @@ export const useAppStore = create(
           myNotes:       stripDataUrls(state.myNotes),
           reviews:       state.reviews,
           tasks:         state.tasks,
+          uniforms:      state.uniforms,
+          uniformInventory: state.uniformInventory,
+          managerUniformStock: state.managerUniformStock,
+          associateUniformItems: state.associateUniformItems,
           contacts:      state.contacts,
           announcements: state.announcements,
         };

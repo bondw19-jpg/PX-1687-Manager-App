@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, PhoneMissed, Star, Calendar,
-  ClipboardCheck, StickyNote, ListChecks, Megaphone, BookUser,
+  ClipboardCheck, StickyNote, ListChecks, Megaphone, BookUser, Shirt,
   Settings, LogOut, X, HardDrive, ShieldCheck
 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
@@ -23,6 +23,7 @@ const sections = [
       { label: 'Associates',       icon: Users,           path: '/team' },
       { label: 'Call-In Tracker',  icon: PhoneMissed,     path: '/callins' },
       { label: 'Performance',      icon: Star,            path: '/reviews' },
+      { label: 'Uniform Tracker',  icon: Shirt,           path: '/uniforms' },
     ]
   },
   {
