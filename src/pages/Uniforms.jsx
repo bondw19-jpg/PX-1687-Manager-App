@@ -219,6 +219,7 @@ function ManagerStockModal({ record, inventory, managers, onClose }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.managerName.trim()) return alert('Please enter or choose a manager.');
+    if (!form.inventoryItemId) return alert('Please link an inventory item. Select from the dropdown or add inventory items first.');
     const payload = {
       ...form,
       managerName: form.managerName.trim(),
@@ -283,6 +284,7 @@ function AssociateItemModal({ record, associates, inventory, onClose }) {
     e.preventDefault();
     if (!form.associateId) return alert('Please choose an associate.');
     if (!form.item) return alert('Please choose an item.');
+    if (!form.inventoryItemId) return alert('Please link an inventory item. Select from the dropdown or add inventory items first.');
     const payload = {
       ...form,
       associateName: associateName(associates, form.associateId),
