@@ -8,6 +8,23 @@ import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import { badgeHtml, infoGridHtml, openPrintWindow, statsRowHtml } from '../lib/printReport';
 
+// StatCard component for displaying stats
+function StatCard({ label, value, tone = 'default' }) {
+  const toneClasses = {
+    default: 'bg-blue-50 border-blue-200 text-blue-700',
+    red: 'bg-red-50 border-red-200 text-red-700',
+    yellow: 'bg-yellow-50 border-yellow-200 text-yellow-700',
+    blue: 'bg-blue-50 border-blue-200 text-blue-700',
+    green: 'bg-green-50 border-green-200 text-green-700',
+  };
+  return (
+    <div className={`border rounded-lg p-4 ${toneClasses[tone]}`}>
+      <p className="text-sm font-medium opacity-75">{label}</p>
+      <p className="text-3xl font-bold mt-2">{value}</p>
+    </div>
+  );
+}
+
 const UNIFORM_ITEMS = [
   'Hat / Cap', 'Shirt', 'Apron', 'Name Tag', 'Full Uniform', 'Other'
 ];
