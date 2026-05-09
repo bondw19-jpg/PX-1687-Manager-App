@@ -120,7 +120,8 @@ export function UniformCard({ record, associates, onEdit }) {
 export function InventoryCard({ item, managerQty, associateQty, onEdit }) {
   const { deleteUniformInventoryItem } = useAppStore();
   const storeQty = Number(item.onHandQty) || 0;
-  const available = Math.max(0, storeQty - managerQty - associateQty);
+  const totalInventory = storeQty + managerQty;
+  const available = Math.max(0, totalInventory - associateQty);
   const status = available <= 0 ? 'out' : available <= (Number(item.reorderPoint) || 2) ? 'low' : 'ok';
   const statusColor = status === 'out' ? 'red' : status === 'low' ? 'yellow' : 'green';
 
@@ -135,10 +136,14 @@ export function InventoryCard({ item, managerQty, associateQty, onEdit }) {
           {status === 'out' ? 'Out of Stock' : status === 'low' ? 'Low Stock' : 'In Stock'}
         </span>
       </div>
-      <div className="grid grid-cols-2 gap-2 text-sm">
+      <div className="grid grid-cols-3 gap-2 text-sm">
         <div className="bg-blue-50 rounded-lg p-2">
           <p className="text-xs text-blue-600 font-semibold">Store</p>
           <p className="text-lg font-bold text-blue-700">{storeQty}</p>
+        </div>
+        <div className="bg-purple-50 rounded-lg p-2">
+          <p className="text-xs text-purple-600 font-semibold">Manager</p>
+          <p className="text-lg font-bold text-purple-700">{managerQty}</p>
         </div>
         <div className="bg-green-50 rounded-lg p-2">
           <p className="text-xs text-green-600 font-semibold">Available</p>

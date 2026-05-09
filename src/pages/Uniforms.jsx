@@ -266,7 +266,7 @@ function ManagerStockModal({ record, inventory, managerQtyByInventoryId, associa
     const storeQty = num(inv.onHandQty);
     const withManagers = managerQtyByInventoryId[invId] || 0;
     const withAssociates = associateQtyByInventoryId[invId] || 0;
-    return storeQty - withManagers - withAssociates;
+    return storeQty + withManagers - withAssociates;
   };
 
   return (
@@ -339,7 +339,7 @@ function AssociateItemModal({ record, associates, inventory, managerQtyByInvento
     const storeQty = num(inv.onHandQty);
     const withManagers = managerQtyByInventoryId[invId] || 0;
     const withAssociates = associateQtyByInventoryId[invId] || 0;
-    return storeQty - withManagers - withAssociates;
+    return storeQty + withManagers - withAssociates;
   };
 
   return (
@@ -425,7 +425,8 @@ function Uniforms() {
     const storeOnHand = uniformInventory.reduce((sum, item) => sum + num(item.onHandQty), 0);
     const managerOnHand = managerUniformStock.reduce((sum, item) => sum + num(item.qty), 0);
     const associateOnHand = associateUniformItems.filter(item => ISSUED_ASSOCIATE_STATUSES.includes(item.status || 'active')).reduce((sum, item) => sum + num(item.qty), 0);
-    const available = storeOnHand - managerOnHand - associateOnHand;
+    const totalInventory = storeOnHand + managerOnHand;
+    const available = totalInventory - associateOnHand;
     return {
       total: uniforms.length,
       open: uniforms.filter(r => r.status === 'open').length,
@@ -434,6 +435,7 @@ function Uniforms() {
       storeOnHand,
       managerOnHand,
       associateOnHand,
+      totalInventory,
       available: Math.max(0, available),
       lowStock: uniformInventory.filter(item => ['low', 'out'].includes(stockStatus(item))).length,
     };
@@ -479,19 +481,19 @@ function Uniforms() {
           <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Inventory Summary</h3>
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
             <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
-              <div className="text-xs text-blue-600 font-semibold">Store On-Hand</div>
-              <div className="text-2xl font-bold text-blue-700 mt-1">{stats.storeOnHand}</div>
+              <div className="text-xs text-blue-600 font-semibold">Total Inventory</div>
+              <div className="text-2xl font-bold text-blue-700 mt-1">{stats.totalInventory}</div>
             </div>
             <div className="bg-purple-50 rounded-xl p-3 border border-purple-100">
-              <div className="text-xs text-purple-600 font-semibold">With Managers</div>
+              <div className="text-xs text-purple-600 font-semibold">Manager Inventory</div>
               <div className="text-2xl font-bold text-purple-700 mt-1">{stats.managerOnHand}</div>
             </div>
             <div className="bg-red-50 rounded-xl p-3 border border-red-100">
-              <div className="text-xs text-red-600 font-semibold">With Associates</div>
+              <div className="text-xs text-red-600 font-semibold">Issued to Associates</div>
               <div className="text-2xl font-bold text-red-700 mt-1">{stats.associateOnHand}</div>
             </div>
             <div className="bg-green-50 rounded-xl p-3 border border-green-100">
-              <div className="text-xs text-green-600 font-semibold">Available</div>
+              <div className="text-xs text-green-600 font-semibold">Available Inventory</div>
               <div className="text-2xl font-bold text-green-700 mt-1">{stats.available}</div>
             </div>
             <div className="bg-yellow-50 rounded-xl p-3 border border-yellow-100">
