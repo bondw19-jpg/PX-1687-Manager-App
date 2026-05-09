@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   AlertTriangle, Boxes, CheckCircle2, ClipboardCheck, Edit3, Filter,
-  PackagePlus, Printer, Search, Shirt, Trash2, UserRound, Warehouse, X
+  PackagePlus, Printer, Search, Shirt, Trash2, UserRound, Warehouse, X, TrendingDown
 } from 'lucide-react';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
@@ -191,20 +191,21 @@ function InventoryModal({ record, onClose }) {
   );
 }
 
-function ManagerStockModal({ record, inventory, managers, onClose }) {
+function ManagerStockModal({ record, inventory, managerQtyByInventoryId, associateQtyByInventoryId, managers, onClose }) {
   const { addManagerUniformStock, updateManagerUniformStock } = useAppStore();
-  const inventoryOptions = inventory.map(item => `${item.item}${item.size ? ' · ' + item.size : ''}${item.color ? ' · ' + item.color : ''}`);
   const [form, setForm] = useState(() => ({
-    managerName: record?.managerName || managers[0] || '',
+    managerName: record?.managerName || '',
     inventoryItemId: record?.inventoryItemId || '',
-    item: record?.item || 'Shirt',
+    item: record?.item || '',
     size: record?.size || '',
-    color: record?.color || 'Black',
-    qty: record?.qty ?? '',
+    color: record?.color || '',
+    qty: record?.qty ?? '1',
     location: record?.location || '',
     notes: record?.notes || '',
   }));
+
   const setField = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
+
   const handleInventoryChoice = (id) => {
     const inv = inventory.find(i => i.id === id);
     setForm(prev => ({
@@ -231,21 +232,28 @@ function ManagerStockModal({ record, inventory, managers, onClose }) {
     onClose();
   };
 
+  // Calculate available quantity for each inventory item
+  const getAvailableQty = (invId) => {
+    const inv = inventory.find(i => i.id === invId);
+    if (!inv) return 0;
+    const storeQty = num(inv.onHandQty);
+    const withManagers = managerQtyByInventoryId[invId] || 0;
+    const withAssociates = associateQtyByInventoryId[invId] || 0;
+    return storeQty - withManagers - withAssociates;
+  };
+
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <form onSubmit={handleSubmit} className="bg-white rounded-t-2xl w-full animate-slide-up lg:rounded-2xl lg:max-w-xl lg:shadow-2xl">
-        <ModalHeader icon={<Warehouse size={20} />} title={record ? 'Edit Manager On-Hand Stock' : 'Assign Manager On-Hand Stock'} subtitle="Show which manager is holding uniform inventory." onClose={onClose} />
+      <form onSubmit={handleSubmit} className="bg-white rounded-t-2xl w-full animate-slide-up lg:rounded-2xl lg:max-w-2xl lg:shadow-2xl max-h-[90vh] overflow-y-auto">
+        <ModalHeader icon={<Warehouse size={20} />} title={record ? 'Edit Manager Stock' : 'Assign Manager Stock'} subtitle="Track uniforms held by managers." onClose={onClose} />
         <div className="modal-body p-4 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Field label="Manager"><input list="manager-options" value={form.managerName} onChange={e => setField('managerName', e.target.value)} placeholder="Manager name" className="form-input" /><datalist id="manager-options">{managers.map(name => <option key={name} value={name} />)}</datalist></Field>
-            <Field label="Link Inventory Item"><select value={form.inventoryItemId} onChange={e => handleInventoryChoice(e.target.value)} className="form-select"><option value="">Manual item...</option>{inventory.map((item, idx) => <option key={item.id} value={item.id}>{inventoryOptions[idx]}</option>)}</select></Field>
-            <Field label="Uniform Item"><select value={form.item} onChange={e => setField('item', e.target.value)} className="form-select">{UNIFORM_ITEMS.filter(i => i !== 'Full Uniform').map(item => <option key={item} value={item}>{item}</option>)}</select></Field>
-            <Field label="Size"><input value={form.size} onChange={e => setField('size', e.target.value)} placeholder="Medium, Large, One Size" className="form-input" /></Field>
-            <Field label="Color"><input value={form.color} onChange={e => setField('color', e.target.value)} placeholder="Black, Red, White" className="form-input" /></Field>
-            <Field label="Qty On Hand"><input type="number" min="0" value={form.qty} onChange={e => setField('qty', e.target.value)} className="form-input" /></Field>
-            <Field label="Where Manager Keeps It"><input value={form.location} onChange={e => setField('location', e.target.value)} placeholder="Locker, office, car kit" className="form-input" /></Field>
+            <Field label="Manager Name"><input list="manager-list" value={form.managerName} onChange={e => setField('managerName', e.target.value)} placeholder="Type or select manager..." className="form-input" /><datalist id="manager-list">{managers.map(m => <option key={m} value={m} />)}</datalist></Field>
+            <Field label="Quantity"><input type="number" min="1" value={form.qty} onChange={e => setField('qty', e.target.value)} className="form-input" /></Field>
           </div>
-          <Field label="Notes"><textarea rows={3} value={form.notes} onChange={e => setField('notes', e.target.value)} placeholder="Example: reserved for new hires, received from ACO, needs recount..." className="form-textarea" /></Field>
+          <Field label="Link Inventory Item (Required)"><select value={form.inventoryItemId} onChange={e => handleInventoryChoice(e.target.value)} className="form-select"><option value="">Select inventory item...</option>{inventory.map(item => <option key={item.id} value={item.id}>{item.item} · {item.size || 'One Size'} · {item.color} (Available: {getAvailableQty(item.id)})</option>)}</select></Field>
+          <Field label="Storage Location"><input value={form.location} onChange={e => setField('location', e.target.value)} placeholder="Office, break room, locker" className="form-input" /></Field>
+          <Field label="Notes"><textarea rows={2} value={form.notes} onChange={e => setField('notes', e.target.value)} placeholder="Condition, manager instructions..." className="form-textarea" /></Field>
         </div>
         <ModalFooter onClose={onClose} submitLabel="Save Manager Stock" />
       </form>
@@ -253,22 +261,23 @@ function ManagerStockModal({ record, inventory, managers, onClose }) {
   );
 }
 
-function AssociateItemModal({ record, associates, inventory, onClose }) {
+function AssociateItemModal({ record, associates, inventory, managerQtyByInventoryId, associateQtyByInventoryId, onClose }) {
   const { addAssociateUniformItem, updateAssociateUniformItem } = useAppStore();
-  const inventoryOptions = inventory.map(item => `${item.item}${item.size ? ' · ' + item.size : ''}${item.color ? ' · ' + item.color : ''}`);
   const [form, setForm] = useState(() => ({
     associateId: record?.associateId || '',
-    issueDate: record?.issueDate || todayIso(),
     inventoryItemId: record?.inventoryItemId || '',
-    item: record?.item || 'Shirt',
+    item: record?.item || '',
     size: record?.size || '',
-    color: record?.color || 'Black',
+    color: record?.color || '',
     qty: record?.qty ?? '1',
     status: record?.status || 'active',
+    issuedDate: record?.issuedDate || todayIso(),
     returnedDate: record?.returnedDate || '',
     notes: record?.notes || '',
   }));
+
   const setField = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
+
   const handleInventoryChoice = (id) => {
     const inv = inventory.find(i => i.id === id);
     setForm(prev => ({
@@ -296,135 +305,56 @@ function AssociateItemModal({ record, associates, inventory, onClose }) {
     onClose();
   };
 
+  // Calculate available quantity for each inventory item
+  const getAvailableQty = (invId) => {
+    const inv = inventory.find(i => i.id === invId);
+    if (!inv) return 0;
+    const storeQty = num(inv.onHandQty);
+    const withManagers = managerQtyByInventoryId[invId] || 0;
+    const withAssociates = associateQtyByInventoryId[invId] || 0;
+    return storeQty - withManagers - withAssociates;
+  };
+
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <form onSubmit={handleSubmit} className="bg-white rounded-t-2xl w-full max-h-[92vh] overflow-hidden flex flex-col animate-slide-up sm:rounded-2xl sm:max-w-lg lg:max-w-xl lg:shadow-2xl">
-        <ModalHeader icon={<UserRound size={20} />} title={record ? 'Edit Associate Uniform Item' : 'Issue Associate Item'} subtitle="Track items an associate currently has." onClose={onClose} compact />
-        <div className="modal-body flex-1 overflow-y-auto p-3 sm:p-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+      <form onSubmit={handleSubmit} className="bg-white rounded-t-2xl w-full animate-slide-up lg:rounded-2xl lg:max-w-2xl lg:shadow-2xl max-h-[90vh] overflow-y-auto">
+        <ModalHeader icon={<UserRound size={20} />} title={record ? 'Edit Associate Item' : 'Issue Associate Item'} subtitle="Track uniforms issued to associates." onClose={onClose} />
+        <div className="modal-body p-4 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Field label="Associate"><select value={form.associateId} onChange={e => setField('associateId', e.target.value)} className="form-select"><option value="">Select associate...</option>{associates.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>
-            <Field label="Issued Date"><input type="date" value={form.issueDate} onChange={e => setField('issueDate', e.target.value)} className="form-input" /></Field>
-            <Field label="Link Inventory Item"><select value={form.inventoryItemId} onChange={e => handleInventoryChoice(e.target.value)} className="form-select"><option value="">Manual item...</option>{inventory.map((item, idx) => <option key={item.id} value={item.id}>{inventoryOptions[idx]}</option>)}</select></Field>
-            <Field label="Uniform Item"><select value={form.item} onChange={e => setField('item', e.target.value)} className="form-select">{UNIFORM_ITEMS.filter(i => i !== 'Full Uniform').map(item => <option key={item} value={item}>{item}</option>)}</select></Field>
-            <Field label="Size"><input value={form.size} onChange={e => setField('size', e.target.value)} placeholder="Small, Medium, Large, One Size" className="form-input" /></Field>
-            <Field label="Color"><input value={form.color} onChange={e => setField('color', e.target.value)} placeholder="Black, Red, White" className="form-input" /></Field>
-            <Field label="Qty With Associate"><input type="number" min="0" value={form.qty} onChange={e => setField('qty', e.target.value)} className="form-input" /></Field>
+            <Field label="Quantity"><input type="number" min="1" value={form.qty} onChange={e => setField('qty', e.target.value)} className="form-input" /></Field>
+            <Field label="Issued Date"><input type="date" value={form.issuedDate} onChange={e => setField('issuedDate', e.target.value)} className="form-input" /></Field>
             <Field label="Status"><select value={form.status} onChange={e => setField('status', e.target.value)} className="form-select">{Object.entries(ASSOCIATE_ITEM_STATUS).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</select></Field>
-            <Field label="Returned Date"><input type="date" value={form.returnedDate} onChange={e => setField('returnedDate', e.target.value)} className="form-input" /></Field>
           </div>
-          <Field label="Notes"><textarea rows={2} value={form.notes} onChange={e => setField('notes', e.target.value)} placeholder="Example: issued at orientation, needs larger shirt, returned after transfer..." className="form-textarea" /></Field>
+          <Field label="Link Inventory Item (Required)"><select value={form.inventoryItemId} onChange={e => handleInventoryChoice(e.target.value)} className="form-select"><option value="">Select inventory item...</option>{inventory.map(item => <option key={item.id} value={item.id}>{item.item} · {item.size || 'One Size'} · {item.color} (Available: {getAvailableQty(item.id)})</option>)}</select></Field>
+          {form.status === 'returned' && <Field label="Returned Date"><input type="date" value={form.returnedDate} onChange={e => setField('returnedDate', e.target.value)} className="form-input" /></Field>}
+          <Field label="Notes"><textarea rows={2} value={form.notes} onChange={e => setField('notes', e.target.value)} placeholder="Condition, replacement reason, follow-up notes..." className="form-textarea" /></Field>
         </div>
-        <ModalFooter onClose={onClose} submitLabel="Save Associate Item" compact />
+        <ModalFooter onClose={onClose} submitLabel="Save Associate Item" />
       </form>
     </div>
   );
 }
 
-function ModalHeader({ icon, title, subtitle, onClose, compact = false }) {
-  return (
-    <div className={`flex items-center justify-between border-b border-gray-100 ${compact ? 'p-3' : 'p-4'}`}>
-      <div className="flex items-center gap-2 min-w-0">
-        <div className={`${compact ? 'w-8 h-8' : 'w-9 h-9'} shrink-0 rounded-xl bg-red-50 text-primary flex items-center justify-center`}>{icon}</div>
-        <div className="min-w-0"><h2 className="font-bold text-gray-900 truncate">{title}</h2><p className="text-xs text-gray-500 truncate">{subtitle}</p></div>
-      </div>
-      <button type="button" onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg"><X size={20} /></button>
-    </div>
-  );
-}
-
-function ModalFooter({ onClose, submitLabel, compact = false }) {
-  return <div className={`flex gap-2 border-t border-gray-100 bg-white ${compact ? 'p-3' : 'p-4'}`}><button type="button" onClick={onClose} className={`${compact ? 'py-2.5' : 'py-3'} flex-1 px-4 rounded-xl border border-gray-200 font-bold text-sm text-gray-700 hover:bg-gray-50`}>Cancel</button><button type="submit" className={`${compact ? 'py-2.5' : 'py-3'} flex-1 px-4 rounded-xl bg-primary text-white font-bold text-sm shadow-sm hover:bg-primary-dark`}>{submitLabel}</button></div>;
-}
-
-function Field({ label, children }) {
-  return <label className="text-sm font-semibold text-gray-700 block">{label}<div className="mt-1">{children}</div></label>;
-}
-
-function StatCard({ label, value, tone = 'gray' }) {
-  const tones = {
-    gray: 'bg-white border-gray-200 text-gray-900', green: 'bg-green-50 border-green-100 text-green-800',
-    red: 'bg-red-50 border-red-100 text-red-800', yellow: 'bg-yellow-50 border-yellow-100 text-yellow-800',
-    blue: 'bg-blue-50 border-blue-100 text-blue-800', purple: 'bg-purple-50 border-purple-100 text-purple-800',
-  };
-  return <div className={`rounded-2xl border p-4 shadow-sm ${tones[tone]}`}><div className="text-2xl font-bold">{value}</div><div className="text-xs font-semibold uppercase tracking-wide opacity-70 mt-1">{label}</div></div>;
-}
-
-function TabButton({ active, onClick, children }) {
-  return <button onClick={onClick} className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors ${active ? 'bg-primary text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{children}</button>;
-}
-
-function UniformCard({ record, associates, onEdit }) {
-  const { deleteUniformCheck } = useAppStore();
-  const meta = STATUS_META[record.status] || STATUS_META.open;
-  const Icon = meta.icon;
-  return (
-    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between gap-3"><div className="flex items-start gap-3 min-w-0"><div className="w-10 h-10 rounded-xl bg-red-50 text-primary flex items-center justify-center flex-shrink-0"><Shirt size={20} /></div><div className="min-w-0"><h3 className="font-bold text-gray-900 truncate">{record.associateName || associateName(associates, record.associateId)}</h3><p className="text-xs text-gray-500">{record.date || 'No date'} · {record.item || 'Uniform'}</p></div></div><span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-bold ${meta.className}`}><Icon size={12} /> {meta.label}</span></div>
-      <div className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Issue</div><div className="font-semibold text-gray-800">{issueLabel(record.issueType)}</div></div><div><div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Request</div><div className="font-semibold text-gray-800">{record.sizeRequest || '—'}</div></div></div>
-      {(record.actionTaken || record.notes) && <div className="mt-3 rounded-xl bg-gray-50 border border-gray-100 p-3 text-sm text-gray-700">{record.actionTaken && <p><span className="font-semibold">Action:</span> {record.actionTaken}</p>}{record.notes && <p className="mt-1"><span className="font-semibold">Notes:</span> {record.notes}</p>}</div>}
-      <div className="mt-4 flex items-center justify-between text-xs text-gray-400"><span>{record.createdBy?.name ? `Logged by ${record.createdBy.name}` : 'Uniform check'}</span><div className="flex items-center gap-2"><button onClick={() => onEdit(record)} className="p-2 rounded-lg text-gray-500 hover:text-primary hover:bg-red-50"><Edit3 size={16} /></button><button onClick={() => window.confirm('Delete this uniform check?') && deleteUniformCheck(record.id)} className="p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50"><Trash2 size={16} /></button></div></div>
-    </div>
-  );
-}
-
-function InventoryCard({ item, managerQty, associateQty, onEdit }) {
-  const { deleteUniformInventoryItem } = useAppStore();
-  const status = stockStatus(item);
-  const meta = STOCK_STATUS[status];
-  const available = Math.max(0, num(item.onHandQty) - num(managerQty) - num(associateQty));
-  return (
-    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between gap-3"><div className="flex items-start gap-3"><div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center"><Boxes size={20} /></div><div><h3 className="font-bold text-gray-900">{item.item}</h3><p className="text-xs text-gray-500">{[item.size, item.color, item.location].filter(Boolean).join(' · ') || 'No size/location'}</p></div></div><span className={`rounded-full border px-2 py-1 text-[11px] font-bold ${meta.className}`}>{meta.label}</span></div>
-      <div className="mt-4 grid grid-cols-4 gap-2 text-center"><div className="rounded-xl bg-gray-50 border border-gray-100 p-2"><div className="text-lg font-bold text-gray-900">{num(item.onHandQty)}</div><div className="text-[10px] uppercase font-bold text-gray-400">Store Qty</div></div><div className="rounded-xl bg-purple-50 border border-purple-100 p-2"><div className="text-lg font-bold text-purple-800">{num(managerQty)}</div><div className="text-[10px] uppercase font-bold text-purple-500">With Mgrs</div></div><div className="rounded-xl bg-red-50 border border-red-100 p-2"><div className="text-lg font-bold text-red-800">{num(associateQty)}</div><div className="text-[10px] uppercase font-bold text-red-500">Issued</div></div><div className="rounded-xl bg-green-50 border border-green-100 p-2"><div className="text-lg font-bold text-green-800">{available}</div><div className="text-[10px] uppercase font-bold text-green-500">Available</div></div></div>
-      {item.notes && <p className="mt-3 rounded-xl bg-gray-50 border border-gray-100 p-3 text-sm text-gray-700">{item.notes}</p>}
-      <div className="mt-4 flex items-center justify-between text-xs text-gray-400"><span>Reorder at {num(item.reorderPoint)}</span><div className="flex gap-2"><button onClick={() => onEdit(item)} className="p-2 rounded-lg text-gray-500 hover:text-primary hover:bg-red-50"><Edit3 size={16} /></button><button onClick={() => window.confirm('Delete this inventory item?') && deleteUniformInventoryItem(item.id)} className="p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50"><Trash2 size={16} /></button></div></div>
-    </div>
-  );
-}
-
-function ManagerStockCard({ record, onEdit }) {
-  const { deleteManagerUniformStock } = useAppStore();
-  return (
-    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between gap-3"><div className="flex items-start gap-3"><div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center"><Warehouse size={20} /></div><div><h3 className="font-bold text-gray-900">{record.managerName}</h3><p className="text-xs text-gray-500">{[record.item, record.size, record.color].filter(Boolean).join(' · ')}</p></div></div><span className="rounded-full border border-purple-200 bg-purple-50 px-2 py-1 text-[11px] font-bold text-purple-700">Qty {num(record.qty)}</span></div>
-      <div className="mt-3 text-sm text-gray-700"><p><span className="font-semibold">Location:</span> {record.location || 'Not specified'}</p>{record.notes && <p className="mt-1"><span className="font-semibold">Notes:</span> {record.notes}</p>}</div>
-      <div className="mt-4 flex items-center justify-between text-xs text-gray-400"><span>{record.updatedAt ? `Updated ${new Date(record.updatedAt).toLocaleDateString()}` : 'Manager on-hand stock'}</span><div className="flex gap-2"><button onClick={() => onEdit(record)} className="p-2 rounded-lg text-gray-500 hover:text-primary hover:bg-red-50"><Edit3 size={16} /></button><button onClick={() => window.confirm('Delete this manager stock record?') && deleteManagerUniformStock(record.id)} className="p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50"><Trash2 size={16} /></button></div></div>
-    </div>
-  );
-}
-
-function AssociateItemCard({ record, associates, onEdit }) {
-  const { deleteAssociateUniformItem } = useAppStore();
-  const meta = ASSOCIATE_ITEM_STATUS[record.status] || ASSOCIATE_ITEM_STATUS.active;
-  return (
-    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between gap-3"><div className="flex items-start gap-3 min-w-0"><div className="w-10 h-10 rounded-xl bg-red-50 text-primary flex items-center justify-center flex-shrink-0"><UserRound size={20} /></div><div className="min-w-0"><h3 className="font-bold text-gray-900 truncate">{record.associateName || associateName(associates, record.associateId)}</h3><p className="text-xs text-gray-500">{[record.item, record.size, record.color].filter(Boolean).join(' · ')}</p></div></div><span className={`rounded-full border px-2 py-1 text-[11px] font-bold ${meta.className}`}>{meta.label}</span></div>
-      <div className="mt-4 grid grid-cols-3 gap-2 text-center"><div className="rounded-xl bg-gray-50 border border-gray-100 p-2"><div className="text-lg font-bold text-gray-900">{num(record.qty)}</div><div className="text-[10px] uppercase font-bold text-gray-400">Qty</div></div><div className="rounded-xl bg-green-50 border border-green-100 p-2"><div className="text-sm font-bold text-green-800">{record.issueDate || '—'}</div><div className="text-[10px] uppercase font-bold text-green-500">Issued</div></div><div className="rounded-xl bg-blue-50 border border-blue-100 p-2"><div className="text-sm font-bold text-blue-800">{record.returnedDate || '—'}</div><div className="text-[10px] uppercase font-bold text-blue-500">Returned</div></div></div>
-      {record.notes && <p className="mt-3 rounded-xl bg-gray-50 border border-gray-100 p-3 text-sm text-gray-700">{record.notes}</p>}
-      <div className="mt-4 flex items-center justify-between text-xs text-gray-400"><span>{record.updatedAt ? `Updated ${new Date(record.updatedAt).toLocaleDateString()}` : 'Associate uniform item'}</span><div className="flex gap-2"><button onClick={() => onEdit(record)} className="p-2 rounded-lg text-gray-500 hover:text-primary hover:bg-red-50"><Edit3 size={16} /></button><button onClick={() => window.confirm('Delete this associate uniform item?') && deleteAssociateUniformItem(record.id)} className="p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50"><Trash2 size={16} /></button></div></div>
-    </div>
-  );
-}
-
-export default function Uniforms() {
+function Uniforms() {
   const { uniforms = [], uniformInventory = [], managerUniformStock = [], associateUniformItems = [], associates = [], storeName, user } = useAppStore();
-  const [modalRecord, setModalRecord] = useState(null);
-  const [showModal, setShowModal] = useState(false);
-  const [inventoryRecord, setInventoryRecord] = useState(null);
-  const [showInventoryModal, setShowInventoryModal] = useState(false);
-  const [managerRecord, setManagerRecord] = useState(null);
-  const [showManagerModal, setShowManagerModal] = useState(false);
-  const [associateItemRecord, setAssociateItemRecord] = useState(null);
-  const [showAssociateItemModal, setShowAssociateItemModal] = useState(false);
-  const [activeTab, setActiveTab] = useState('checks');
+  const [activeTab, setActiveTab] = useState('inventory');
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [issueFilter, setIssueFilter] = useState('all');
+  const [showModal, setShowModal] = useState(false);
+  const [showInventoryModal, setShowInventoryModal] = useState(false);
+  const [showManagerModal, setShowManagerModal] = useState(false);
+  const [showAssociateItemModal, setShowAssociateItemModal] = useState(false);
+  const [modalRecord, setModalRecord] = useState(null);
+  const [inventoryRecord, setInventoryRecord] = useState(null);
+  const [managerRecord, setManagerRecord] = useState(null);
+  const [associateItemRecord, setAssociateItemRecord] = useState(null);
 
-  const activeAssociates = useMemo(() => associates.filter(a => a.status !== 'inactive'), [associates]);
-  const managers = useMemo(() => managerNameList(associates, user), [associates, user]);
-  const enriched = useMemo(() => uniforms.map(r => ({ ...r, associateName: r.associateName || associateName(associates, r.associateId) })).sort((a, b) => new Date(b.date || b.createdAt || 0) - new Date(a.date || a.createdAt || 0)), [uniforms, associates]);
-  const associateItemsEnriched = useMemo(() => associateUniformItems.map(r => ({ ...r, associateName: r.associateName || associateName(associates, r.associateId) })).sort((a, b) => String(a.associateName).localeCompare(String(b.associateName)) || String(a.item).localeCompare(String(b.item))), [associateUniformItems, associates]);
+  const activeAssociates = associates.filter(a => a.status !== 'inactive');
+  const managers = managerNameList(associates, user);
+
+  const enriched = uniforms.map(r => ({ ...r, associateName: associateName(associates, r.associateId) }));
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -446,6 +376,8 @@ export default function Uniforms() {
     return managerUniformStock.filter(r => !q || [r.managerName, r.item, r.size, r.color, r.location, r.notes].filter(Boolean).some(v => String(v).toLowerCase().includes(q))).sort((a, b) => String(a.managerName).localeCompare(String(b.managerName)) || String(a.item).localeCompare(String(b.item)));
   }, [managerUniformStock, query]);
 
+  const associateItemsEnriched = associateUniformItems.map(r => ({ ...r, associateName: associateName(associates, r.associateId) }));
+
   const associateItemsFiltered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return associateItemsEnriched.filter(r => !q || [r.associateName, r.item, r.size, r.color, associateItemStatusLabel(r.status), r.notes].filter(Boolean).some(v => String(v).toLowerCase().includes(q)));
@@ -461,10 +393,12 @@ export default function Uniforms() {
     return acc;
   }, {}), [associateUniformItems]);
 
+  // Enhanced stats with inventory flow
   const stats = useMemo(() => {
     const storeOnHand = uniformInventory.reduce((sum, item) => sum + num(item.onHandQty), 0);
     const managerOnHand = managerUniformStock.reduce((sum, item) => sum + num(item.qty), 0);
     const associateOnHand = associateUniformItems.filter(item => ISSUED_ASSOCIATE_STATUSES.includes(item.status || 'active')).reduce((sum, item) => sum + num(item.qty), 0);
+    const available = storeOnHand - managerOnHand - associateOnHand;
     return {
       total: uniforms.length,
       open: uniforms.filter(r => r.status === 'open').length,
@@ -473,6 +407,7 @@ export default function Uniforms() {
       storeOnHand,
       managerOnHand,
       associateOnHand,
+      available: Math.max(0, available),
       lowStock: uniformInventory.filter(item => ['low', 'out'].includes(stockStatus(item))).length,
     };
   }, [uniforms, uniformInventory, managerUniformStock, associateUniformItems]);
@@ -486,19 +421,23 @@ export default function Uniforms() {
   const openAssociateItemAdd = () => { setAssociateItemRecord(null); setShowAssociateItemModal(true); };
   const openAssociateItemEdit = (record) => { setAssociateItemRecord(record); setShowAssociateItemModal(true); };
 
-  const primaryAdd = activeTab === 'inventory' ? openInventoryAdd : activeTab === 'managers' ? openManagerAdd : activeTab === 'associateItems' ? openAssociateItemAdd : openAdd;
-  const addLabel = activeTab === 'inventory' ? 'Add Item' : activeTab === 'managers' ? 'Assign Stock' : activeTab === 'associateItems' ? 'Issue Item' : 'Add Check';
+  const primaryAdd = activeTab === 'checks' ? openAdd : activeTab === 'inventory' ? openInventoryAdd : activeTab === 'managers' ? openManagerAdd : openAssociateItemAdd;
+  const addLabel = activeTab === 'checks' ? 'Uniform Check' : activeTab === 'inventory' ? 'Inventory' : activeTab === 'managers' ? 'Manager Stock' : 'Associate Item';
 
   const handlePrint = () => {
-    const checkRows = filtered.map(r => `<tr><td>${r.date || ''}</td><td>${r.associateName || ''}</td><td>${r.item || ''}</td><td>${issueLabel(r.issueType)}</td><td>${badgeHtml(STATUS_META[r.status]?.label || r.status || 'Open', STATUS_META[r.status]?.color || 'gray')}</td><td>${r.sizeRequest || ''}</td><td>${r.actionTaken || r.notes || ''}</td></tr>`).join('');
-    const inventoryRows = inventoryFiltered.map(item => `<tr><td>${item.item || ''}</td><td>${item.size || ''}</td><td>${item.color || ''}</td><td>${num(item.onHandQty)}</td><td>${num(managerQtyByInventoryId[item.id])}</td><td>${num(associateQtyByInventoryId[item.id])}</td><td>${Math.max(0, num(item.onHandQty) - num(managerQtyByInventoryId[item.id]) - num(associateQtyByInventoryId[item.id]))}</td><td>${badgeHtml(STOCK_STATUS[stockStatus(item)].label, STOCK_STATUS[stockStatus(item)].color)}</td><td>${item.location || ''}</td></tr>`).join('');
-    const managerRows = managerFiltered.map(r => `<tr><td>${r.managerName || ''}</td><td>${r.item || ''}</td><td>${r.size || ''}</td><td>${r.color || ''}</td><td>${num(r.qty)}</td><td>${r.location || ''}</td><td>${r.notes || ''}</td></tr>`).join('');
-    const associateRows = associateItemsFiltered.map(r => `<tr><td>${r.associateName || ''}</td><td>${r.item || ''}</td><td>${r.size || ''}</td><td>${r.color || ''}</td><td>${num(r.qty)}</td><td>${r.issueDate || ''}</td><td>${r.returnedDate || ''}</td><td>${badgeHtml(ASSOCIATE_ITEM_STATUS[r.status]?.label || r.status || 'Active / Issued', ASSOCIATE_ITEM_STATUS[r.status]?.color || 'green')}</td><td>${r.notes || ''}</td></tr>`).join('');
-    openPrintWindow({
-      title: 'Uniform Tracker & Inventory Report',
-      subtitle: storeName,
-      html: `${infoGridHtml([['Report View', activeTab === 'checks' ? 'Uniform Checks' : activeTab === 'inventory' ? 'Inventory' : activeTab === 'managers' ? 'Manager On-Hand' : 'Associate Items'], ['Generated', new Date().toLocaleString()], ['Store', storeName]])}${statsRowHtml([{ value: stats.total, label: 'Checks' }, { value: stats.open, label: 'Open Issues' }, { value: stats.storeOnHand, label: 'Store On-Hand' }, { value: stats.managerOnHand, label: 'Manager On-Hand' }, { value: stats.associateOnHand, label: 'With Associates' }, { value: stats.lowStock, label: 'Low/Out Items' }])}<h2 class="section-title">Inventory</h2><table><thead><tr><th>Item</th><th>Size</th><th>Color</th><th>Store Qty</th><th>With Managers</th><th>With Associates</th><th>Available</th><th>Status</th><th>Location</th></tr></thead><tbody>${inventoryRows || '<tr><td colspan="9">No inventory records found.</td></tr>'}</tbody></table><h2 class="section-title">Manager On-Hand</h2><table><thead><tr><th>Manager</th><th>Item</th><th>Size</th><th>Color</th><th>Qty</th><th>Location</th><th>Notes</th></tr></thead><tbody>${managerRows || '<tr><td colspan="7">No manager stock records found.</td></tr>'}</tbody></table><h2 class="section-title">Associate Items</h2><table><thead><tr><th>Associate</th><th>Item</th><th>Size</th><th>Color</th><th>Qty</th><th>Issued</th><th>Returned</th><th>Status</th><th>Notes</th></tr></thead><tbody>${associateRows || '<tr><td colspan="9">No associate uniform item records found.</td></tr>'}</tbody></table><h2 class="section-title">Uniform Checks</h2><table><thead><tr><th>Date</th><th>Associate</th><th>Item</th><th>Issue</th><th>Status</th><th>Request</th><th>Action / Notes</th></tr></thead><tbody>${checkRows || '<tr><td colspan="7">No uniform check records found.</td></tr>'}</tbody></table>`,
-    });
+    const rows = [];
+    if (activeTab === 'checks') rows.push(...filtered.map(r => [r.associateName, r.date, r.item, issueLabel(r.issueType), r.status, r.sizeRequest, r.actionTaken, r.notes]));
+    else if (activeTab === 'inventory') rows.push(...inventoryFiltered.map(r => [r.item, r.size, r.color, r.onHandQty, r.reorderPoint, r.location, r.notes]));
+    else if (activeTab === 'managers') rows.push(...managerFiltered.map(r => [r.managerName, r.item, r.size, r.color, r.qty, r.location, r.notes]));
+    else rows.push(...associateItemsFiltered.map(r => [r.associateName, r.item, r.size, r.color, r.qty, associateItemStatusLabel(r.status), r.issuedDate, r.returnedDate, r.notes]));
+
+    const headers = activeTab === 'checks' ? ['Associate', 'Date', 'Item', 'Issue', 'Status', 'Size/Request', 'Action', 'Notes']
+      : activeTab === 'inventory' ? ['Item', 'Size', 'Color', 'On-Hand', 'Reorder', 'Location', 'Notes']
+      : activeTab === 'managers' ? ['Manager', 'Item', 'Size', 'Color', 'Qty', 'Location', 'Notes']
+      : ['Associate', 'Item', 'Size', 'Color', 'Qty', 'Status', 'Issued', 'Returned', 'Notes'];
+
+    const html = `<h2>${storeName} - Uniform Tracker (${activeTab})</h2><table border="1" cellpadding="8"><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>${rows.map(r => `<tr>${r.map(v => `<td>${v || ''}</td>`).join('')}</tr>`).join('')}</table>`;
+    openPrintWindow(html);
   };
 
   return (
@@ -508,16 +447,42 @@ export default function Uniforms() {
       <DesktopPageHeader title="Uniform Tracker" onAdd={primaryAdd} addLabel={addLabel} onPrint={handlePrint} />
 
       <main className="desktop-page-content p-4 lg:p-8 space-y-5">
-        <section className="grid grid-cols-2 lg:grid-cols-7 gap-3">
+        {/* Enhanced Summary Dashboard */}
+        <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 lg:p-6 space-y-4">
+          <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Inventory Summary</h3>
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
+              <div className="text-xs text-blue-600 font-semibold">Store On-Hand</div>
+              <div className="text-2xl font-bold text-blue-700 mt-1">{stats.storeOnHand}</div>
+            </div>
+            <div className="bg-purple-50 rounded-xl p-3 border border-purple-100">
+              <div className="text-xs text-purple-600 font-semibold">With Managers</div>
+              <div className="text-2xl font-bold text-purple-700 mt-1">{stats.managerOnHand}</div>
+            </div>
+            <div className="bg-red-50 rounded-xl p-3 border border-red-100">
+              <div className="text-xs text-red-600 font-semibold">With Associates</div>
+              <div className="text-2xl font-bold text-red-700 mt-1">{stats.associateOnHand}</div>
+            </div>
+            <div className="bg-green-50 rounded-xl p-3 border border-green-100">
+              <div className="text-xs text-green-600 font-semibold">Available</div>
+              <div className="text-2xl font-bold text-green-700 mt-1">{stats.available}</div>
+            </div>
+            <div className="bg-yellow-50 rounded-xl p-3 border border-yellow-100">
+              <div className="text-xs text-yellow-600 font-semibold">Low Stock Items</div>
+              <div className="text-2xl font-bold text-yellow-700 mt-1">{stats.lowStock}</div>
+            </div>
+          </div>
+        </section>
+
+        {/* Checks Stats */}
+        <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <StatCard label="Total Checks" value={stats.total} />
           <StatCard label="Open Issues" value={stats.open} tone="red" />
           <StatCard label="Follow Up" value={stats.followUp} tone="yellow" />
           <StatCard label="Inventory SKUs" value={stats.inventoryItems} tone="blue" />
-          <StatCard label="Store On-Hand" value={stats.storeOnHand} tone="green" />
-          <StatCard label="With Managers" value={stats.managerOnHand} tone="purple" />
-          <StatCard label="With Associates" value={stats.associateOnHand} tone="red" />
         </section>
 
+        {/* Tabs and Content */}
         <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-3 lg:p-4 space-y-3">
           <div className="flex flex-wrap gap-2"><TabButton active={activeTab === 'checks'} onClick={() => setActiveTab('checks')}>Uniform Checks</TabButton><TabButton active={activeTab === 'inventory'} onClick={() => setActiveTab('inventory')}>Inventory</TabButton><TabButton active={activeTab === 'managers'} onClick={() => setActiveTab('managers')}>Manager On-Hand</TabButton><TabButton active={activeTab === 'associateItems'} onClick={() => setActiveTab('associateItems')}>Associate Items</TabButton></div>
           <div className="flex flex-col lg:flex-row gap-3">
@@ -537,8 +502,8 @@ export default function Uniforms() {
 
       {showModal && <UniformModal record={modalRecord} associates={activeAssociates} onClose={() => setShowModal(false)} />}
       {showInventoryModal && <InventoryModal record={inventoryRecord} onClose={() => setShowInventoryModal(false)} />}
-      {showManagerModal && <ManagerStockModal record={managerRecord} inventory={uniformInventory} managers={managers} onClose={() => setShowManagerModal(false)} />}
-      {showAssociateItemModal && <AssociateItemModal record={associateItemRecord} associates={activeAssociates} inventory={uniformInventory} onClose={() => setShowAssociateItemModal(false)} />}
+      {showManagerModal && <ManagerStockModal record={managerRecord} inventory={uniformInventory} managerQtyByInventoryId={managerQtyByInventoryId} associateQtyByInventoryId={associateQtyByInventoryId} managers={managers} onClose={() => setShowManagerModal(false)} />}
+      {showAssociateItemModal && <AssociateItemModal record={associateItemRecord} associates={activeAssociates} inventory={uniformInventory} managerQtyByInventoryId={managerQtyByInventoryId} associateQtyByInventoryId={associateQtyByInventoryId} onClose={() => setShowAssociateItemModal(false)} />}
     </div>
   );
 }
@@ -546,3 +511,5 @@ export default function Uniforms() {
 function EmptyState({ icon, title, text, action, onClick }) {
   return <section className="bg-white rounded-2xl border border-dashed border-gray-300 p-8 text-center"><div className="w-14 h-14 rounded-2xl bg-red-50 text-primary mx-auto flex items-center justify-center">{icon}</div><h3 className="mt-4 font-bold text-gray-900">{title}</h3><p className="mt-1 text-sm text-gray-500 max-w-md mx-auto">{text}</p><button onClick={onClick} className="mt-4 inline-flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-sm">{action}</button></section>;
 }
+
+export default Uniforms;
