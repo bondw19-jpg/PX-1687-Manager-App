@@ -7,9 +7,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      // 'prompt' — onNeedRefresh fires when a new SW is waiting,
-      // giving us a chance to show the toast before reloading.
-      registerType: 'prompt',
+      // 'autoUpdate' — automatically updates the SW when a new version is detected
+      // This ensures non-technical users always see the latest version without manual refresh
+      registerType: 'autoUpdate',
       injectRegister: 'auto',
 
       // Use the existing manifest.json in /public
@@ -48,9 +48,9 @@ export default defineConfig({
 
         // Clean old caches on activate
         cleanupOutdatedCaches: true,
-        // skipWaiting/clientsClaim are handled manually via updateSW()
-        // so the toast can show first before the page reloads.
-        skipWaiting: false,
+        // skipWaiting: true — immediately activate new SW without waiting for user action
+        // This ensures non-technical users get updates without confusion
+        skipWaiting: true,
         clientsClaim: true,
       },
 

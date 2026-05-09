@@ -9,10 +9,26 @@ import {
 // ─── Changelog Data ───────────────────────────────────────────────────────────
 export const UPDATES = [
   {
-    version: '2.1.2',
-    date: 'Apr 12, 2026',
+    version: '2.2.0',
+    date: 'May 8, 2026',
     label: 'Latest',
     labelColor: 'bg-green-500',
+    summary: 'Uniform Tracker restructured with automated inventory system, Associate Items tracking, and improved inventory calculations.',
+    changes: [
+      { type: 'new',     text: 'Associate Items tracking — Track which uniform items each associate currently has (Active, Returned, Needs Replacement, Lost)' },
+      { type: 'new',     text: 'Inventory summary dashboard — Clear breakdown of Store Stock, Manager On-Hand, Issued to Associates, and Available quantities' },
+      { type: 'new',     text: 'Automated inventory calculations — Available quantities now automatically update across all tabs' },
+      { type: 'improve', text: 'Inventory dropdowns now show current available quantities for each item' },
+      { type: 'improve', text: 'Required inventory linking — All Manager Stock and Associate Items must now link to a master inventory item for proper tracking' },
+      { type: 'fix',     text: 'Fixed inventory counts not updating when items were added to Manager or Associate tabs' },
+      { type: 'fix',     text: 'Removed Pants, Shoes, and Hair Restraint from uniform item dropdown' },
+    ],
+  },
+  {
+    version: '2.1.2',
+    date: 'Apr 12, 2026',
+    label: 'Previous',
+    labelColor: 'bg-gray-400',
     summary: 'Team Activity Feed on Dashboard, alphabetical associate lists, and bell icon removed in favour of the new feed.',
     changes: [
       { type: 'new',     text: 'Team Updates feed on Dashboard — see every call-in, task, announcement, note, review & calendar event in real time' },
@@ -268,10 +284,10 @@ export default function PreviewUpdateBanner({ previewUrl }) {
 
           <div className="flex-1 min-w-0 relative z-10">
             <p className="text-white font-bold text-xs leading-tight">
-              ✨ v2.1.2 — Team Updates Feed + Alphabetical Lists
+              ✨ v2.2.0 — Uniform Tracker Automation
             </p>
             <p className="text-white/70 text-[11px] leading-tight mt-0.5">
-              Real-time team activity feed, deep-links & per-user read tracking
+              Associate Items tracking, automated inventory calculations & improved dropdowns
             </p>
           </div>
 
