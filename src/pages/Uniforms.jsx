@@ -7,6 +7,16 @@ import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import { badgeHtml, infoGridHtml, openPrintWindow, statsRowHtml } from '../lib/printReport';
+import {
+  ModalHeader,
+  ModalFooter,
+  Field,
+  TabButton,
+  UniformCard,
+  InventoryCard,
+  ManagerStockCard,
+  AssociateItemCard,
+} from '../components/UniformComponents';
 
 // StatCard component for displaying stats
 function StatCard({ label, value, tone = 'default' }) {
