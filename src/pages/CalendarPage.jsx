@@ -96,6 +96,62 @@ function EventDetailModal({ event, onClose, onDelete }) {
   );
 }
 
+
+// ── Day Events Modal ────────────────────────────────────────────────────────
+function DayEventsModal({ date, events, onClose, onOpenEvent, onAddEvent }) {
+  if (!date || !events?.length) return null;
+
+  const sortedEvents = [...events].sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="bg-white rounded-t-2xl w-full animate-slide-up">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
+          <div>
+            <h2 className="font-bold text-lg text-gray-800">Events on {date}</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Tap an event to view details.</p>
+          </div>
+          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="modal-body p-4 space-y-2">
+          {sortedEvents.map(event => (
+            <button
+              key={event.id}
+              onClick={() => onOpenEvent(event)}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl border border-gray-100 hover:bg-gray-50 active:bg-gray-100 transition-colors text-left"
+            >
+              <div className={`w-2 h-10 rounded-full flex-shrink-0 ${EVENT_COLORS[event.type] || 'bg-gray-400'}`} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-800 truncate">{event.title}</p>
+                <p className="text-xs text-gray-500">
+                  {event.time || 'No time set'} · {event.type}
+                  {event.notes ? <span className="ml-1 text-gray-400">· has notes</span> : null}
+                </p>
+                {event.createdBy?.name && (
+                  <p className="text-[11px] text-blue-500 mt-0.5">Added by {event.createdBy.name}</p>
+                )}
+              </div>
+              <ChevronRight size={14} className="text-gray-300 shrink-0" />
+            </button>
+          ))}
+        </div>
+
+        <div className="modal-footer">
+          <button
+            onClick={onAddEvent}
+            className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-sm"
+          >
+            Add Another Event for This Date
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AddEventModal({ selectedDate, onClose, onSave }) {
   const [form, setForm] = useState({
     title: '',
@@ -195,7 +251,8 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [detailEvent, setDetailEvent]   = useState(null); // event tapped in upcoming list
+  const [detailEvent, setDetailEvent]   = useState(null); // event tapped in upcoming list or date cell
+  const [dayEventsModal, setDayEventsModal] = useState(null);
 
   const events = activeTab === 'team' ? teamEvents : myEvents;
   const addEvent = activeTab === 'team' ? addTeamEvent : addMyEvent;
@@ -390,7 +447,13 @@ export default function CalendarPage() {
                   key={dateStr}
                   onClick={() => {
                     setSelectedDate(dateStr);
-                    setShowAddModal(true);
+                    if (dayEvents.length === 1) {
+                      setDetailEvent(dayEvents[0]);
+                    } else if (dayEvents.length > 1) {
+                      setDayEventsModal({ date: dateStr, events: dayEvents });
+                    } else {
+                      setShowAddModal(true);
+                    }
                   }}
                   className={`h-10 rounded-xl flex flex-col items-center justify-center relative transition-all ${
                     isSelected ? 'bg-primary text-white' :
@@ -473,6 +536,23 @@ export default function CalendarPage() {
           selectedDate={selectedDate}
           onClose={() => { setShowAddModal(false); setSelectedDate(null); }}
           onSave={addEvent}
+        />
+      )}
+
+      {dayEventsModal && (
+        <DayEventsModal
+          date={dayEventsModal.date}
+          events={dayEventsModal.events}
+          onClose={() => setDayEventsModal(null)}
+          onOpenEvent={(event) => {
+            setDayEventsModal(null);
+            setDetailEvent(event);
+          }}
+          onAddEvent={() => {
+            setSelectedDate(dayEventsModal.date);
+            setDayEventsModal(null);
+            setShowAddModal(true);
+          }}
         />
       )}
 
