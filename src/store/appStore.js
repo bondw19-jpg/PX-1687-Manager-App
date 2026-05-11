@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { normalizeUserProfile } from '../lib/roles';
 
 // Returns only the first name (first word) from a full name string
 function firstName(str) {
@@ -154,7 +155,7 @@ export const useAppStore = create(
       storeId: 'store_1687',
       storeName: 'PANDA EXPRESS 1687',
       isOnline: true,
-      setUser:      (user) => set({ user }),
+      setUser:      (user) => set(s => ({ user: user ? normalizeUserProfile(user, s.user) : null })),
       setStoreId:   (id)   => set({ storeId: id }),
       setStoreName: (name) => set({ storeName: name }),
       setOnline:  (v)    => set({ isOnline: v }),
@@ -675,7 +676,7 @@ export const useAppStore = create(
     {
       name: 'panda-manager-storage',
       storage: createBackupStorage(),
-      version: 4,
+      version: 5,
       migrate: (persistedState, fromVersion) => {
         const state = { ...(persistedState || {}) };
         if ((fromVersion ?? -1) < 1) {
@@ -695,11 +696,15 @@ export const useAppStore = create(
           if (!state.workFiles  || typeof state.workFiles  !== 'object') state.workFiles  = {};
           if (!Array.isArray(state.customChecklists)) state.customChecklists = [];
         }
+        if ((fromVersion ?? -1) < 5) {
+          state.user = state.user ? normalizeUserProfile(state.user) : null;
+        }
         return state;
       },
       merge: (persisted, current) => ({
         ...current,
         ...persisted,
+        user: persisted?.user ? normalizeUserProfile(persisted.user, current.user) : current.user,
         associates:    Array.isArray(persisted?.associates)    ? persisted.associates    : current.associates,
         callIns:       Array.isArray(persisted?.callIns)       ? persisted.callIns       : current.callIns,
         teamEvents:    Array.isArray(persisted?.teamEvents)    ? persisted.teamEvents    : current.teamEvents,

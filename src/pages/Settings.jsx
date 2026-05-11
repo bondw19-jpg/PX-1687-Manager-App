@@ -8,8 +8,7 @@ import {
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
-
-const ADMIN_EMAIL = 'bondw19@gmail.com';
+import { getRoleShortLabel, isAdminUser } from '../lib/roles';
 const APP_VERSION = '2.1.0';
 
 // ── Inline section card ──────────────────────────────────────────────────────
@@ -308,9 +307,10 @@ export default function Settings() {
   const navigate = useNavigate();
   const { user, setUser, storeName, setStoreName, dbMode, dbReady, dbConnecting } = useAppStore();
 
-  const isAdmin  = user?.email === ADMIN_EMAIL;
+  const isAdmin  = isAdminUser(user);
+  const roleLabel = user?.roleLabel || getRoleShortLabel(user?.role, user?.email);
   const isReal   = user && user.uid && user.uid !== 'demo_user';
-  const initial  = user?.name?.[0]?.toUpperCase() || '?';
+  const initial  = user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || '?';
 
   const [modal, setModal] = useState(null); // 'name' | 'password' | 'storeName'
   const [toast, setToast] = useState('');
@@ -361,7 +361,7 @@ export default function Settings() {
             <p className="text-white/70 text-xs truncate">{user?.email || ''}</p>
             <span className={`inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full
               ${isAdmin ? 'bg-amber-300 text-amber-900' : 'bg-white/20 text-white'}`}>
-              {isAdmin ? '⭐ ADMIN' : user?.role?.toUpperCase() || 'MANAGER'}
+              {roleLabel}
             </span>
           </div>
         </div>

@@ -2,17 +2,104 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function adminEmail() {
+      return signedIn()
+        && request.auth.token.email != null
+        && request.auth.token.email == 'bondw19@gmail.com';
+    }
+
+    function memberPath(storeId) {
+      return /databases/$(database)/documents/stores/$(storeId)/members/$(request.auth.uid);
+    }
+
+    function legacyPresencePath(storeId) {
+      return /databases/$(database)/documents/stores/$(storeId)/presence/$(request.auth.uid);
+    }
+
+    function hasMemberRecord(storeId) {
+      return signedIn() && exists(memberPath(storeId));
+    }
+
+    function hasLegacyPresence(storeId) {
+      return signedIn() && exists(legacyPresencePath(storeId));
+    }
+
+    function isActiveMember(storeId) {
+      return adminEmail()
+        || (
+          hasMemberRecord(storeId)
+          && get(memberPath(storeId)).data.disabled != true
+          && get(memberPath(storeId)).data.status != 'disabled'
+        )
+        || hasLegacyPresence(storeId);
+    }
+
+    function isStoreAdmin(storeId) {
+      return adminEmail()
+        || (
+          hasMemberRecord(storeId)
+          && get(memberPath(storeId)).data.role == 'admin'
+          && get(memberPath(storeId)).data.disabled != true
+          && get(memberPath(storeId)).data.status != 'disabled'
+        );
+    }
+
+    function validRole(role) {
+      return role in ['admin', 'manager', 'shift_lead'];
+    }
+
+    function isSelfMemberDoc(memberId) {
+      return signedIn() && request.auth.uid == memberId;
+    }
+
+    // ── Store member role records ─────────────────────────────────────────────
+    // Members are the database-backed role source for the app. Current users
+    // default to Manager, while Shift Lead can be enabled later from Admin.
+    match /stores/{storeId}/members/{memberId} {
+      allow read: if isActiveMember(storeId) || isSelfMemberDoc(memberId);
+
+      allow create: if isSelfMemberDoc(memberId)
+        && request.resource.data.storeId == storeId
+        && validRole(request.resource.data.role)
+        && request.resource.data.disabled != true
+        && request.resource.data.status != 'disabled';
+
+      allow update: if isStoreAdmin(storeId)
+        || (
+          isSelfMemberDoc(memberId)
+          && validRole(resource.data.role)
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.disabled == resource.data.disabled
+          && request.resource.data.status == resource.data.status
+        );
+
+      allow delete: if isStoreAdmin(storeId);
+    }
+
+    // ── Presence records ─────────────────────────────────────────────────────
+    // Presence remains writable by the signed-in user for online/last-seen state.
+    match /stores/{storeId}/presence/{memberId} {
+      allow read: if isActiveMember(storeId) || isSelfMemberDoc(memberId);
+      allow create, update: if isSelfMemberDoc(memberId) || isStoreAdmin(storeId);
+      allow delete: if isSelfMemberDoc(memberId) || isStoreAdmin(storeId);
+    }
+
     // ── Shared store data ─────────────────────────────────────────────────────
-    // Any authenticated user can read and write shared store collections.
+    // Shared manager tools require an active store member. This preserves current
+    // Manager-only use and prepares for future role restrictions inside the app.
     match /stores/{storeId}/{collection}/{docId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isActiveMember(storeId);
     }
 
     // ── Private per-user data ─────────────────────────────────────────────────
     // Only the owner (matching UID) can read or write their private notes
     // and calendar events.
     match /users/{userId}/{collection}/{docId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if signedIn() && request.auth.uid == userId;
     }
 
     // Deny everything else

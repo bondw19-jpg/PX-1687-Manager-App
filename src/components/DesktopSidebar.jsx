@@ -6,8 +6,7 @@ import {
   Settings, LogOut, ChevronRight, HardDrive, ShieldCheck
 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
-
-const ADMIN_EMAIL = 'bondw19@gmail.com';
+import { getRoleShortLabel, isAdminUser } from '../lib/roles';
 
 const sections = [
   {
@@ -51,10 +50,10 @@ export default function DesktopSidebar() {
   const location  = useLocation();
   const { user, storeName } = useAppStore();
 
-  const isAdmin     = user?.email === ADMIN_EMAIL;
-  const userInitial = user?.name?.[0]?.toUpperCase() || 'B';
-  const userName    = user?.name  || 'Bond';
-  const userRole    = user?.role  || 'Store Manager';
+  const isAdmin     = isAdminUser(user);
+  const userInitial = user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'P';
+  const userName    = user?.name  || user?.email?.split('@')[0] || 'PX User';
+  const userRole    = user?.roleLabel || getRoleShortLabel(user?.role, user?.email);
 
   return (
     <div

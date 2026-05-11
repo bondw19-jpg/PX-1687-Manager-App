@@ -5,8 +5,7 @@ import {
   StickyNote, Star, ListChecks, BookUser, ShieldCheck, Shirt
 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
-
-const ADMIN_EMAIL = 'bondw19@gmail.com';
+import { isAdminUser } from '../lib/roles';
 
 const tabs = [
   { id: 'home',      label: 'Home',      icon: Home,          path: '/' },
@@ -27,7 +26,7 @@ export default function BottomNav() {
   const navigate  = useNavigate();
   const location  = useLocation();
   const { user }  = useAppStore();
-  const isAdmin   = user?.email === ADMIN_EMAIL;
+  const isAdmin   = isAdminUser(user);
 
   // For admin: replace the last tab (Contacts) with Admin tab
   const visibleTabs = isAdmin

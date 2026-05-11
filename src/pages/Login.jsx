@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
-
-const ADMIN_EMAIL = 'bondw19@gmail.com';
+import { ADMIN_EMAIL } from '../lib/roles';
+import { loadOrCreateMemberProfile } from '../lib/memberRoles';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -52,28 +52,25 @@ export default function Login() {
       const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
       const u    = cred.user;
 
-      // ── Disabled-user check ─────────────────────────────────────────────
-      // Non-admin users: check if the Admin has disabled this account in Firestore.
-      if (u.email !== ADMIN_EMAIL) {
-        try {
-          const { getFirebaseModules } = await import('../lib/firebase');
-          const { db } = await getFirebaseModules();
-          const { doc, getDoc } = await import('firebase/firestore');
-          const presSnap = await getDoc(doc(db, 'stores', 'store_1687', 'presence', u.uid));
-          if (presSnap.exists() && presSnap.data().disabled === true) {
-            // Sign out immediately and show error
-            await signOut(auth);
-            setError('Your account has been disabled. Please contact your manager.');
-            setLoading(false);
-            return;
-          }
-        } catch {
-          // Firestore unreachable — allow login gracefully (offline mode)
+      let memberProfile = null;
+      try {
+        memberProfile = await loadOrCreateMemberProfile(u, {
+          email: u.email,
+          name: u.displayName || name || u.email.split('@')[0],
+          role: u.email === ADMIN_EMAIL ? 'admin' : 'manager',
+        });
+      } catch (memberErr) {
+        if (memberErr?.code === 'account-disabled' || memberErr?.message === 'account-disabled') {
+          await signOut(auth);
+          setError('Your account has been disabled. Please contact your manager.');
+          setLoading(false);
+          return;
         }
+        // Firestore may be temporarily unreachable. Let the manager sign in locally,
+        // then the app will reconnect and hydrate the database role when available.
       }
-      // ───────────────────────────────────────────────────────────────────
 
-      setUser({
+      setUser(memberProfile || {
         uid:     u.uid,
         email:   u.email,
         name:    u.displayName || name || u.email.split('@')[0],
@@ -102,7 +99,17 @@ export default function Login() {
       const auth = await getAuth();
       const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
       const u    = cred.user;
-      setUser({
+      let memberProfile = null;
+      try {
+        memberProfile = await loadOrCreateMemberProfile(u, {
+          email: u.email,
+          name: name.trim(),
+          role: 'manager',
+        });
+      } catch {
+        // Registration still works offline/local if Firestore is unreachable.
+      }
+      setUser(memberProfile || {
         uid:     u.uid,
         email:   u.email,
         name:    name.trim(),
@@ -255,7 +262,7 @@ export default function Login() {
         {/* Demo Login */}
         <button onClick={handleDemoLogin}
           className="w-full border-2 border-primary text-primary py-3 rounded-xl font-semibold text-sm hover:bg-red-50 transition-colors">
-          🐼 Demo Login (No Account Needed)
+          🐼 Demo Login (Manager Preview)
         </button>
       </div>
 

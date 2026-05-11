@@ -9,11 +9,10 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/appStore';
+import { ADMIN_EMAIL, ROLE_KEYS, ROLE_OPTIONS, getRoleShortLabel, normalizeRole, isAdminUser } from '../lib/roles';
+import { updateMemberRole, updateMemberStatus, syncMemberFromPresence } from '../lib/memberRoles';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
-
-// ── Admin guard ───────────────────────────────────────────────────────────────
-const ADMIN_EMAIL = 'bondw19@gmail.com';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function getStorageSize(key) {
@@ -291,7 +290,8 @@ function SignedInUsers({ onToast }) {
           {users.map(u => {
             const online    = isActivelyOnline(u);
             const isMe      = u.uid === adminUser?.uid;
-            const isAdmin   = u.email === ADMIN_EMAIL;
+            const isAdmin   = isAdminUser(u);
+            const roleLabel = u.roleLabel || getRoleShortLabel(u.role, u.email);
             const initial   = (u.name || u.email || '?')[0].toUpperCase();
             const lastSeen  = formatLastSeen(u.lastSeen);
 
@@ -326,9 +326,9 @@ function SignedInUsers({ onToast }) {
                     {isMe && (
                       <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-bold">You</span>
                     )}
-                    {isAdmin && (
-                      <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full font-bold">ADMIN</span>
-                    )}
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${isAdmin ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
+                      {roleLabel}
+                    </span>
                   </div>
                   <div className="text-xs text-gray-400 truncate">{u.email || u.uid}</div>
                 </div>
@@ -500,38 +500,45 @@ function ChecklistTemplates({ onToast }) {
 // SECTION 4b: User Management
 // ─────────────────────────────────────────────────────────────────────────────
 
-const ROLES = [
-  { value: 'admin',   label: 'Admin',   color: 'bg-red-100 text-red-700',    icon: Crown },
-  { value: 'manager', label: 'Manager', color: 'bg-blue-100 text-blue-700',   icon: ShieldCheck },
-  { value: 'viewer',  label: 'Viewer',  color: 'bg-gray-100 text-gray-600',   icon: Eye },
-];
+const ROLE_STYLES = {
+  [ROLE_KEYS.ADMIN]:      { color: 'bg-red-100 text-red-700',    icon: Crown },
+  [ROLE_KEYS.MANAGER]:    { color: 'bg-blue-100 text-blue-700',   icon: ShieldCheck },
+  [ROLE_KEYS.SHIFT_LEAD]: { color: 'bg-amber-100 text-amber-700', icon: UserCheck },
+};
 
-function roleMeta(role) {
-  return ROLES.find(r => r.value === role) || ROLES[1];
+const ROLES = ROLE_OPTIONS.map(role => ({
+  ...role,
+  label: role.shortLabel,
+  color: ROLE_STYLES[role.value]?.color || 'bg-gray-100 text-gray-600',
+  icon: ROLE_STYLES[role.value]?.icon || Eye,
+}));
+
+function roleMeta(role, email = '') {
+  const value = normalizeRole(role, email);
+  return ROLES.find(r => r.value === value) || ROLES.find(r => r.value === ROLE_KEYS.MANAGER);
 }
 
 function UserManagement({ onToast }) {
   const { dbReady, dbMode, user: adminUser } = useAppStore();
-  const [users, setUsers]         = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [saving, setSaving]       = useState(null); // uid being saved
-  const [editRole, setEditRole]   = useState({}); // { uid: role }
-  const [confirm, setConfirm]     = useState(null);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(null);
+  const [editRole, setEditRole] = useState({});
+  const [confirm, setConfirm] = useState(null);
   const [inviteCode, setInviteCode] = useState('');
   const [inviteLoading, setInviteLoading] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const unsubRef = useRef(() => {});
 
-  // ── Format helpers ────────────────────────────────────────────────────────
   const formatLastSeen = (ts) => {
     if (!ts) return 'Never';
     const date = ts.toDate ? ts.toDate() : new Date(ts);
     const diffMs = Date.now() - date.getTime();
     const diffMin = Math.floor(diffMs / 60000);
-    if (diffMin < 1)  return 'just now';
+    if (diffMin < 1) return 'just now';
     if (diffMin < 60) return `${diffMin}m ago`;
     const diffHr = Math.floor(diffMin / 60);
-    if (diffHr < 24)  return `${diffHr}h ago`;
+    if (diffHr < 24) return `${diffHr}h ago`;
     return date.toLocaleDateString();
   };
 
@@ -541,43 +548,65 @@ function UserManagement({ onToast }) {
     return (Date.now() - d.getTime()) < 3 * 60 * 1000;
   };
 
-  // ── Load users from presence collection ──────────────────────────────────
   useEffect(() => {
-    if (!dbReady || dbMode !== 'firestore') { setLoading(false); return; }
+    if (!dbReady || dbMode !== 'firestore') {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
     (async () => {
       try {
         const { getFirebaseModules } = await import('../lib/firebase');
         const { db } = await getFirebaseModules();
         const { collection, onSnapshot } = await import('firebase/firestore');
-        const ref = collection(db, 'stores', 'store_1687', 'presence');
-        unsubRef.current = onSnapshot(ref, snap => {
-          const list = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+        const membersRef = collection(db, 'stores', 'store_1687', 'members');
+        const presenceRef = collection(db, 'stores', 'store_1687', 'presence');
+        let membersByUid = {};
+        let presenceByUid = {};
+
+        const publish = () => {
+          const ids = new Set([...Object.keys(membersByUid), ...Object.keys(presenceByUid)]);
+          const list = [...ids].map(uid => ({ uid, ...(presenceByUid[uid] || {}), ...(membersByUid[uid] || {}) }));
           list.sort((a, b) => {
             const aOn = isOnline(a) ? 1 : 0;
             const bOn = isOnline(b) ? 1 : 0;
             if (bOn !== aOn) return bOn - aOn;
-            // Admin first, then by name
-            const aAdmin = a.email === ADMIN_EMAIL ? 1 : 0;
-            const bAdmin = b.email === ADMIN_EMAIL ? 1 : 0;
+            const aAdmin = isAdminUser(a) ? 1 : 0;
+            const bAdmin = isAdminUser(b) ? 1 : 0;
             if (bAdmin !== aAdmin) return bAdmin - aAdmin;
             return (a.name || a.email || '').localeCompare(b.name || b.email || '');
           });
           setUsers(list);
           setLoading(false);
+        };
+
+        const unsubMembers = onSnapshot(membersRef, snap => {
+          membersByUid = Object.fromEntries(snap.docs.map(d => [d.id, { uid: d.id, ...d.data() }]));
+          publish();
         }, err => {
-          onToast('Error loading users: ' + err.message, 'error');
+          onToast('Error loading member roles: ' + err.message, 'error');
           setLoading(false);
         });
+
+        const unsubPresence = onSnapshot(presenceRef, snap => {
+          presenceByUid = Object.fromEntries(snap.docs.map(d => [d.id, { uid: d.id, ...d.data() }]));
+          snap.docs.forEach(d => {
+            if (!membersByUid[d.id]) syncMemberFromPresence(d.id, d.data()).catch(() => {});
+          });
+          publish();
+        }, () => publish());
+
+        unsubRef.current = () => { unsubMembers(); unsubPresence(); };
       } catch (e) {
         onToast('Failed to load users: ' + e.message, 'error');
         setLoading(false);
       }
     })();
-    return () => unsubRef.current();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dbReady, dbMode]);
 
-  // ── Load current invite code ──────────────────────────────────────────────
+    return () => { try { unsubRef.current(); } catch {} };
+  }, [dbReady, dbMode, onToast]);
+
   const loadInviteCode = async () => {
     setInviteLoading(true);
     try {
@@ -586,7 +615,7 @@ function UserManagement({ onToast }) {
       const { doc, getDoc } = await import('firebase/firestore');
       const snap = await getDoc(doc(db, 'stores', 'store_1687', 'config', 'invite'));
       setInviteCode(snap.exists() ? snap.data().code || '' : '');
-    } catch (e) {
+    } catch {
       onToast('Could not load invite code', 'error');
     }
     setInviteLoading(false);
@@ -612,32 +641,22 @@ function UserManagement({ onToast }) {
     setInviteLoading(false);
   };
 
-  // ── Update role ────────────────────────────────────────────────────────────
   const saveRole = async (uid, role) => {
     setSaving(uid);
     try {
-      const { getFirebaseModules } = await import('../lib/firebase');
-      const { db } = await getFirebaseModules();
-      const { doc, updateDoc } = await import('firebase/firestore');
-      await updateDoc(doc(db, 'stores', 'store_1687', 'presence', uid), { role });
+      await updateMemberRole(uid, role);
       setEditRole(prev => { const n = { ...prev }; delete n[uid]; return n; });
-      onToast('Role updated!', 'success');
+      onToast('Role updated in database.', 'success');
     } catch (e) {
       onToast('Failed to update role: ' + e.message, 'error');
     }
     setSaving(null);
   };
 
-  // ── Toggle disabled ────────────────────────────────────────────────────────
   const toggleDisabled = async (uid, currentlyDisabled) => {
     setSaving(uid);
     try {
-      const { getFirebaseModules } = await import('../lib/firebase');
-      const { db } = await getFirebaseModules();
-      const { doc, updateDoc } = await import('firebase/firestore');
-      await updateDoc(doc(db, 'stores', 'store_1687', 'presence', uid), {
-        disabled: !currentlyDisabled,
-      });
+      await updateMemberStatus(uid, !currentlyDisabled);
       onToast(currentlyDisabled ? 'User re-enabled.' : 'User disabled — they cannot log in.', 'success');
     } catch (e) {
       onToast('Failed: ' + e.message, 'error');
@@ -645,11 +664,10 @@ function UserManagement({ onToast }) {
     setSaving(null);
   };
 
-  // ── Remove from store ──────────────────────────────────────────────────────
   const removeUser = async (uid, name) => {
     setConfirm({
       title: `Remove ${name}?`,
-      message: 'This removes them from the store. They can rejoin with the invite code.',
+      message: 'This removes them from the store member database. They can be added again later if needed.',
       confirmLabel: 'Remove',
       onConfirm: async () => {
         setConfirm(null);
@@ -658,7 +676,8 @@ function UserManagement({ onToast }) {
           const { getFirebaseModules } = await import('../lib/firebase');
           const { db } = await getFirebaseModules();
           const { doc, deleteDoc } = await import('firebase/firestore');
-          await deleteDoc(doc(db, 'stores', 'store_1687', 'presence', uid));
+          await deleteDoc(doc(db, 'stores', 'store_1687', 'members', uid));
+          await deleteDoc(doc(db, 'stores', 'store_1687', 'presence', uid)).catch(() => {});
           onToast(`${name} removed from store.`, 'success');
         } catch (e) {
           onToast('Failed to remove: ' + e.message, 'error');
@@ -668,13 +687,12 @@ function UserManagement({ onToast }) {
     });
   };
 
-  // ── Require Firestore ─────────────────────────────────────────────────────
   if (!dbReady || dbMode !== 'firestore') {
     return (
       <div className="pt-4">
         <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 flex items-center gap-2 text-sm text-amber-700">
           <WifiOff size={16} />
-          <span>Connect cloud sync to manage users.</span>
+          <span>Connect cloud sync to manage database-backed user roles.</span>
         </div>
       </div>
     );
@@ -684,8 +702,6 @@ function UserManagement({ onToast }) {
 
   return (
     <div className="pt-3 space-y-4">
-
-      {/* ── Summary + Invite toggle ─────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-50 border border-green-100 px-2.5 py-1 rounded-full">
@@ -702,14 +718,13 @@ function UserManagement({ onToast }) {
         </button>
       </div>
 
-      {/* ── Invite code panel ──────────────────────────────────────────── */}
       {showInvite && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
           <div className="flex items-center gap-2 text-sm font-bold text-blue-800">
             <Key size={15} /> Store Invite Code
           </div>
           <p className="text-xs text-blue-700">
-            Share this code with new managers. They enter it on first login to join this store.
+            Share this code with new Managers now. It also prepares the store for future Shift Lead users.
             Rotate it anytime to revoke old links.
           </p>
           <div className="flex items-center gap-2">
@@ -735,7 +750,6 @@ function UserManagement({ onToast }) {
         </div>
       )}
 
-      {/* ── Users list ─────────────────────────────────────────────────── */}
       {loading ? (
         <div className="flex items-center justify-center py-8">
           <RefreshCw size={20} className="animate-spin text-gray-400" />
@@ -749,29 +763,27 @@ function UserManagement({ onToast }) {
       ) : (
         <div className="space-y-2">
           {users.map(u => {
-            const online      = isOnline(u);
-            const isMe        = u.uid === adminUser?.uid;
-            const isAdmin     = u.email === ADMIN_EMAIL;
-            const disabled    = !!u.disabled;
-            const initial     = (u.name || u.email || '?')[0].toUpperCase();
-            const currentRole = editRole[u.uid] ?? u.role ?? 'manager';
-            const rm          = roleMeta(currentRole);
-            const RoleIcon    = rm.icon;
-            const isSaving    = saving === u.uid;
-            const hasRoleChange = editRole[u.uid] && editRole[u.uid] !== u.role;
+            const online = isOnline(u);
+            const isMe = u.uid === adminUser?.uid;
+            const isAdmin = isAdminUser(u);
+            const disabled = !!u.disabled;
+            const initial = (u.name || u.email || '?')[0].toUpperCase();
+            const currentRole = editRole[u.uid] ?? normalizeRole(u.role, u.email);
+            const rm = roleMeta(currentRole, u.email);
+            const RoleIcon = rm.icon;
+            const isSaving = saving === u.uid;
+            const hasRoleChange = !!editRole[u.uid] && editRole[u.uid] !== normalizeRole(u.role, u.email);
 
             return (
               <div
                 key={u.uid}
                 className={`rounded-2xl border transition-colors ${
                   disabled ? 'bg-gray-50 border-gray-200 opacity-60'
-                  : online  ? 'bg-green-50 border-green-100'
+                  : online ? 'bg-green-50 border-green-100'
                   : 'bg-white border-gray-100'
                 }`}
               >
-                {/* ── Top row: avatar + name + status ── */}
                 <div className="flex items-center gap-3 px-3 py-3">
-                  {/* Avatar */}
                   <div className="relative shrink-0">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm text-white ${
                       isAdmin ? 'bg-red-500' : disabled ? 'bg-gray-400' : 'bg-primary'
@@ -783,20 +795,20 @@ function UserManagement({ onToast }) {
                     }`} />
                   </div>
 
-                  {/* Name + email */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-sm font-bold text-gray-800 truncate">
                         {u.name || u.email?.split('@')[0] || 'Unknown'}
                       </span>
                       {isMe && <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-bold">You</span>}
-                      {isAdmin && <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full font-bold">ADMIN</span>}
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${isAdmin ? 'bg-red-100 text-red-700' : 'bg-blue-50 text-blue-700'}`}>
+                        {getRoleShortLabel(currentRole, u.email)}
+                      </span>
                       {disabled && <span className="text-[10px] bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded-full font-bold">DISABLED</span>}
                     </div>
                     <div className="text-xs text-gray-400 truncate">{u.email || u.uid}</div>
                   </div>
 
-                  {/* Online / last seen */}
                   <div className="shrink-0 text-right">
                     <span className={`text-xs font-semibold ${online ? 'text-green-600' : 'text-gray-400'}`}>
                       {online ? '● Online' : '○ Offline'}
@@ -805,11 +817,8 @@ function UserManagement({ onToast }) {
                   </div>
                 </div>
 
-                {/* ── Role + actions row ── */}
                 {!isAdmin && (
                   <div className="px-3 pb-3 flex items-center gap-2 flex-wrap border-t border-gray-100 pt-2.5">
-
-                    {/* Role selector */}
                     <div className="flex items-center gap-1.5 flex-1 min-w-0">
                       <RoleIcon size={13} className={rm.color.split(' ')[1]} />
                       <select
@@ -820,7 +829,7 @@ function UserManagement({ onToast }) {
                           hasRoleChange ? 'border-primary text-primary' : 'border-gray-200 text-gray-600'
                         }`}
                       >
-                        {ROLES.filter(r => r.value !== 'admin').map(r => (
+                        {ROLES.filter(r => r.value !== ROLE_KEYS.ADMIN).map(r => (
                           <option key={r.value} value={r.value}>{r.label}</option>
                         ))}
                       </select>
@@ -836,7 +845,6 @@ function UserManagement({ onToast }) {
                       )}
                     </div>
 
-                    {/* Disable / Enable */}
                     {!isMe && (
                       <button
                         onClick={() => toggleDisabled(u.uid, disabled)}
@@ -852,7 +860,6 @@ function UserManagement({ onToast }) {
                       </button>
                     )}
 
-                    {/* Remove */}
                     {!isMe && (
                       <button
                         onClick={() => removeUser(u.uid, u.name || u.email)}
@@ -870,13 +877,10 @@ function UserManagement({ onToast }) {
         </div>
       )}
 
-      {/* Info note */}
       <p className="text-[10px] text-gray-400 text-center">
-        Roles: Admin (full access) · Manager (all modules) · Viewer (read-only) ·
-        Disabled users cannot log in · Updates live
+        Roles: Admin has full access · Manager is current daily access · Shift Lead is prepared for future limited access · Updates live
       </p>
 
-      {/* Confirm dialog */}
       {confirm && (
         <ConfirmDialog
           title={confirm.title}
@@ -1122,8 +1126,8 @@ export default function AdminPage() {
     setToast({ message, type });
   }, []);
 
-  // Access guard — only bondw19@gmail.com
-  if (!user || user.email !== ADMIN_EMAIL) {
+  // Access guard — only database-backed admins can open this page.
+  if (!user || !isAdminUser(user)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl p-8 w-full max-w-sm shadow-xl text-center">

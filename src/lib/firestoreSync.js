@@ -1,3 +1,5 @@
+import { loadOrCreateMemberProfile } from './memberRoles';
+import { normalizeUserProfile } from './roles';
 // firestoreSync.js
 // ─────────────────────────────────────────────────────────────────────────────
 // Loaded dynamically the first time the user connects Firebase.
@@ -571,6 +573,23 @@ export async function initFirestoreSync(set, get) {
     // make sure Zustand user uid matches Firebase Auth uid.
     if (firebaseUser?.uid && get().user?.uid && firebaseUser.uid !== get().user?.uid) {
       console.warn('[FS] uid mismatch — Firebase:', firebaseUser.uid, '| Zustand:', get().user?.uid, '— using Firebase uid');
+    }
+
+    // ── Database-backed role profile ─────────────────────────────────────────
+    // Hydrate the current signed-in user's role from stores/store_1687/members/{uid}.
+    // Existing manager users default to Manager; the configured admin email defaults to Admin.
+    if (firebaseUser?.uid) {
+      try {
+        const memberProfile = await loadOrCreateMemberProfile(firebaseUser, get().user || {});
+        set(s => ({ user: normalizeUserProfile(memberProfile, s.user) }));
+        console.log('[FS] Role profile loaded:', memberProfile.role);
+      } catch (roleErr) {
+        console.warn('[FS] Role profile load failed:', roleErr?.code || roleErr?.message);
+        if (roleErr?.code === 'account-disabled' || roleErr?.message === 'account-disabled') {
+          set({ needsRelogin: true, dbReady: false, dbMode: 'local' });
+          throw roleErr;
+        }
+      }
     }
 
     // Migration key is PER UID so each user/device migrates independently
