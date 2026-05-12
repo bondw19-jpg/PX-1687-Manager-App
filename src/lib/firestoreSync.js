@@ -489,6 +489,33 @@ export async function batchForceToFirestore(data, uid) {
   return count;
 }
 
+// ── Clear ALL private data for a user (emergency cleanup) ─────────────────────
+// Deletes every document in users/{uid}/myNotes and users/{uid}/myEvents.
+// Used when a prior race-condition bug wrote another user's content into this
+// user's private Firestore collections. Safe to call while signed in — the
+// onSnapshot listener will immediately fire and update state to [].
+export async function clearAllPrivateData(uid) {
+  if (!uid) throw new Error('clearAllPrivateData: uid is required');
+  const { getDocs, deleteDoc } = await import('firebase/firestore');
+
+  let deleted = 0;
+  for (const collName of ['myNotes', 'myEvents']) {
+    try {
+      const coll = await userColl(uid, collName);
+      const snap = await getDocs(coll);
+      await Promise.all(snap.docs.map(async (d) => {
+        try { await deleteDoc(d.ref); deleted++; } catch (e) {
+          console.warn(`[FS] clearPrivate delete(${collName}/${d.id}):`, e?.code || e?.message);
+        }
+      }));
+    } catch (e) {
+      console.warn(`[FS] clearPrivate getDocs(${collName}):`, e?.code || e?.message);
+    }
+  }
+  console.log(`[FS] 🧹 clearAllPrivateData: deleted ${deleted} doc(s) for uid ${uid}`);
+  return deleted;
+}
+
 // ── Snapshot helpers ──────────────────────────────────────────────────────────
 function subscribeCollection(collName, callback) {
   let unsub = () => {};
@@ -553,6 +580,16 @@ export async function initFirestoreSync(set, get) {
   // Tear down any existing listeners (handles logout → login re-connect)
   if (_syncActive) {
     disconnectFirestore(set);
+    // ── CRITICAL: Reset the auth-ready cache synchronously ───────────────────
+    // disconnectFirestore() resets the cache asynchronously (via dynamic import
+    // promise), which creates a race: the very next waitForAuthReady() call
+    // below could still find the previous user's cached result and subscribe to
+    // their private collections — making the new user see another account's
+    // private notes and calendar events.
+    // Awaiting resetAuthReadyPromise() here ensures the cache is cleared before
+    // waitForAuthReady() is called, so it always produces a fresh auth result.
+    const { resetAuthReadyPromise } = await import('./firebase');
+    resetAuthReadyPromise();
   }
 
   try {
@@ -567,15 +604,20 @@ export async function initFirestoreSync(set, get) {
     //
     // waitForAuthReady() waits for onAuthStateChanged to fire once, which is
     // the definitive signal that auth restoration is complete.
-    const { waitForAuthReady } = await import('./firebase');
+    const { waitForAuthReady, getFirebaseModules } = await import('./firebase');
     const firebaseUser = await waitForAuthReady();
     console.log('[FS] Auth confirmed:', firebaseUser?.uid || 'no firebase user');
 
     await getDb();
 
-    // Use Firebase Auth uid as the authoritative source; fall back to Zustand
-    // state uid (covers the case where user signed in earlier this session).
-    const uid = firebaseUser?.uid || get().user?.uid || null;
+    // ── Use auth.currentUser as the authoritative UID ─────────────────────────
+    // auth.currentUser is always live — it reflects whoever is actually signed
+    // in right now, even if waitForAuthReady() somehow returned a stale cached
+    // result from a prior session. This is the critical second line of defence
+    // against one user's private data leaking to another account.
+    const { auth } = await getFirebaseModules();
+    const uid = auth.currentUser?.uid || firebaseUser?.uid || get().user?.uid || null;
+    const currentEmail = auth.currentUser?.email || firebaseUser?.email || get().user?.email || null;
     _uid = uid;
     console.log('[FS] uid =', uid || '(none — shared data only)');
 
@@ -695,9 +737,53 @@ export async function initFirestoreSync(set, get) {
     // Firestore is unconditionally authoritative for private data:
     //   - items non-empty → update state with cloud notes ✅
     //   - items empty     → user has no cloud notes (correct — show empty) ✅
+    //
+    // OWNERSHIP FILTER: Due to a past race condition, items belonging to a
+    // different user could have been written into this user's Firestore path
+    // (users/{uid}/myNotes or myEvents). We classify every loaded item as
+    // owned or contaminated using two explicit signals — checked in order:
+    //   1. ownerUid present but ≠ uid           → contaminated (wrong account)
+    //   2. ownerEmail present but ≠ currentEmail → contaminated (email cross-check)
+    // Items with NEITHER field set are legacy data written before ownership
+    // fields existed — they are assumed to belong to the path owner and kept.
+    // Contaminated docs are silently deleted from Firestore and never shown.
+    function classifyPrivateItems(items) {
+      const owned = [];
+      const contaminated = [];
+      for (const item of items) {
+        if (item.ownerUid && item.ownerUid !== uid) {
+          contaminated.push(item); continue;
+        }
+        if (item.ownerEmail && currentEmail && item.ownerEmail !== currentEmail) {
+          contaminated.push(item); continue;
+        }
+        owned.push(item);
+      }
+      return { owned, contaminated };
+    }
+
+    async function purgeContaminatedDocs(collName, contaminatedItems) {
+      if (!contaminatedItems.length) return;
+      console.warn(`[FS] 🧹 Auto-purging ${contaminatedItems.length} contaminated doc(s) from users/${uid}/${collName}`);
+      const { deleteDoc } = await import('firebase/firestore');
+      await Promise.all(
+        contaminatedItems.map(async (item) => {
+          try {
+            const ref = await userItem(uid, collName, item.id);
+            await deleteDoc(ref);
+          } catch (e) {
+            console.warn(`[FS] purge(${collName}/${item.id}):`, e?.code || e?.message);
+          }
+        })
+      );
+    }
+
     if (uid) {
       _unsubscribers.push(
         subscribeUserCollection(uid, 'myNotes', (items) => {
+          const { owned, contaminated } = classifyPrivateItems(items);
+          if (contaminated.length) purgeContaminatedDocs('myNotes', contaminated);
+
           // Same dataUrl-preservation logic as teamNotes above
           const existing = get().myNotes || [];
           const dataUrlMap = {};
@@ -706,20 +792,22 @@ export async function initFirestoreSync(set, get) {
               n.attachments.forEach(a => { if (a.id && a.dataUrl) dataUrlMap[a.id] = a.dataUrl; });
             }
           });
-          const merged = items.map(n => ({
+          const merged = owned.map(n => ({
             ...n,
             attachments: Array.isArray(n.attachments)
               ? n.attachments.map(a => ({ ...a, dataUrl: a.dataUrl || dataUrlMap[a.id] || undefined }))
               : [],
           }));
           set({ myNotes: merged });
-          console.log(`[FS] 🔒 myNotes loaded from cloud: ${items.length} note(s)`);
+          console.log(`[FS] 🔒 myNotes loaded from cloud: ${owned.length} note(s)${contaminated.length ? ` (${contaminated.length} auto-purged)` : ''}`);
         })
       );
       _unsubscribers.push(
         subscribeUserCollection(uid, 'myEvents', (items) => {
-          set({ myEvents: items });
-          console.log(`[FS] 🔒 myEvents loaded from cloud: ${items.length} event(s)`);
+          const { owned, contaminated } = classifyPrivateItems(items);
+          if (contaminated.length) purgeContaminatedDocs('myEvents', contaminated);
+          set({ myEvents: owned });
+          console.log(`[FS] 🔒 myEvents loaded from cloud: ${owned.length} event(s)${contaminated.length ? ` (${contaminated.length} auto-purged)` : ''}`);
         })
       );
       console.log(`[FS] 🔒 Subscribed to private collections for uid: ${uid}`);
