@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   User, Lock, Store, Info, LogOut, ChevronRight,
   Check, X, Eye, EyeOff, Pencil, Shield, Wifi, WifiOff,
-  RefreshCw, AlertTriangle
+  RefreshCw, AlertTriangle, Trash2
 } from 'lucide-react';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
@@ -314,6 +314,7 @@ export default function Settings() {
 
   const [modal, setModal] = useState(null); // 'name' | 'password' | 'storeName'
   const [toast, setToast] = useState('');
+  const [clearingPrivate, setClearingPrivate] = useState(false);
 
   const showToast = (msg) => {
     setToast(msg);
@@ -330,6 +331,25 @@ export default function Settings() {
     setStoreName(name);
     setModal(null);
     showToast('Store name updated ✓');
+  };
+
+  const handleClearPrivateData = async () => {
+    if (!user?.uid || user.uid === 'demo_user') return;
+    if (!window.confirm(
+      'This will permanently delete ALL of your private notes and calendar events from the cloud — including any that may have been accidentally imported from another account.\n\nThis cannot be undone. Continue?'
+    )) return;
+    setClearingPrivate(true);
+    try {
+      const { clearAllPrivateData } = await import('../lib/firestoreSync');
+      const deleted = await clearAllPrivateData(user.uid);
+      useAppStore.setState({ myNotes: [], myEvents: [] });
+      showToast(`✓ Cleared ${deleted} private item${deleted !== 1 ? 's' : ''} from cloud`);
+    } catch (e) {
+      showToast('Failed to clear — try again');
+      console.warn('[Settings] clearPrivateData error:', e?.message);
+    } finally {
+      setClearingPrivate(false);
+    }
   };
 
   const handleSignOut = async () => {
@@ -467,6 +487,15 @@ export default function Settings() {
         {/* DANGER ZONE */}
         <SectionTitle label="Account Actions" />
         <Card>
+          {isReal && (
+            <Row
+              icon={clearingPrivate ? RefreshCw : Trash2}
+              label={clearingPrivate ? 'Clearing…' : 'Reset Private Notes & Calendar'}
+              value="Remove all My Notes & My Calendar events from cloud"
+              onClick={clearingPrivate ? undefined : handleClearPrivateData}
+              danger
+            />
+          )}
           <Row
             icon={LogOut}
             label="Sign Out"
