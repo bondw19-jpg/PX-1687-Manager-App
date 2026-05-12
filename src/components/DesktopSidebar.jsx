@@ -48,12 +48,24 @@ const sections = [
 export default function DesktopSidebar() {
   const navigate  = useNavigate();
   const location  = useLocation();
-  const { user, storeName } = useAppStore();
+  const { user, storeName, setUser } = useAppStore();
 
   const isAdmin     = isAdminUser(user);
   const userInitial = user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'P';
   const userName    = user?.name  || user?.email?.split('@')[0] || 'PX User';
   const userRole    = user?.roleLabel || getRoleShortLabel(user?.role, user?.email);
+
+  const handleSignOut = async () => {
+    try {
+      const { getFirebaseModules, resetAuthReadyPromise } = await import('../lib/firebase');
+      const { auth } = await getFirebaseModules();
+      const { signOut } = await import('firebase/auth');
+      await signOut(auth);
+      resetAuthReadyPromise?.();
+    } catch {}
+    setUser(null);
+    navigate('/login');
+  };
 
   return (
     <div
@@ -125,7 +137,7 @@ export default function DesktopSidebar() {
             <div className="text-xs text-accent truncate">{userRole}</div>
           </div>
           <button
-            onClick={() => navigate('/login')}
+            onClick={handleSignOut}
             title="Sign out"
             className="p-1.5 text-gray-400 hover:text-primary rounded-lg transition-colors"
           >

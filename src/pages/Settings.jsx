@@ -332,8 +332,16 @@ export default function Settings() {
     showToast('Store name updated ✓');
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     if (!window.confirm('Sign out of Panda Manager Hub?')) return;
+    try {
+      const { getFirebaseModules, resetAuthReadyPromise } = await import('../lib/firebase');
+      const { auth } = await getFirebaseModules();
+      const { signOut } = await import('firebase/auth');
+      await signOut(auth);
+      resetAuthReadyPromise?.();
+    } catch {}
+    setUser(null);
     navigate('/login');
   };
 

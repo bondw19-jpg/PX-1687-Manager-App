@@ -127,18 +127,26 @@ export const useAppStore = create(
         const uid = get().user?.uid;
         return uid && uid !== 'demo_user';
       };
+      const getPrivateOwner = () => {
+        const user = get().user;
+        const uid = user?.uid;
+        if (!uid || uid === 'demo_user') return null;
+        return { uid, email: user?.email || null };
+      };
       const fsWritePrivate = (coll, id, data) => {
-        if (!isRealUser()) return;
-        const uid = get().user.uid;
+        const owner = getPrivateOwner();
+        if (!owner) return;
+        const payload = { ...data, ownerUid: owner.uid, ownerEmail: owner.email };
         import('../lib/firestoreSync')
-          .then(({ fsSetPrivateItem }) => fsSetPrivateItem(coll, id, data, uid))
+          .then(({ fsSetPrivateItem }) => fsSetPrivateItem(coll, id, payload, owner.uid))
           .catch(() => {});
       };
       const fsUpdatePrivate = (coll, id, data) => {
-        if (!isRealUser()) return;
-        const uid = get().user.uid;
+        const owner = getPrivateOwner();
+        if (!owner) return;
+        const payload = { ...data, ownerUid: owner.uid, ownerEmail: owner.email };
         import('../lib/firestoreSync')
-          .then(({ fsUpdatePrivateItem }) => fsUpdatePrivateItem(coll, id, data, uid))
+          .then(({ fsUpdatePrivateItem }) => fsUpdatePrivateItem(coll, id, payload, owner.uid))
           .catch(() => {});
       };
       const fsDelPrivate = (coll, id) => {
@@ -155,7 +163,35 @@ export const useAppStore = create(
       storeId: 'store_1687',
       storeName: 'PANDA EXPRESS 1687',
       isOnline: true,
-      setUser:      (user) => set(s => ({ user: user ? normalizeUserProfile(user, s.user) : null })),
+      setUser:      (user) => {
+        const current = get();
+        const normalized = user ? normalizeUserProfile(user, current.user) : null;
+        const previousUid = current.user?.uid || null;
+        const nextUid = normalized?.uid || null;
+        const accountChanged = previousUid !== nextUid;
+
+        if (accountChanged) {
+          import('../lib/firestoreSync')
+            .then(({ disconnectFirestore }) => disconnectFirestore(set))
+            .catch(() => {});
+        }
+
+        set({
+          user: normalized,
+          // Private notes/calendar must never carry over between signed-in accounts.
+          // Firestore will hydrate the correct user's data from users/{uid}/myNotes
+          // and users/{uid}/myEvents after connectFirestore runs.
+          ...(accountChanged ? {
+            myNotes: [],
+            myEvents: [],
+            noteUploads: {},
+            dbReady: false,
+            dbMode: 'local',
+            dbConnecting: false,
+            needsRelogin: false,
+          } : {}),
+        });
+      },
       setStoreId:   (id)   => set({ storeId: id }),
       setStoreName: (name) => set({ storeName: name }),
       setOnline:  (v)    => set({ isOnline: v }),
@@ -348,7 +384,9 @@ export const useAppStore = create(
       },
       // myEvents — PRIVATE cloud backup (users/{uid}/myEvents)
       addMyEvent: (e) => {
-        const doc = { ...e, id: `myevent_${Date.now()}`, createdAt: new Date().toISOString() };
+        const owner = getPrivateOwner();
+        if (!owner) return;
+        const doc = { ...e, id: `myevent_${Date.now()}`, createdAt: new Date().toISOString(), ownerUid: owner.uid, ownerEmail: owner.email };
         set(s => ({ myEvents: [...s.myEvents, doc] }));
         fsWritePrivate('myEvents', doc.id, doc);
       },
@@ -458,7 +496,9 @@ export const useAppStore = create(
       },
       // myNotes — PRIVATE cloud backup (users/{uid}/myNotes)
       addMyNote: (n) => {
-        const doc = { ...n, id: `mynote_${Date.now()}`, createdAt: new Date().toISOString(), pinned: false, attachments: n.attachments || [] };
+        const owner = getPrivateOwner();
+        if (!owner) return;
+        const doc = { ...n, id: `mynote_${Date.now()}`, createdAt: new Date().toISOString(), pinned: false, attachments: n.attachments || [], ownerUid: owner.uid, ownerEmail: owner.email };
         // Step 1 & 2: state update + immediate Firestore write (no dataUrl)
         set(s => ({ myNotes: [doc, ...s.myNotes] }));
         fsWritePrivate('myNotes', doc.id, doc);
@@ -470,7 +510,7 @@ export const useAppStore = create(
           import('../lib/firestoreSync').then(async ({ uploadNoteAttachments, fsUpdatePrivateItem }) => {
             const enriched = await uploadNoteAttachments(doc, 'my', (name, pct, done, error, errorMsg) => {
               get()._updateNoteUploadFile(doc.id, name, pct, done, error, errorMsg);
-            });
+            }, uid);
             set(s => ({ myNotes: s.myNotes.map(n => n.id === doc.id ? { ...n, attachments: enriched.attachments } : n) }));
             fsUpdatePrivateItem('myNotes', doc.id, { attachments: enriched.attachments }, uid);
             setTimeout(() => get()._clearNoteUpload(doc.id), 2500);
@@ -488,7 +528,7 @@ export const useAppStore = create(
           import('../lib/firestoreSync').then(async ({ uploadNoteAttachments, fsUpdatePrivateItem }) => {
             const enriched = await uploadNoteAttachments({ id, attachments: d.attachments }, 'my', (name, pct, done, error, errorMsg) => {
               get()._updateNoteUploadFile(id, name, pct, done, error, errorMsg);
-            });
+            }, uid);
             set(s => ({ myNotes: s.myNotes.map(n => n.id === id ? { ...n, attachments: enriched.attachments } : n) }));
             fsUpdatePrivateItem('myNotes', id, { attachments: enriched.attachments }, uid);
             setTimeout(() => get()._clearNoteUpload(id), 2500);
@@ -676,7 +716,7 @@ export const useAppStore = create(
     {
       name: 'panda-manager-storage',
       storage: createBackupStorage(),
-      version: 5,
+      version: 6,
       migrate: (persistedState, fromVersion) => {
         const state = { ...(persistedState || {}) };
         if ((fromVersion ?? -1) < 1) {
@@ -699,6 +739,13 @@ export const useAppStore = create(
         if ((fromVersion ?? -1) < 5) {
           state.user = state.user ? normalizeUserProfile(state.user) : null;
         }
+        if ((fromVersion ?? -1) < 6) {
+          // Privacy hardening: previous versions stored My Notes/My Calendar in
+          // one shared browser cache. Clear legacy cached private data so it can
+          // never appear under a different signed-in user after account switching.
+          state.myNotes = [];
+          state.myEvents = [];
+        }
         return state;
       },
       merge: (persisted, current) => ({
@@ -708,9 +755,7 @@ export const useAppStore = create(
         associates:    Array.isArray(persisted?.associates)    ? persisted.associates    : current.associates,
         callIns:       Array.isArray(persisted?.callIns)       ? persisted.callIns       : current.callIns,
         teamEvents:    Array.isArray(persisted?.teamEvents)    ? persisted.teamEvents    : current.teamEvents,
-        myEvents:      Array.isArray(persisted?.myEvents)      ? persisted.myEvents      : current.myEvents,
         teamNotes:     Array.isArray(persisted?.teamNotes)     ? persisted.teamNotes     : current.teamNotes,
-        myNotes:       Array.isArray(persisted?.myNotes)       ? persisted.myNotes       : current.myNotes,
         reviews:       Array.isArray(persisted?.reviews)       ? persisted.reviews       : current.reviews,
         tasks:         Array.isArray(persisted?.tasks)         ? persisted.tasks         : current.tasks,
         contacts:      Array.isArray(persisted?.contacts)      ? persisted.contacts      : current.contacts,
@@ -748,11 +793,9 @@ export const useAppStore = create(
           workFiles:     state.workFiles,
           callIns:       state.callIns,
           teamEvents:    state.teamEvents,
-          myEvents:      state.myEvents,
           checklists:       state.checklists,
           customChecklists: state.customChecklists,
           teamNotes:     stripDataUrls(state.teamNotes),
-          myNotes:       stripDataUrls(state.myNotes),
           reviews:       state.reviews,
           tasks:         state.tasks,
           uniforms:      state.uniforms,

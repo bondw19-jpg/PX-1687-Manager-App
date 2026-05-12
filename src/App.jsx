@@ -1,7 +1,9 @@
-import React, { Suspense, lazy, Component, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import React, { Suspense, lazy, Component, useEffect, useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAppStore } from './store/appStore';
 import Layout from './components/Layout';
+import { getFirebaseModules } from './lib/firebase';
+import { loadOrCreateMemberProfile } from './lib/memberRoles';
 
 // Lazy load pages
 const Dashboard     = lazy(() => import('./pages/Dashboard'));
@@ -95,32 +97,121 @@ function AutoConnectFirestore() {
   return null;
 }
 
+function AuthSessionGate({ children }) {
+  const [authReady, setAuthReady] = useState(false);
+  const setUser = useAppStore(s => s.setUser);
+
+  useEffect(() => {
+    let active = true;
+    let unsubscribe = () => {};
+
+    (async () => {
+      try {
+        const { auth, onAuthStateChanged } = await getFirebaseModules();
+        unsubscribe = onAuthStateChanged(auth, async (authUser) => {
+          if (!active) return;
+
+          if (!authUser) {
+            // Do not allow a previously persisted app profile to unlock private
+            // pages when Firebase says nobody is signed in on this device.
+            const currentUser = useAppStore.getState().user;
+            if (currentUser?.uid !== 'demo_user') {
+              setUser(null);
+            }
+            setAuthReady(true);
+            return;
+          }
+
+          try {
+            const currentUser = useAppStore.getState().user || {};
+            const fallback = {
+              uid: authUser.uid,
+              email: authUser.email || '',
+              name: authUser.displayName || authUser.email?.split('@')[0] || 'User',
+              role: currentUser.uid === authUser.uid ? currentUser.role : 'manager',
+              storeId: 'store_1687',
+            };
+            const memberProfile = await loadOrCreateMemberProfile(authUser, fallback);
+            if (!active) return;
+            setUser(memberProfile);
+          } catch (profileErr) {
+            console.warn('[AuthSession] Profile load failed:', profileErr?.code || profileErr?.message);
+            if (!active) return;
+            setUser({
+              uid: authUser.uid,
+              email: authUser.email || '',
+              name: authUser.displayName || authUser.email?.split('@')[0] || 'User',
+              role: authUser.email === 'bondw19@gmail.com' ? 'admin' : 'manager',
+              storeId: 'store_1687',
+            });
+          } finally {
+            if (active) setAuthReady(true);
+          }
+        });
+      } catch (err) {
+        console.warn('[AuthSession] Firebase auth listener failed:', err?.message);
+        if (active) setAuthReady(true);
+      }
+    })();
+
+    return () => {
+      active = false;
+      try { unsubscribe(); } catch {}
+    };
+  }, [setUser]);
+
+  return children(authReady);
+}
+
+function ProtectedRoute({ authReady, children }) {
+  const user = useAppStore(s => s.user);
+  const location = useLocation();
+
+  if (!authReady) return <LoadingSpinner />;
+  if (!user) return <Navigate to="/login" replace state={{ from: location }} />;
+  return children;
+}
+
+function PrivatePage({ authReady, children }) {
+  return (
+    <ProtectedRoute authReady={authReady}>
+      <Layout>{children}</Layout>
+    </ProtectedRoute>
+  );
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
-        <AutoConnectFirestore />
-        <Suspense fallback={<LoadingSpinner />}>
-          <Routes>
-            <Route path="/login"         element={<Login />} />
-            <Route path="/"              element={<Layout><Dashboard /></Layout>} />
-            <Route path="/team"          element={<Layout><Associates /></Layout>} />
-            <Route path="/callins"       element={<Layout><CallIns /></Layout>} />
-            <Route path="/calendar"      element={<Layout><CalendarPage /></Layout>} />
-            <Route path="/checklist"     element={<Layout><Checklist /></Layout>} />
-            <Route path="/notes"         element={<Layout><Notes /></Layout>} />
-            <Route path="/reviews"       element={<Layout><Reviews /></Layout>} />
-            <Route path="/uniforms"      element={<Layout><Uniforms /></Layout>} />
-            <Route path="/tasks"         element={<Layout><Tasks /></Layout>} />
-            <Route path="/contacts"      element={<Layout><Contacts /></Layout>} />
-            <Route path="/announcements" element={<Layout><Announcements /></Layout>} />
-            <Route path="/backup"        element={<Layout><BackupManager /></Layout>} />
-            <Route path="/admin"         element={<Layout><AdminPage /></Layout>} />
-            <Route path="/settings"      element={<Layout><Settings /></Layout>} />
-            <Route path="*"             element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
+        <AuthSessionGate>
+          {(authReady) => (
+            <>
+              <AutoConnectFirestore />
+              <Suspense fallback={<LoadingSpinner />}>
+                <Routes>
+                  <Route path="/login"         element={<Login />} />
+                  <Route path="/"              element={<PrivatePage authReady={authReady}><Dashboard /></PrivatePage>} />
+                  <Route path="/team"          element={<PrivatePage authReady={authReady}><Associates /></PrivatePage>} />
+                  <Route path="/callins"       element={<PrivatePage authReady={authReady}><CallIns /></PrivatePage>} />
+                  <Route path="/calendar"      element={<PrivatePage authReady={authReady}><CalendarPage /></PrivatePage>} />
+                  <Route path="/checklist"     element={<PrivatePage authReady={authReady}><Checklist /></PrivatePage>} />
+                  <Route path="/notes"         element={<PrivatePage authReady={authReady}><Notes /></PrivatePage>} />
+                  <Route path="/reviews"       element={<PrivatePage authReady={authReady}><Reviews /></PrivatePage>} />
+                  <Route path="/uniforms"      element={<PrivatePage authReady={authReady}><Uniforms /></PrivatePage>} />
+                  <Route path="/tasks"         element={<PrivatePage authReady={authReady}><Tasks /></PrivatePage>} />
+                  <Route path="/contacts"      element={<PrivatePage authReady={authReady}><Contacts /></PrivatePage>} />
+                  <Route path="/announcements" element={<PrivatePage authReady={authReady}><Announcements /></PrivatePage>} />
+                  <Route path="/backup"        element={<PrivatePage authReady={authReady}><BackupManager /></PrivatePage>} />
+                  <Route path="/admin"         element={<PrivatePage authReady={authReady}><AdminPage /></PrivatePage>} />
+                  <Route path="/settings"      element={<PrivatePage authReady={authReady}><Settings /></PrivatePage>} />
+                  <Route path="*"             element={<Navigate to="/" replace />} />
+                </Routes>
+              </Suspense>
+            </>
+          )}
+        </AuthSessionGate>
       </BrowserRouter>
     </ErrorBoundary>
   );

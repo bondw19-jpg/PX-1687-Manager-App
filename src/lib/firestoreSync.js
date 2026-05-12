@@ -52,13 +52,15 @@ function stripAttachmentDataUrls(data) {
 // ── Firebase Storage upload ───────────────────────────────────────────────────
 // Uploads a single attachment (base64 dataUrl) to Firebase Storage and returns
 // the permanent public download URL.  Stored at:
-//   noteAttachments/{scope}/{noteId}/{attachmentId}
-// where scope is 'team' or 'my' (matching the note collection).
+//   team: noteAttachments/team/{noteId}/{attachmentId}
+//   my:   noteAttachments/my/{uid}/{noteId}/{attachmentId}
+// The uid-scoped private path lets Storage rules enforce that only the owner can
+// read/write My Notes attachments.
 //
 // Returns { ...attachment, storageUrl } on success, or the original attachment
 // on failure (non-fatal — preview will fall back to in-memory dataUrl).
 // onProgress(pct: 0-100) is called during upload if provided.
-export async function uploadNoteAttachment(attachment, noteId, scope = 'team', onProgress) {
+export async function uploadNoteAttachment(attachment, noteId, scope = 'team', onProgress, uidOverride) {
   if (!attachment.dataUrl) return attachment; // nothing to upload
   try {
     const { ref, uploadBytesResumable, getDownloadURL } = await import('firebase/storage');
@@ -73,7 +75,14 @@ export async function uploadNoteAttachment(attachment, noteId, scope = 'team', o
     const res  = await fetch(attachment.dataUrl);
     const blob = await res.blob();
 
-    const path       = `noteAttachments/${scope}/${noteId}/${attachment.id}`;
+    const ownerUid = uidOverride || _uid;
+    const path = scope === 'my'
+      ? `noteAttachments/my/${ownerUid}/${noteId}/${attachment.id}`
+      : `noteAttachments/${scope}/${noteId}/${attachment.id}`;
+    if (scope === 'my' && !ownerUid) {
+      console.warn('[Storage] private note attachment upload skipped: no uid');
+      return { ...attachment, _uploadError: true, _uploadErrorMsg: 'missing-user-id' };
+    }
     const storageRef = ref(storage, path);
     const task       = uploadBytesResumable(storageRef, blob, { contentType: attachment.type });
 
@@ -107,14 +116,15 @@ export async function uploadNoteAttachment(attachment, noteId, scope = 'team', o
 // Upload all attachments in a note that don't yet have a storageUrl.
 // onFileProgress(fileName, pct, done, error) is called for each file.
 // Returns the note with updated attachments (storageUrl added where uploaded).
-export async function uploadNoteAttachments(note, scope = 'team', onFileProgress) {
+export async function uploadNoteAttachments(note, scope = 'team', onFileProgress, uidOverride) {
   if (!Array.isArray(note.attachments) || note.attachments.length === 0) return note;
   const uploadedAttachments = await Promise.all(
     note.attachments.map(att => {
       if (att.storageUrl) return att; // already uploaded
       return uploadNoteAttachment(
         att, note.id, scope,
-        pct => onFileProgress?.(att.name, pct, false, false, '')
+        pct => onFileProgress?.(att.name, pct, false, false, ''),
+        uidOverride
       ).then(result => {
         const isError = !!result._uploadError;
         onFileProgress?.(att.name, 100, !isError, isError, result._uploadErrorMsg || '');
@@ -569,6 +579,11 @@ export async function initFirestoreSync(set, get) {
     _uid = uid;
     console.log('[FS] uid =', uid || '(none — shared data only)');
 
+    // Clear private in-memory data before subscribing to the signed-in user's
+    // private collections. This prevents a previous account's cached My Notes or
+    // My Calendar entries from being visible while the new user's snapshots load.
+    set({ myNotes: [], myEvents: [] });
+
     // If we have a uid from Firebase Auth but Zustand state has an older uid,
     // make sure Zustand user uid matches Firebase Auth uid.
     if (firebaseUser?.uid && get().user?.uid && firebaseUser.uid !== get().user?.uid) {
@@ -743,14 +758,19 @@ export async function initFirestoreSync(set, get) {
           const parsed = JSON.parse(raw);
           const data   = parsed?.state ?? parsed;
           const hasData = [
-            'associates', 'callIns', 'teamNotes', 'myNotes', 'myEvents',
+            'associates', 'callIns', 'teamNotes',
             'reviews', 'tasks', 'uniforms', 'uniformInventory', 'managerUniformStock', 'associateUniformItems', 'contacts', 'announcements',
           ].some(k => Array.isArray(data[k]) && data[k].length > 0);
 
           if (hasData) {
-            console.log('[FS] Migrating local data → Firestore (create-only, no overwrites)…');
-            const count = await batchImportToFirestore(data, uid);
-            console.log(`[FS] ✅ Migrated ${count} new records.`);
+            console.log('[FS] Migrating shared local data → Firestore (create-only, no overwrites)…');
+            // Do not migrate legacy flat-cache private data. Older versions stored
+            // My Notes/My Calendar in shared browser storage with no reliable owner
+            // marker, so importing those arrays during a different user's login can
+            // copy one account's private data into another account.
+            const dataWithoutLegacyPrivateCache = { ...data, myNotes: [], myEvents: [] };
+            const count = await batchImportToFirestore(dataWithoutLegacyPrivateCache, uid);
+            console.log(`[FS] ✅ Migrated ${count} new shared records.`);
           }
         }
         // Mark migration done for this uid in this browser context

@@ -23,18 +23,10 @@ export default defineConfig({
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
 
-        // Runtime caching strategies
+        // Runtime caching strategies. Firebase Auth/Firestore API responses must
+        // never be service-worker cached because they are account-specific and can
+        // replay one user's private data after switching accounts on the same PWA.
         runtimeCaching: [
-          {
-            // Firebase Firestore & Auth — network first, fall back to cache
-            urlPattern: /^https:\/\/(firestore|identitytoolkit|securetoken)\.googleapis\.com\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'firebase-cache',
-              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 },
-              networkTimeoutSeconds: 5,
-            },
-          },
           {
             // Google fonts / external assets — stale while revalidate
             urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,

@@ -4,7 +4,28 @@ import App from './App.jsx'
 import './index.css'
 import { registerSW } from 'virtual:pwa-register'
 
-const APP_VERSION = '2.1.2'
+const APP_VERSION = '2.1.3'
+
+// Older PWA builds cached Firebase Auth/Firestore API responses in a shared
+// runtime cache named `firebase-cache`. Those responses are account-specific;
+// keeping them can replay one user's private notes/calendar after another user
+// signs in on the same installed PWA. Remove that legacy cache immediately on
+// app startup before any Firebase listeners are initialized.
+async function clearLegacyFirebaseRuntimeCaches() {
+  try {
+    if (!('caches' in window)) return
+    const names = await caches.keys()
+    await Promise.all(
+      names
+        .filter((name) => name === 'firebase-cache' || name.toLowerCase().includes('firebase'))
+        .map((name) => caches.delete(name))
+    )
+  } catch (e) {
+    console.warn('[SW] Legacy Firebase cache cleanup skipped:', e?.message || e)
+  }
+}
+
+clearLegacyFirebaseRuntimeCaches()
 
 // ── Service Worker registration ───────────────────────────────────────────────
 // registerType: 'prompt' → onNeedRefresh fires when a new SW is waiting.

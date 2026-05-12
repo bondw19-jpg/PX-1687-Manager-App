@@ -49,7 +49,7 @@ const sections = [
 export default function SideDrawer({ isOpen, onClose }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, storeName } = useAppStore();
+  const { user, storeName, setUser } = useAppStore();
 
   const isAdmin     = isAdminUser(user);
   const userInitial = user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'P';
@@ -58,6 +58,19 @@ export default function SideDrawer({ isOpen, onClose }) {
 
   const handleNav = (path) => {
     navigate(path);
+    onClose();
+  };
+
+  const handleSignOut = async () => {
+    try {
+      const { getFirebaseModules, resetAuthReadyPromise } = await import('../lib/firebase');
+      const { auth } = await getFirebaseModules();
+      const { signOut } = await import('firebase/auth');
+      await signOut(auth);
+      resetAuthReadyPromise?.();
+    } catch {}
+    setUser(null);
+    navigate('/login');
     onClose();
   };
 
@@ -143,7 +156,7 @@ export default function SideDrawer({ isOpen, onClose }) {
             <div className="text-xs text-accent truncate">{userRole}</div>
           </div>
           <button
-            onClick={() => handleNav('/login')}
+            onClick={handleSignOut}
             title="Sign out"
             className="p-1.5 text-gray-400 hover:text-primary rounded-lg"
           >

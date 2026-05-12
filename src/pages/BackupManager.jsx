@@ -39,13 +39,27 @@ function getAppData() {
   catch { return {}; }
 }
 
+function sanitizeRestoredAppData(data) {
+  const state = data?.state ?? data ?? {};
+  const sanitizedState = {
+    ...state,
+    // Legacy backups may contain My Notes/My Calendar from a previous account.
+    // Personal data now lives only in each user's Firestore path, so restore/import
+    // must never copy these arrays into shared local storage or another UID.
+    myNotes: [],
+    myEvents: [],
+  };
+
+  return data?.state ? { ...data, state: sanitizedState } : sanitizedState;
+}
+
 function countRecords(data) {
   const s = data?.state || data || {};
   return {
     associates:    s.associates?.length    || 0,
     callIns:       s.callIns?.length       || 0,
     teamNotes:     s.teamNotes?.length     || 0,
-    myNotes:       s.myNotes?.length       || 0,
+        myNotes:       0,
     tasks:         s.tasks?.length         || 0,
     uniforms:      s.uniforms?.length      || 0,
     uniformInventory: s.uniformInventory?.length || 0,
@@ -310,7 +324,8 @@ export default function BackupManager() {
       setSyncProgress('Uploading to cloud…');
       try {
         const { batchForceToFirestore } = await import('../lib/firestoreSync');
-        const state = data?.state ?? data;
+        const sanitizedData = sanitizeRestoredAppData(data);
+        const state = sanitizedData?.state ?? sanitizedData;
         const count = await batchForceToFirestore(state, uid);
         setSyncProgress(`Synced ${count} records to cloud ✅`);
         showToast(`${successMsg} Synced ${count} records to cloud.`);
@@ -358,7 +373,8 @@ export default function BackupManager() {
         setTimeout(() => {
           try {
             const str = localStorage.getItem(EMERGENCY_KEY);
-            localStorage.setItem(STORAGE_KEY, str);
+            const parsed = JSON.parse(str || '{}');
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitizeRestoredAppData(parsed)));
             showToast('Data recovered! Reloading…');
             setTimeout(() => window.location.reload(), 1500);
           } catch {
@@ -451,7 +467,7 @@ export default function BackupManager() {
         setRestoring(true);
         try {
           createAutoBackup();
-          const data = backup.data;
+          const data = sanitizeRestoredAppData(backup.data);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
           await pushToCloudAndReload(data, 'Restored!');
         } catch {
@@ -526,8 +542,9 @@ export default function BackupManager() {
             setConfirm(null);
             setRestoring(true);
             createAutoBackup();
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
-            await pushToCloudAndReload(appData, 'Imported!');
+            const sanitizedData = sanitizeRestoredAppData(appData);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitizedData));
+            await pushToCloudAndReload(sanitizedData, 'Imported!');
           },
           onCancel: () => setConfirm(null),
         });
