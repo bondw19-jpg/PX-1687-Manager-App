@@ -36,7 +36,15 @@ function StatCard({ label, value, tone = 'default' }) {
 }
 
 const UNIFORM_ITEMS = [
-  'Hat / Cap', 'Shirt', 'Apron', 'Name Tag', 'Full Uniform', 'Other'
+  'Hat / Cap', 'Shirt', 'Apron', 'Name Tag', 'Back Brace', 'Full Uniform', 'Other'
+];
+
+const SIZE_OPTIONS = [
+  'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'One Size', 'N/A'
+];
+
+const COLOR_OPTIONS = [
+  'Black', 'Red', 'White', 'Gray', 'Khaki', 'Navy', 'Other'
 ];
 
 const ISSUE_TYPES = [
@@ -204,8 +212,8 @@ function InventoryModal({ record, onClose }) {
         <div className="modal-body p-4 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Field label="Uniform Item"><select value={form.item} onChange={e => setField('item', e.target.value)} className="form-select">{UNIFORM_ITEMS.filter(i => i !== 'Full Uniform').map(item => <option key={item} value={item}>{item}</option>)}</select></Field>
-            <Field label="Size"><input value={form.size} onChange={e => setField('size', e.target.value)} placeholder="Small, Medium, Large, One Size" className="form-input" /></Field>
-            <Field label="Color"><input value={form.color} onChange={e => setField('color', e.target.value)} placeholder="Black, Red, White" className="form-input" /></Field>
+            <Field label="Size"><select value={form.size} onChange={e => setField('size', e.target.value)} className="form-select"><option value="">Select size...</option>{SIZE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}</select></Field>
+            <Field label="Color"><select value={form.color} onChange={e => setField('color', e.target.value)} className="form-select"><option value="">Select color...</option>{COLOR_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}</select></Field>
             <Field label="On-Hand Qty"><input type="number" min="0" value={form.onHandQty} onChange={e => setField('onHandQty', e.target.value)} className="form-input" /></Field>
             <Field label="Reorder Point"><input type="number" min="0" value={form.reorderPoint} onChange={e => setField('reorderPoint', e.target.value)} className="form-input" /></Field>
             <Field label="Storage Location"><input value={form.location} onChange={e => setField('location', e.target.value)} placeholder="Office cabinet, back room bin" className="form-input" /></Field>
@@ -227,30 +235,27 @@ function ManagerStockModal({ record, inventory, managerQtyByInventoryId, associa
     size: record?.size || '',
     color: record?.color || '',
     qty: record?.qty ?? '1',
-    location: record?.location || '',
     notes: record?.notes || '',
   }));
 
   const setField = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
 
-  const handleInventoryChoice = (id) => {
-    const inv = inventory.find(i => i.id === id);
-    setForm(prev => ({
-      ...prev,
-      inventoryItemId: id,
-      item: inv?.item || prev.item,
-      size: inv?.size || prev.size,
-      color: inv?.color || prev.color,
-    }));
+  // Auto-link inventory item if item+size+color match
+  const syncInventoryLink = (nextForm) => {
+    const match = inventory.find(i => i.item === nextForm.item && i.size === nextForm.size && i.color === nextForm.color);
+    return { ...nextForm, inventoryItemId: match?.id || '' };
+  };
+
+  const handleField = (field, value) => {
+    setForm(prev => syncInventoryLink({ ...prev, [field]: value }));
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.managerName.trim()) return alert('Please enter or choose a manager.');
-    if (!form.inventoryItemId) return alert('Please link an inventory item. Select from the dropdown or add inventory items first.');
+    if (!form.managerName) return alert('Please choose a manager.');
+    if (!form.item) return alert('Please choose a uniform item.');
     const payload = {
       ...form,
-      managerName: form.managerName.trim(),
       qty: num(form.qty),
       updatedAt: new Date().toISOString(),
     };
@@ -259,28 +264,41 @@ function ManagerStockModal({ record, inventory, managerQtyByInventoryId, associa
     onClose();
   };
 
-  // Calculate available quantity for each inventory item
-  const getAvailableQty = (invId) => {
-    const inv = inventory.find(i => i.id === invId);
-    if (!inv) return 0;
-    const storeQty = num(inv.onHandQty);
-    const withManagers = managerQtyByInventoryId[invId] || 0;
-    const withAssociates = associateQtyByInventoryId[invId] || 0;
-    return storeQty + withManagers - withAssociates;
-  };
-
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <form onSubmit={handleSubmit} className="bg-white rounded-t-2xl w-full animate-slide-up lg:rounded-2xl lg:max-w-2xl lg:shadow-2xl max-h-[90vh] overflow-y-auto">
+      <form onSubmit={handleSubmit} className="bg-white rounded-t-2xl w-full animate-slide-up lg:rounded-2xl lg:max-w-xl lg:shadow-2xl">
         <ModalHeader icon={<Warehouse size={20} />} title={record ? 'Edit Manager Stock' : 'Assign Manager Stock'} subtitle="Track uniforms held by managers." onClose={onClose} />
         <div className="modal-body p-4 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Field label="Manager Name"><input list="manager-list" value={form.managerName} onChange={e => setField('managerName', e.target.value)} placeholder="Type or select manager..." className="form-input" /><datalist id="manager-list">{managers.map(m => <option key={m} value={m} />)}</datalist></Field>
-            <Field label="Quantity"><input type="number" min="1" value={form.qty} onChange={e => setField('qty', e.target.value)} className="form-input" /></Field>
+            <Field label="Manager">
+              <select value={form.managerName} onChange={e => handleField('managerName', e.target.value)} className="form-select">
+                <option value="">Select manager...</option>
+                {managers.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </Field>
+            <Field label="Quantity">
+              <input type="number" min="1" value={form.qty} onChange={e => handleField('qty', e.target.value)} className="form-input" />
+            </Field>
+            <Field label="Uniform Item">
+              <select value={form.item} onChange={e => handleField('item', e.target.value)} className="form-select">
+                <option value="">Select item...</option>
+                {UNIFORM_ITEMS.filter(i => i !== 'Full Uniform').map(i => <option key={i} value={i}>{i}</option>)}
+              </select>
+            </Field>
+            <Field label="Size">
+              <select value={form.size} onChange={e => handleField('size', e.target.value)} className="form-select">
+                <option value="">Select size...</option>
+                {SIZE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </Field>
+            <Field label="Color">
+              <select value={form.color} onChange={e => handleField('color', e.target.value)} className="form-select">
+                <option value="">Select color...</option>
+                {COLOR_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </Field>
           </div>
-          <Field label="Link Inventory Item (Required)"><select value={form.inventoryItemId} onChange={e => handleInventoryChoice(e.target.value)} className="form-select"><option value="">Select inventory item...</option>{inventory.map(item => <option key={item.id} value={item.id}>{item.item} · {item.size || 'One Size'} · {item.color} (Available: {getAvailableQty(item.id)})</option>)}</select></Field>
-          <Field label="Storage Location"><input value={form.location} onChange={e => setField('location', e.target.value)} placeholder="Office, break room, locker" className="form-input" /></Field>
-          <Field label="Notes"><textarea rows={2} value={form.notes} onChange={e => setField('notes', e.target.value)} placeholder="Condition, manager instructions..." className="form-textarea" /></Field>
+          <Field label="Notes"><textarea rows={2} value={form.notes} onChange={e => handleField('notes', e.target.value)} placeholder="Condition, storage location, or instructions..." className="form-textarea" /></Field>
         </div>
         <ModalFooter onClose={onClose} submitLabel="Save Manager Stock" />
       </form>
@@ -369,6 +387,9 @@ function Uniforms() {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [issueFilter, setIssueFilter] = useState('all');
+  const [locatorItem, setLocatorItem] = useState('');
+  const [locatorSize, setLocatorSize] = useState('');
+  const [locatorColor, setLocatorColor] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [showInventoryModal, setShowInventoryModal] = useState(false);
   const [showManagerModal, setShowManagerModal] = useState(false);
@@ -402,6 +423,16 @@ function Uniforms() {
     const q = query.trim().toLowerCase();
     return managerUniformStock.filter(r => !q || [r.managerName, r.item, r.size, r.color, r.location, r.notes].filter(Boolean).some(v => String(v).toLowerCase().includes(q))).sort((a, b) => String(a.managerName).localeCompare(String(b.managerName)) || String(a.item).localeCompare(String(b.item)));
   }, [managerUniformStock, query]);
+
+  const locatorResults = useMemo(() => {
+    if (!locatorItem) return [];
+    return managerUniformStock.filter(r => {
+      if (r.item !== locatorItem) return false;
+      if (locatorSize && r.size !== locatorSize) return false;
+      if (locatorColor && r.color !== locatorColor) return false;
+      return true;
+    }).sort((a, b) => String(a.managerName).localeCompare(String(b.managerName)));
+  }, [managerUniformStock, locatorItem, locatorSize, locatorColor]);
 
   const associateItemsEnriched = associateUniformItems.map(r => ({ ...r, associateName: associateName(associates, r.associateId) }));
 
@@ -523,7 +554,78 @@ function Uniforms() {
 
         {activeTab === 'checks' && (filtered.length > 0 ? <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">{filtered.map(record => <UniformCard key={record.id} record={record} associates={associates} onEdit={openEdit} />)}</section> : <EmptyState icon={<Shirt size={28} />} title="No uniform checks yet" text="Add the first uniform check to track compliance, replacement needs, and follow-up. Non-compliant records automatically create a key C Work File entry." action="Add Uniform Check" onClick={openAdd} />)}
         {activeTab === 'inventory' && (inventoryFiltered.length > 0 ? <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">{inventoryFiltered.map(item => <InventoryCard key={item.id} item={item} managerQty={managerQtyByInventoryId[item.id] || 0} associateQty={associateQtyByInventoryId[item.id] || 0} onEdit={openInventoryEdit} />)}</section> : <EmptyState icon={<Boxes size={28} />} title="No uniform inventory yet" text="Add store inventory by item, size, color, and location so managers can see what is available before ordering or replacing uniforms." action="Add Inventory Item" onClick={openInventoryAdd} />)}
-        {activeTab === 'managers' && (managerFiltered.length > 0 ? <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">{managerFiltered.map(record => <ManagerStockCard key={record.id} record={record} onEdit={openManagerEdit} />)}</section> : <EmptyState icon={<Warehouse size={28} />} title="No manager on-hand stock yet" text="Assign uniform items to a manager to show who currently has extra shirts, hats, aprons, name tags, or other uniform supplies on hand." action="Assign Manager Stock" onClick={openManagerAdd} />)}
+        {activeTab === 'managers' && (
+          managerUniformStock.length === 0
+            ? <EmptyState icon={<Warehouse size={28} />} title="No manager on-hand stock yet" text="Assign uniform items to a manager to show who currently has extra shirts, hats, aprons, name tags, or other uniform supplies on hand." action="Assign Manager Stock" onClick={openManagerAdd} />
+            : <section className="space-y-4">
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 space-y-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Search size={16} className="text-primary" />
+                    <h3 className="font-bold text-gray-800 text-sm">Item Locator — Find who has it on hand</h3>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-semibold text-gray-600">Uniform Item <span className="text-primary">*</span></label>
+                      <select value={locatorItem} onChange={e => setLocatorItem(e.target.value)} className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white">
+                        <option value="">Select item...</option>
+                        {UNIFORM_ITEMS.filter(i => i !== 'Full Uniform').map(i => <option key={i} value={i}>{i}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-semibold text-gray-600">Size <span className="text-gray-400 font-normal">(optional)</span></label>
+                      <select value={locatorSize} onChange={e => setLocatorSize(e.target.value)} className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white">
+                        <option value="">Any size</option>
+                        {SIZE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-semibold text-gray-600">Color <span className="text-gray-400 font-normal">(optional)</span></label>
+                      <select value={locatorColor} onChange={e => setLocatorColor(e.target.value)} className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white">
+                        <option value="">Any color</option>
+                        {COLOR_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {!locatorItem && (
+                  <div className="bg-gray-50 rounded-2xl border border-dashed border-gray-300 p-8 text-center">
+                    <div className="w-14 h-14 rounded-2xl bg-purple-50 text-purple-600 mx-auto flex items-center justify-center"><Warehouse size={28} /></div>
+                    <p className="mt-3 font-semibold text-gray-700">Select an item above to find who has it</p>
+                    <p className="mt-1 text-sm text-gray-400">Filter by size or color to narrow results</p>
+                  </div>
+                )}
+
+                {locatorItem && locatorResults.length === 0 && (
+                  <div className="bg-yellow-50 rounded-2xl border border-yellow-200 p-6 text-center">
+                    <p className="font-semibold text-yellow-800">No manager has <span className="font-bold">{locatorItem}{locatorSize ? ` · ${locatorSize}` : ''}{locatorColor ? ` · ${locatorColor}` : ''}</span> on hand</p>
+                    <p className="mt-1 text-sm text-yellow-600">Try a different size or color, or assign stock to a manager.</p>
+                    <button onClick={openManagerAdd} className="mt-3 inline-flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-primary-dark"><Warehouse size={15} /> Assign Manager Stock</button>
+                  </div>
+                )}
+
+                {locatorItem && locatorResults.length > 0 && (
+                  <div className="space-y-3">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide px-1">{locatorResults.length} manager{locatorResults.length !== 1 ? 's' : ''} with this item</p>
+                    {locatorResults.map(record => (
+                      <div key={record.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center flex-shrink-0">
+                          <span className="text-xl font-bold text-purple-600">{num(record.qty)}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-gray-900">{record.managerName}</p>
+                          <p className="text-sm text-gray-500">{record.item}{record.size ? ` · ${record.size}` : ''}{record.color ? ` · ${record.color}` : ''}</p>
+                          {record.notes && <p className="text-xs text-gray-400 mt-0.5 truncate">{record.notes}</p>}
+                        </div>
+                        <button onClick={() => openManagerEdit(record)} className="flex-shrink-0 p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100">
+                          <Edit3 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+        )}
         {activeTab === 'associateItems' && (associateItemsFiltered.length > 0 ? <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">{associateItemsFiltered.map(record => <AssociateItemCard key={record.id} record={record} associates={associates} onEdit={openAssociateItemEdit} />)}</section> : <EmptyState icon={<UserRound size={28} />} title="No associate uniform items yet" text="Issue uniform items to associates to track what each person currently has, what was returned, and what may need replacement." action="Issue Associate Item" onClick={openAssociateItemAdd} />)}
 
         {activeAssociates.length === 0 && <section className="rounded-2xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800 flex gap-2"><UserRound size={18} className="flex-shrink-0 mt-0.5" />Add active associates first so uniform checks and issued items can be assigned to team members.</section>}
