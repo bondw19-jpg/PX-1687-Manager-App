@@ -640,7 +640,7 @@ export default function DailyPlan() {
   return (
     <>
       {/* Mobile header */}
-      <Header title="Daily Plan" subtitle="5P7A Checklist" rightIcon={<Printer size={20} />} onRightClick={handlePrint} />
+      <Header title="5P7A" subtitle="5P7A Checklist" rightIcon={<Printer size={20} />} onRightClick={handlePrint} />
 
       {/* Desktop header */}
       <DesktopPageHeader title="5P7A Daily Plan" onPrint={handlePrint} />
