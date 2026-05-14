@@ -284,10 +284,10 @@ export default function PreviewUpdateBanner({ previewUrl }) {
 
           <div className="flex-1 min-w-0 relative z-10">
             <p className="text-white font-bold text-xs leading-tight">
-              ✨ v2.2.0 — Uniform Tracker Automation
+              ✨ New Version Live — 5P7A Daily Plan
             </p>
             <p className="text-white/70 text-[11px] leading-tight mt-0.5">
-              Associate Items tracking, automated inventory calculations & improved dropdowns
+              FOH/BOH daily checklist, role-gated checkoff, and history tracking are now available
             </p>
           </div>
 
