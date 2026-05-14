@@ -9,10 +9,28 @@ import {
 // ─── Changelog Data ───────────────────────────────────────────────────────────
 export const UPDATES = [
   {
-    version: '2.2.0',
-    date: 'May 8, 2026',
+    version: '2.2.1',
+    date: 'May 14, 2026',
     label: 'Latest',
     labelColor: 'bg-green-500',
+    summary: '5P7A Daily Plan page with role-gated FOH/BOH checklists, 30-day history, and Uniform Tracker improvements including Back Brace, Item Locator, and simplified dropdowns.',
+    changes: [
+      { type: 'new',     text: '5P7A Daily Plan — Full daily checklist with 5 Points and day-specific FOH/BOH 7 Action tasks' },
+      { type: 'new',     text: 'Role-gated checkoff — Only managers and shift leads can check off tasks; associates see read-only view' },
+      { type: 'new',     text: 'Verified by tracking — Each checked item records who verified it and at what time' },
+      { type: 'new',     text: 'History tab — View past 30 days of daily checklists with completion percentages' },
+      { type: 'new',     text: 'Item Locator — Find which manager has a specific uniform item on hand using dropdown filters' },
+      { type: 'new',     text: 'Back Brace added to uniform item list across all Uniform Tracker forms' },
+      { type: 'improve', text: 'Size and color fields in Uniform Tracker now use dropdowns (XS–XXXL, standard PX colors)' },
+      { type: 'improve', text: 'Manager On-Hand form simplified — clean dropdowns, no mandatory inventory linking' },
+      { type: 'fix',     text: 'Fixed Item Locator showing duplicate manager entries — same item/size/color now grouped and quantities added together' },
+    ],
+  },
+  {
+    version: '2.2.0',
+    date: 'May 8, 2026',
+    label: 'Previous',
+    labelColor: 'bg-gray-400',
     summary: 'Uniform Tracker restructured with automated inventory system, Associate Items tracking, and improved inventory calculations.',
     changes: [
       { type: 'new',     text: 'Associate Items tracking — Track which uniform items each associate currently has (Active, Returned, Needs Replacement, Lost)' },
