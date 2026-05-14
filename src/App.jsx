@@ -4,6 +4,7 @@ import { useAppStore } from './store/appStore';
 import Layout from './components/Layout';
 import { getFirebaseModules } from './lib/firebase';
 import { loadOrCreateMemberProfile } from './lib/memberRoles';
+import PWAUpdatePrompt from './components/PWAUpdatePrompt';
 
 // Lazy load pages
 const Dashboard     = lazy(() => import('./pages/Dashboard'));
@@ -216,6 +217,7 @@ export default function App() {
           )}
         </AuthSessionGate>
       </BrowserRouter>
+      <PWAUpdatePrompt />
     </ErrorBoundary>
   );
 }
