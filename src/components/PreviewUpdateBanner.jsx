@@ -284,7 +284,7 @@ export default function PreviewUpdateBanner({ previewUrl }) {
 
           <div className="flex-1 min-w-0 relative z-10">
             <p className="text-white font-bold text-xs leading-tight">
-              ✨ New Version Live — 5P7A Daily Plan
+              ✨ v2.2.1 — New Version Live · 5P7A Daily Plan
             </p>
             <p className="text-white/70 text-[11px] leading-tight mt-0.5">
               FOH/BOH daily checklist, role-gated checkoff, and history tracking are now available
