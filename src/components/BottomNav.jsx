@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Home, Users, PhoneMissed, Calendar, ClipboardCheck,
-  StickyNote, Star, ListChecks, BookUser, ShieldCheck, Shirt
+  StickyNote, ListChecks, BookUser, ShieldCheck, Shirt, ClipboardList
 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { isAdminUser } from '../lib/roles';
@@ -12,9 +12,9 @@ const tabs = [
   { id: 'team',      label: 'Team',      icon: Users,         path: '/team' },
   { id: 'callins',   label: 'Call-Ins',  icon: PhoneMissed,   path: '/callins' },
   { id: 'calendar',  label: 'Calendar',  icon: Calendar,      path: '/calendar' },
-  { id: 'checklist', label: 'Checklist', icon: ClipboardCheck,path: '/checklist' },
-  { id: 'notes',     label: 'Notes',     icon: StickyNote,    path: '/notes' },
-  { id: 'reviews',   label: 'Reviews',   icon: Star,          path: '/reviews' },
+  { id: 'checklist',  label: 'Checklist', icon: ClipboardCheck, path: '/checklist' },
+  { id: 'daily-plan', label: '5P7A',      icon: ClipboardList, path: '/daily-plan' },
+  { id: 'notes',      label: 'Notes',     icon: StickyNote,    path: '/notes' },
   { id: 'uniforms',  label: 'Uniforms',  icon: Shirt,         path: '/uniforms' },
   { id: 'tasks',     label: 'Tasks',     icon: ListChecks,    path: '/tasks' },
   { id: 'contacts',  label: 'Contacts',  icon: BookUser,      path: '/contacts' },
@@ -28,9 +28,9 @@ export default function BottomNav() {
   const { user }  = useAppStore();
   const isAdmin   = isAdminUser(user);
 
-  // For admin: replace the last tab (Contacts) with Admin tab
+  // For admin: replace the last tab with Admin tab, regardless of total tab count
   const visibleTabs = isAdmin
-    ? [...tabs.slice(0, 9), adminTab]
+    ? [...tabs.slice(0, tabs.length - 1), adminTab]
     : tabs;
 
   return (
