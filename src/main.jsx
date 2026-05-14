@@ -4,13 +4,41 @@ import App from './App.jsx'
 import './index.css'
 import { registerSW } from 'virtual:pwa-register'
 
-const APP_VERSION = '2.1.3'
+const APP_VERSION = '2.2.1'
 
-// Older PWA builds cached Firebase Auth/Firestore API responses in a shared
-// runtime cache named `firebase-cache`. Those responses are account-specific;
-// keeping them can replay one user's private notes/calendar after another user
-// signs in on the same installed PWA. Remove that legacy cache immediately on
-// app startup before any Firebase listeners are initialized.
+// ── Startup version check ─────────────────────────────────────────────────────
+// Fetches /version.json with cache:'no-store' (bypasses SW + HTTP cache).
+// If the server version doesn't match the compiled APP_VERSION, clear all
+// caches and hard-reload so iOS standalone PWAs pick up the latest build.
+async function checkVersionAndReload() {
+  try {
+    const res = await fetch('/version.json?t=' + Date.now(), { cache: 'no-store' })
+    if (!res.ok) return
+    const { version } = await res.json()
+    if (version && version !== APP_VERSION) {
+      if ('caches' in window) {
+        const keys = await caches.keys()
+        await Promise.all(keys.map(k => caches.delete(k)))
+      }
+      window.location.reload()
+    }
+  } catch (e) {
+    // Offline or fetch error — skip silently
+  }
+}
+
+checkVersionAndReload()
+
+// ── SW controllerchange → reload ──────────────────────────────────────────────
+// When the new SW activates (skipWaiting + clientsClaim), the browser fires
+// 'controllerchange'. Reloading here ensures the page uses the new bundles.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    window.location.reload()
+  })
+}
+
+// ── Legacy Firebase cache cleanup ─────────────────────────────────────────────
 async function clearLegacyFirebaseRuntimeCaches() {
   try {
     if (!('caches' in window)) return
