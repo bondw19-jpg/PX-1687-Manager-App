@@ -426,12 +426,23 @@ function Uniforms() {
 
   const locatorResults = useMemo(() => {
     if (!locatorItem) return [];
-    return managerUniformStock.filter(r => {
+    const matching = managerUniformStock.filter(r => {
       if (r.item !== locatorItem) return false;
       if (locatorSize && r.size !== locatorSize) return false;
       if (locatorColor && r.color !== locatorColor) return false;
       return true;
-    }).sort((a, b) => String(a.managerName).localeCompare(String(b.managerName)));
+    });
+    // Group by manager + item + size + color, summing qty
+    const grouped = {};
+    matching.forEach(r => {
+      const key = `${r.managerName}||${r.item}||${r.size || ''}||${r.color || ''}`;
+      if (!grouped[key]) {
+        grouped[key] = { ...r, qty: 0, _ids: [] };
+      }
+      grouped[key].qty += num(r.qty);
+      grouped[key]._ids.push(r.id);
+    });
+    return Object.values(grouped).sort((a, b) => String(a.managerName).localeCompare(String(b.managerName)));
   }, [managerUniformStock, locatorItem, locatorSize, locatorColor]);
 
   const associateItemsEnriched = associateUniformItems.map(r => ({ ...r, associateName: associateName(associates, r.associateId) }));
