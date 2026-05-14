@@ -18,6 +18,7 @@ const Tasks         = lazy(() => import('./pages/Tasks'));
 const Contacts      = lazy(() => import('./pages/Contacts'));
 const Announcements = lazy(() => import('./pages/Announcements'));
 const BackupManager = lazy(() => import('./pages/BackupManager'));
+const DailyPlan     = lazy(() => import('./pages/DailyPlan'));
 const Login         = lazy(() => import('./pages/Login'));
 const AdminPage     = lazy(() => import('./pages/AdminPage'));
 const Settings      = lazy(() => import('./pages/Settings'));
@@ -107,7 +108,8 @@ function AuthSessionGate({ children }) {
 
     (async () => {
       try {
-        const { auth, onAuthStateChanged } = await getFirebaseModules();
+        const { auth } = await getFirebaseModules();
+        const { onAuthStateChanged } = await import('firebase/auth');
         unsubscribe = onAuthStateChanged(auth, async (authUser) => {
           if (!active) return;
 
@@ -197,6 +199,7 @@ export default function App() {
                   <Route path="/callins"       element={<PrivatePage authReady={authReady}><CallIns /></PrivatePage>} />
                   <Route path="/calendar"      element={<PrivatePage authReady={authReady}><CalendarPage /></PrivatePage>} />
                   <Route path="/checklist"     element={<PrivatePage authReady={authReady}><Checklist /></PrivatePage>} />
+                  <Route path="/daily-plan"    element={<PrivatePage authReady={authReady}><DailyPlan /></PrivatePage>} />
                   <Route path="/notes"         element={<PrivatePage authReady={authReady}><Notes /></PrivatePage>} />
                   <Route path="/reviews"       element={<PrivatePage authReady={authReady}><Reviews /></PrivatePage>} />
                   <Route path="/uniforms"      element={<PrivatePage authReady={authReady}><Uniforms /></PrivatePage>} />
