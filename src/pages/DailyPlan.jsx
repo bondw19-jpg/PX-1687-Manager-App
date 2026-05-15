@@ -567,19 +567,14 @@ export default function DailyPlan() {
     );
   }, [isManager, actionsState, dateStr, user]);
 
-  // ── Progress counts ──
-  const pointsTotal = FIVE_POINTS.reduce((sum, pt) => sum + pt.subItems.length, 0);
-  const pointsDone = FIVE_POINTS.reduce((sum, pt) => {
-    return sum + pt.subItems.filter((_, i) => pointsState[pt.key]?.subItems?.[`${pt.key}_${i}`]?.checked).length;
-  }, 0);
-
+  // ── Progress counts (7 Actions only — 5 Points are daily reminders, not tracked) ──
   const fohTotal = dayData?.foh?.length || 0;
   const fohDone = dayData?.foh?.filter(item => actionsState?.foh?.[item.id]?.checked).length || 0;
   const bohTotal = dayData?.boh?.length || 0;
   const bohDone = dayData?.boh?.filter(item => actionsState?.boh?.[item.id]?.checked).length || 0;
 
-  const grandTotal = pointsTotal + fohTotal + bohTotal;
-  const grandDone  = pointsDone + fohDone + bohDone;
+  const grandTotal = fohTotal + bohTotal;
+  const grandDone  = fohDone + bohDone;
   const allDone    = grandTotal > 0 && grandDone === grandTotal;
 
   // ── Print ──
@@ -607,7 +602,7 @@ export default function DailyPlan() {
         <p className={`text-sm font-bold ${allDone ? 'text-green-700' : 'text-gray-700'}`}>
           {allDone ? '✓ All tasks complete!' : `${grandDone} of ${grandTotal} tasks complete`}
         </p>
-        <p className="text-xs text-gray-400">{dayData?.dayLabel} · 5 Points + 7 Actions</p>
+        <p className="text-xs text-gray-400">{dayData?.dayLabel} · 7 Actions</p>
       </div>
       <div className="flex items-center gap-2">
         <div className="text-right">
@@ -673,41 +668,28 @@ export default function DailyPlan() {
 
         {!loading && (
           <>
-            {/* ── 5 POINTS ── */}
+            {/* ── 5 POINTS — Daily Reminders (read-only) ── */}
             <div className="mb-2">
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest">5 Points — Daily Standards</h2>
-                <ProgressPill done={pointsDone} total={pointsTotal} label="complete" />
-              </div>
+              <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">5 Points — Daily Reminders</h2>
 
-              {FIVE_POINTS.map((pt) => {
-                const ptDone = pt.subItems.filter((_, i) => pointsState[pt.key]?.subItems?.[`${pt.key}_${i}`]?.checked).length;
-                return (
-                  <SectionCard
-                    key={pt.key}
-                    title={pt.label}
-                    badge={`${ptDone}/${pt.subItems.length}`}
-                    color={ptDone === pt.subItems.length ? 'green' : 'red'}
-                    defaultOpen={true}
-                  >
-                    {pt.subItems.map((sub, i) => {
-                      const subKey = `${pt.key}_${i}`;
-                      const state = pointsState[pt.key]?.subItems?.[subKey] || {};
-                      return (
-                        <GatedCheckbox
-                          key={subKey}
-                          checked={!!state.checked}
-                          verifiedBy={state.checkedBy}
-                          verifiedAt={state.checkedAt}
-                          onChange={() => togglePointSubItem(pt.key, i)}
-                          readOnly={!isManager}
-                          label={sub}
-                        />
-                      );
-                    })}
-                  </SectionCard>
-                );
-              })}
+              {FIVE_POINTS.map((pt) => (
+                <SectionCard
+                  key={pt.key}
+                  title={pt.label}
+                  badge="5P"
+                  color="red"
+                  defaultOpen={false}
+                >
+                  <ul className="px-4 py-2 space-y-1.5">
+                    {pt.subItems.map((sub, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
+                        {sub}
+                      </li>
+                    ))}
+                  </ul>
+                </SectionCard>
+              ))}
             </div>
 
             {/* ── 7 ACTIONS ── */}
