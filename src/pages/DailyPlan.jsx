@@ -254,17 +254,6 @@ function buildPrintHtml(dateStr, dayData, pointsState, actionsState) {
 
   let html = `<div style="margin-bottom:12px"><strong>Date:</strong> ${dayLabel}</div>`;
 
-  // 5 Points
-  let pointRows = '';
-  FIVE_POINTS.forEach(pt => {
-    const ptState = pointsState[pt.key] || {};
-    pt.subItems.forEach((sub, i) => {
-      const subState = ptState.subItems?.[`${pt.key}_${i}`] || {};
-      pointRows += itemRow(`[${pt.label}] ${sub}`, '', subState);
-    });
-  });
-  html += sectionTable('5 POINTS (Daily Standards)', pointRows);
-
   // FOH
   if (actions?.foh?.length) {
     let fohRows = '';
