@@ -66,7 +66,7 @@ export const FIVE_POINTS = [
       'Spatula',
       'PCB 1 batch',
       'Retail station fortune cookie bag',
-      'SS5P',
+      'SSSP',
       'Sneeze guard and slats',
       'Food quality',
     ],
