@@ -727,6 +727,11 @@ export default function DailyPlan() {
                   color={fohDone === fohTotal ? 'green' : 'blue'}
                   defaultOpen={true}
                 >
+                  {dayData.fohTitle && (
+                    <div className="px-4 py-2 bg-blue-50 border-b border-blue-100">
+                      <p className="text-xs font-bold text-blue-700 uppercase tracking-wide">{dayData.fohTitle}</p>
+                    </div>
+                  )}
                   {dayData.foh.map(item => {
                     const state = actionsState?.foh?.[item.id] || {};
                     return (
@@ -738,7 +743,6 @@ export default function DailyPlan() {
                         onChange={() => toggleAction('foh', item.id)}
                         readOnly={!isManager}
                         label={item.task}
-                        detail={item.detail}
                       />
                     );
                   })}
@@ -751,6 +755,11 @@ export default function DailyPlan() {
                   color={bohDone === bohTotal ? 'green' : 'orange'}
                   defaultOpen={true}
                 >
+                  {dayData.bohTitle && (
+                    <div className="px-4 py-2 bg-orange-50 border-b border-orange-100">
+                      <p className="text-xs font-bold text-orange-700 uppercase tracking-wide">{dayData.bohTitle}</p>
+                    </div>
+                  )}
                   {dayData.boh.map(item => {
                     const state = actionsState?.boh?.[item.id] || {};
                     return (
@@ -762,7 +771,6 @@ export default function DailyPlan() {
                         onChange={() => toggleAction('boh', item.id)}
                         readOnly={!isManager}
                         label={item.task}
-                        detail={item.detail}
                       />
                     );
                   })}
