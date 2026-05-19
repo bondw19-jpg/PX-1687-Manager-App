@@ -1,22 +1,47 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, AlertTriangle } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
-import { ADMIN_EMAIL } from '../lib/roles';
+import { ADMIN_EMAIL, isShiftLeadUser } from '../lib/roles';
+import { SHIFT_LEAD_FIRST_PATH } from '../lib/permissions';
 import { loadOrCreateMemberProfile } from '../lib/memberRoles';
 
 export default function Login() {
   const navigate = useNavigate();
   const { setUser, connectFirestore } = useAppStore();
 
-  const [mode, setMode]         = useState('login'); // 'login' | 'register'
+  const [mode, setMode]         = useState('login');
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [name, setName]         = useState('');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading]   = useState(false);
+  const [loadingMsg, setLoadingMsg] = useState('');
   const [error, setError]       = useState('');
   const [info, setInfo]         = useState('');
+
+  // ── Session lock: detect an existing active Firebase session ──────────────
+  // If another user is already signed in on this device, show a warning so the
+  // person about to sign in knows their session will replace it.
+  const [activeSession, setActiveSession] = useState(null); // { email, name }
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { getFirebaseModules } = await import('../lib/firebase');
+        const { auth } = await getFirebaseModules();
+        const current = auth.currentUser;
+        if (!cancelled && current) {
+          setActiveSession({
+            email: current.email || '',
+            name:  current.displayName || current.email?.split('@')[0] || 'Someone',
+          });
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const friendlyError = (code) => {
     switch (code) {
@@ -40,19 +65,52 @@ export default function Login() {
     return auth;
   };
 
+  // ── Session lock: sign out the current Firebase user before a new sign-in ─
+  // This is the core of the session lock. By explicitly signing out first we:
+  //  1. Ensure Firebase Auth's onAuthStateChanged fires with null (triggering
+  //     setUser(null) and clearing all private cached data)
+  //  2. Force a full auth-ready cache reset so the next connectFirestore()
+  //     always picks up the new user's UID — never the previous user's
+  //  3. Give the user visible feedback that the switch is happening safely
+  const clearPreviousSession = async (auth) => {
+    if (!auth.currentUser) return;
+    try {
+      setLoadingMsg('Clearing previous session…');
+      const { signOut } = await import('firebase/auth');
+      const { resetAuthReadyPromise } = await import('../lib/firebase');
+      await signOut(auth);
+      resetAuthReadyPromise();
+      setUser(null);
+      // Brief pause so Firebase Auth has time to propagate the sign-out before
+      // we immediately call signInWithEmailAndPassword. Without this pause the
+      // auth state listener in AuthSessionGate can see an intermediate null →
+      // new-user transition before Zustand has finished clearing private data.
+      await new Promise(r => setTimeout(r, 150));
+    } catch {
+      // Non-fatal — still attempt the new sign-in
+    }
+  };
+
   // ── Sign In ───────────────────────────────────────────────────────────────
   const handleLogin = async (e) => {
     e.preventDefault();
     setError(''); setInfo('');
     if (!email || !password) { setError('Please enter email and password.'); return; }
     setLoading(true);
+    setLoadingMsg('Signing in…');
     try {
       const { signInWithEmailAndPassword, signOut } = await import('firebase/auth');
       const auth = await getAuth();
+
+      // ── SESSION LOCK: sign out any existing user before switching ─────────
+      await clearPreviousSession(auth);
+
+      setLoadingMsg('Verifying credentials…');
       const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
       const u    = cred.user;
 
       let memberProfile = null;
+      setLoadingMsg('Loading your profile…');
       try {
         memberProfile = await loadOrCreateMemberProfile(u, {
           email: u.email,
@@ -64,27 +122,27 @@ export default function Login() {
           await signOut(auth);
           setError('Your account has been disabled. Please contact your manager.');
           setLoading(false);
+          setLoadingMsg('');
           return;
         }
-        // Firestore may be temporarily unreachable. Let the manager sign in locally,
-        // then the app will reconnect and hydrate the database role when available.
       }
 
-      setUser(memberProfile || {
+      const finalUser = memberProfile || {
         uid:     u.uid,
         email:   u.email,
         name:    u.displayName || name || u.email.split('@')[0],
         role:    u.email === ADMIN_EMAIL ? 'admin' : 'manager',
         storeId: 'store_1687',
-      });
-      // Auto-connect Firestore sync after sign-in
-      // Use setTimeout(0) so zustand finishes persisting the user before we read it
+      };
+      setUser(finalUser);
+      setActiveSession(null);
       setTimeout(() => connectFirestore().catch(() => {}), 0);
-      navigate('/');
+      navigate(isShiftLeadUser(finalUser) ? SHIFT_LEAD_FIRST_PATH : '/');
     } catch (err) {
       setError(friendlyError(err.code || err.message));
     } finally {
       setLoading(false);
+      setLoadingMsg('');
     }
   };
 
@@ -94,9 +152,14 @@ export default function Login() {
     setError(''); setInfo('');
     if (!email || !password || !name) { setError('Please fill in all fields.'); return; }
     setLoading(true);
+    setLoadingMsg('Creating account…');
     try {
       const { createUserWithEmailAndPassword } = await import('firebase/auth');
       const auth = await getAuth();
+
+      // ── SESSION LOCK: sign out any existing user before creating a new account
+      await clearPreviousSession(auth);
+
       const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
       const u    = cred.user;
       let memberProfile = null;
@@ -116,13 +179,14 @@ export default function Login() {
         role:    'manager',
         storeId: 'store_1687',
       });
-      // Auto-connect Firestore sync after registration
+      setActiveSession(null);
       setTimeout(() => connectFirestore().catch(() => {}), 0);
       navigate('/');
     } catch (err) {
       setError(friendlyError(err.code || err.message));
     } finally {
       setLoading(false);
+      setLoadingMsg('');
     }
   };
 
@@ -166,6 +230,20 @@ export default function Login() {
         <p className="text-sm text-gray-500 mb-5">
           {mode === 'login' ? 'Access your manager dashboard' : 'Register your manager account'}
         </p>
+
+        {/* ── Active session warning ─────────────────────────────────────── */}
+        {activeSession && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-3 mb-4 flex items-start gap-2.5">
+            <AlertTriangle size={15} className="text-amber-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-semibold text-amber-800">Active session detected</p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                <strong>{activeSession.name}</strong> ({activeSession.email}) is currently signed in on this device.
+                Signing in will end their session and clear their private data from this device.
+              </p>
+            </div>
+          </div>
+        )}
 
         {error && (
           <div className="bg-red-50 text-red-600 text-sm px-3 py-2.5 rounded-xl mb-4 border border-red-100">
@@ -236,10 +314,14 @@ export default function Login() {
 
           <button type="submit" disabled={loading}
             className="w-full bg-primary text-white py-3.5 rounded-xl font-bold text-sm disabled:opacity-70 flex items-center justify-center gap-2 hover:bg-primary-dark transition-colors">
-            {loading
-              ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"/>
-              : mode === 'login' ? 'Sign In' : 'Create Account'
-            }
+            {loading ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin flex-shrink-0"/>
+                <span className="text-sm font-medium">{loadingMsg || 'Signing in…'}</span>
+              </>
+            ) : (
+              mode === 'login' ? 'Sign In' : 'Create Account'
+            )}
           </button>
         </form>
 
