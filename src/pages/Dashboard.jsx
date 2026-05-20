@@ -182,8 +182,10 @@ export default function Dashboard() {
 
   const [selectedEvent, setSelectedEvent] = useState(null);
 
+  const todayDisplay = format(new Date(), 'EEEE, MMMM d');
   const today = format(new Date(), 'yyyy-MM-dd');
   const currentMonth = format(new Date(), 'yyyy-MM');
+  const firstName = user?.name?.split(' ')[0] || user?.email?.split('@')[0] || 'Manager';
 
   const activeAssociates = associates.filter(a => a.status === 'active').length;
   const callInsThisMonth = callIns.filter(c => c.date?.startsWith(currentMonth)).length;
@@ -244,6 +246,16 @@ export default function Dashboard() {
       ) : null}
 
       <div className="desktop-page-content p-4 lg:p-0 space-y-4">
+        {/* Personalized Greeting */}
+        <div className="bg-primary rounded-2xl p-5 text-white">
+          <p className="text-sm opacity-80 mb-0.5">{todayDisplay}</p>
+          <h1 className="text-xl font-bold leading-tight">Hey, {firstName}! 👋</h1>
+          <p className="text-sm opacity-75 mt-1">Here's your store overview for today.</p>
+        </div>
+
+        {/* Daily Motivation */}
+        <DailyMotivation />
+
         {/* Stats Grid — 2 col mobile, 5 col desktop */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <StatCard icon={<Users size={22} className="text-red-500" />}     count={activeAssociates}    label="Active Associates"    bgColor="bg-red-50" />
@@ -252,9 +264,6 @@ export default function Dashboard() {
           <StatCard icon={<Calendar size={22} className="text-green-500" />} count={todayEvents.length} label="Today's Events"       bgColor="bg-green-50" />
           <StatCard icon={<Pin size={22} className="text-blue-500" />}       count={pinnedNotes}        label="Pinned Notes"         bgColor="bg-blue-50" />
         </div>
-
-        {/* 1 — Daily Motivation */}
-        <DailyMotivation />
 
         {/* 2 — Team Updates Feed (full width) */}
         <ActivityFeed />
