@@ -7,6 +7,7 @@ import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import PreviewUpdateBanner from '../components/PreviewUpdateBanner';
 import ActivityFeed from '../components/ActivityFeed';
+import DailyMotivation from '../components/DailyMotivation';
 
 const PREVIEW_URL = 'https://4173-il9welzg75eglof37wb6r-ea026bf9.sandbox.novita.ai';
 
@@ -252,7 +253,10 @@ export default function Dashboard() {
           <StatCard icon={<Pin size={22} className="text-blue-500" />}       count={pinnedNotes}        label="Pinned Notes"         bgColor="bg-blue-50" />
         </div>
 
-        {/* 1 — Team Updates Feed (full width) */}
+        {/* 1 — Daily Motivation */}
+        <DailyMotivation />
+
+        {/* 2 — Team Updates Feed (full width) */}
         <ActivityFeed />
 
         {/* 2 — Today's Events (full width) */}
