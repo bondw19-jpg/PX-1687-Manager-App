@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { isAdminUser } from '../lib/roles';
+import { canAccessPath } from '../lib/permissions';
 
 const tabs = [
   { id: 'home',      label: 'Home',      icon: Home,          path: '/' },
@@ -29,9 +30,12 @@ export default function BottomNav() {
   const isAdmin   = isAdminUser(user);
 
   // For admin: replace the last tab with Admin tab, regardless of total tab count
-  const visibleTabs = isAdmin
+  const baseTabs = isAdmin
     ? [...tabs.slice(0, tabs.length - 1), adminTab]
     : tabs;
+
+  // Hide restricted nav items for shift leads
+  const visibleTabs = baseTabs.filter(tab => canAccessPath(user, tab.path));
 
   return (
     <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] bg-white border-t border-gray-200 z-40 safe-bottom lg:hidden">
