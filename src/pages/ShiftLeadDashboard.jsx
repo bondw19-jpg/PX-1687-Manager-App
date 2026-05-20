@@ -1,42 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ClipboardCheck, ClipboardList, ListChecks, Megaphone, ChevronRight, Sparkles, RefreshCw } from 'lucide-react';
+import { ClipboardCheck, ClipboardList, ListChecks, Megaphone, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
+import DailyMotivation from '../components/DailyMotivation';
 import { useAppStore } from '../store/appStore';
-
-const QUOTE_STORAGE_KEY = 'px_shift_lead_daily_quote';
-
-const FALLBACK_QUOTES = [
-  { quote: "Every great shift starts with a great attitude. Lead with energy and your team will follow.", author: "— The Panda Way" },
-  { quote: "Serve every guest like they're the first guest of the day — that's the Panda difference.", author: "— Panda Wisdom" },
-  { quote: "Great operations don't happen by accident. They happen because great leaders show up ready.", author: "— Panda Leadership" },
-  { quote: "Your energy sets the tone. Make it a shift everyone remembers for the right reasons.", author: "— The Panda Spirit" },
-  { quote: "When you take care of your team, your team takes care of the guests. That's the Panda way.", author: "— Panda Values" },
-  { quote: "Consistency is the foundation of excellence. Show up the same way every single shift.", author: "— Panda Excellence" },
-  { quote: "A good shift lead doesn't just manage — they inspire. Be the reason your team gives their best.", author: "— Panda Leadership" },
-];
-
-function getTodayString() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function loadCachedQuote() {
-  try {
-    const raw = localStorage.getItem(QUOTE_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (parsed.date === getTodayString()) return parsed;
-  } catch {}
-  return null;
-}
-
-function saveCachedQuote(data) {
-  try {
-    localStorage.setItem(QUOTE_STORAGE_KEY, JSON.stringify(data));
-  } catch {}
-}
 
 const PRIORITY_LEFT = {
   Normal: 'bg-blue-400',
@@ -50,9 +19,9 @@ const PRIORITY_COLORS = {
 };
 
 const QUICK_LINKS = [
-  { label: 'Shift Checklist', icon: ClipboardCheck, path: '/checklist', color: 'bg-red-50 text-primary' },
-  { label: '5P7A',            icon: ClipboardList,  path: '/daily-plan', color: 'bg-orange-50 text-orange-600' },
-  { label: 'Tasks & To-Do',   icon: ListChecks,     path: '/tasks',      color: 'bg-blue-50 text-blue-600' },
+  { label: 'Shift Checklist', icon: ClipboardCheck, path: '/checklist',     color: 'bg-red-50 text-primary' },
+  { label: '5P7A',            icon: ClipboardList,  path: '/daily-plan',    color: 'bg-orange-50 text-orange-600' },
+  { label: 'Tasks & To-Do',   icon: ListChecks,     path: '/tasks',         color: 'bg-blue-50 text-blue-600' },
   { label: 'Announcements',   icon: Megaphone,      path: '/announcements', color: 'bg-purple-50 text-purple-600' },
 ];
 
@@ -60,44 +29,8 @@ export default function ShiftLeadDashboard() {
   const navigate = useNavigate();
   const { user, announcements } = useAppStore();
 
-  const [quote, setQuote] = useState(loadCachedQuote());
-  const [quoteLoading, setQuoteLoading] = useState(!loadCachedQuote());
-  const [quoteError, setQuoteError] = useState(false);
-
   const firstName = user?.name?.split(' ')[0] || user?.email?.split('@')[0] || 'there';
   const today = format(new Date(), 'EEEE, MMMM d');
-
-  const getLocalFallback = () => {
-    const idx = new Date().getDay() % FALLBACK_QUOTES.length;
-    return { ...FALLBACK_QUOTES[idx], date: getTodayString() };
-  };
-
-  const fetchQuote = async () => {
-    setQuoteLoading(true);
-    setQuoteError(false);
-    try {
-      const res = await fetch('/api/daily-quote');
-      if (!res.ok) throw new Error('non-ok');
-      const contentType = res.headers.get('content-type') || '';
-      if (!contentType.includes('application/json')) throw new Error('not-json');
-      const data = await res.json();
-      if (!data?.quote) throw new Error('empty');
-      setQuote(data);
-      saveCachedQuote(data);
-    } catch {
-      const fallback = getLocalFallback();
-      setQuote(fallback);
-      saveCachedQuote(fallback);
-    } finally {
-      setQuoteLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!loadCachedQuote()) {
-      fetchQuote();
-    }
-  }, []);
 
   const recentAnnouncements = [...announcements]
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
@@ -118,48 +51,7 @@ export default function ShiftLeadDashboard() {
         </div>
 
         {/* Daily Motivation */}
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-            <div className="flex items-center gap-2 font-semibold text-gray-800 text-sm">
-              <Sparkles size={16} className="text-yellow-500" />
-              Today's Motivation
-            </div>
-            <button
-              onClick={fetchQuote}
-              disabled={quoteLoading}
-              title="Refresh quote"
-              className="p-1.5 text-gray-400 hover:text-primary rounded-lg disabled:opacity-40 transition-colors"
-            >
-              <RefreshCw size={15} className={quoteLoading ? 'animate-spin' : ''} />
-            </button>
-          </div>
-
-          <div className="p-5">
-            {quoteLoading ? (
-              <div className="flex flex-col items-center py-4 gap-2">
-                <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                <p className="text-xs text-gray-400">Generating your daily message…</p>
-              </div>
-            ) : quoteError ? (
-              <div className="text-center py-3">
-                <p className="text-sm text-gray-400 mb-2">Couldn't load today's message.</p>
-                <button
-                  onClick={fetchQuote}
-                  className="text-xs text-primary font-semibold underline"
-                >
-                  Try again
-                </button>
-              </div>
-            ) : quote ? (
-              <div>
-                <p className="text-[15px] text-gray-800 leading-relaxed font-medium italic">
-                  "{quote.quote}"
-                </p>
-                <p className="text-xs text-gray-400 mt-3 font-semibold">{quote.author}</p>
-              </div>
-            ) : null}
-          </div>
-        </div>
+        <DailyMotivation />
 
         {/* Quick Links */}
         <div>
