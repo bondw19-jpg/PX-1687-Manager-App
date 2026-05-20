@@ -1,13 +1,16 @@
 import React, { Suspense, lazy, Component, useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { useAppStore } from './store/appStore';
 import Layout from './components/Layout';
 import { getFirebaseModules } from './lib/firebase';
 import { loadOrCreateMemberProfile } from './lib/memberRoles';
+import { canAccessPath, SHIFT_LEAD_FIRST_PATH } from './lib/permissions';
+import { isShiftLeadUser } from './lib/roles';
 import PWAUpdatePrompt from './components/PWAUpdatePrompt';
 
 // Lazy load pages
-const Dashboard     = lazy(() => import('./pages/Dashboard'));
+const Dashboard          = lazy(() => import('./pages/Dashboard'));
+const ShiftLeadDashboard = lazy(() => import('./pages/ShiftLeadDashboard'));
 const Associates    = lazy(() => import('./pages/Associates'));
 const CallIns       = lazy(() => import('./pages/CallIns'));
 const CalendarPage  = lazy(() => import('./pages/CalendarPage'));
@@ -175,12 +178,48 @@ function ProtectedRoute({ authReady, children }) {
   return children;
 }
 
-function PrivatePage({ authReady, children }) {
+function RequireRole({ user, path, children }) {
+  if (!canAccessPath(user, path)) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh] p-6">
+        <div className="bg-white rounded-2xl p-8 w-full max-w-sm shadow-xl text-center">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-3xl">🔒</span>
+          </div>
+          <h2 className="text-lg font-bold text-gray-800 mb-2">Access Denied</h2>
+          <p className="text-sm text-gray-500 mb-5">
+            You don't have permission to view this page. Please contact your manager if you think this is a mistake.
+          </p>
+          <Link
+            to={SHIFT_LEAD_FIRST_PATH}
+            className="block w-full bg-[#C8102E] text-white py-3 rounded-xl font-bold text-sm text-center"
+          >
+            Go to Checklist
+          </Link>
+        </div>
+      </div>
+    );
+  }
+  return children;
+}
+
+function PrivatePage({ authReady, path, children }) {
+  const user = useAppStore(s => s.user);
   return (
     <ProtectedRoute authReady={authReady}>
-      <Layout>{children}</Layout>
+      <Layout>
+        <RequireRole user={user} path={path}>
+          {children}
+        </RequireRole>
+      </Layout>
     </ProtectedRoute>
   );
+}
+
+// ── Home route — shows shift lead dashboard or manager dashboard by role ──────
+function HomeDashboard() {
+  const user = useAppStore(s => s.user);
+  return isShiftLeadUser(user) ? <ShiftLeadDashboard /> : <Dashboard />;
 }
 
 // ── App ───────────────────────────────────────────────────────────────────────
@@ -195,21 +234,21 @@ export default function App() {
               <Suspense fallback={<LoadingSpinner />}>
                 <Routes>
                   <Route path="/login"         element={<Login />} />
-                  <Route path="/"              element={<PrivatePage authReady={authReady}><Dashboard /></PrivatePage>} />
-                  <Route path="/team"          element={<PrivatePage authReady={authReady}><Associates /></PrivatePage>} />
-                  <Route path="/callins"       element={<PrivatePage authReady={authReady}><CallIns /></PrivatePage>} />
-                  <Route path="/calendar"      element={<PrivatePage authReady={authReady}><CalendarPage /></PrivatePage>} />
-                  <Route path="/checklist"     element={<PrivatePage authReady={authReady}><Checklist /></PrivatePage>} />
-                  <Route path="/daily-plan"    element={<PrivatePage authReady={authReady}><DailyPlan /></PrivatePage>} />
-                  <Route path="/notes"         element={<PrivatePage authReady={authReady}><Notes /></PrivatePage>} />
-                  <Route path="/reviews"       element={<PrivatePage authReady={authReady}><Reviews /></PrivatePage>} />
-                  <Route path="/uniforms"      element={<PrivatePage authReady={authReady}><Uniforms /></PrivatePage>} />
-                  <Route path="/tasks"         element={<PrivatePage authReady={authReady}><Tasks /></PrivatePage>} />
-                  <Route path="/contacts"      element={<PrivatePage authReady={authReady}><Contacts /></PrivatePage>} />
-                  <Route path="/announcements" element={<PrivatePage authReady={authReady}><Announcements /></PrivatePage>} />
-                  <Route path="/backup"        element={<PrivatePage authReady={authReady}><BackupManager /></PrivatePage>} />
-                  <Route path="/admin"         element={<PrivatePage authReady={authReady}><AdminPage /></PrivatePage>} />
-                  <Route path="/settings"      element={<PrivatePage authReady={authReady}><Settings /></PrivatePage>} />
+                  <Route path="/"              element={<PrivatePage authReady={authReady} path="/"><HomeDashboard /></PrivatePage>} />
+                  <Route path="/team"          element={<PrivatePage authReady={authReady} path="/team"><Associates /></PrivatePage>} />
+                  <Route path="/callins"       element={<PrivatePage authReady={authReady} path="/callins"><CallIns /></PrivatePage>} />
+                  <Route path="/calendar"      element={<PrivatePage authReady={authReady} path="/calendar"><CalendarPage /></PrivatePage>} />
+                  <Route path="/checklist"     element={<PrivatePage authReady={authReady} path="/checklist"><Checklist /></PrivatePage>} />
+                  <Route path="/daily-plan"    element={<PrivatePage authReady={authReady} path="/daily-plan"><DailyPlan /></PrivatePage>} />
+                  <Route path="/notes"         element={<PrivatePage authReady={authReady} path="/notes"><Notes /></PrivatePage>} />
+                  <Route path="/reviews"       element={<PrivatePage authReady={authReady} path="/reviews"><Reviews /></PrivatePage>} />
+                  <Route path="/uniforms"      element={<PrivatePage authReady={authReady} path="/uniforms"><Uniforms /></PrivatePage>} />
+                  <Route path="/tasks"         element={<PrivatePage authReady={authReady} path="/tasks"><Tasks /></PrivatePage>} />
+                  <Route path="/contacts"      element={<PrivatePage authReady={authReady} path="/contacts"><Contacts /></PrivatePage>} />
+                  <Route path="/announcements" element={<PrivatePage authReady={authReady} path="/announcements"><Announcements /></PrivatePage>} />
+                  <Route path="/backup"        element={<PrivatePage authReady={authReady} path="/backup"><BackupManager /></PrivatePage>} />
+                  <Route path="/admin"         element={<PrivatePage authReady={authReady} path="/admin"><AdminPage /></PrivatePage>} />
+                  <Route path="/settings"      element={<PrivatePage authReady={authReady} path="/settings"><Settings /></PrivatePage>} />
                   <Route path="*"             element={<Navigate to="/" replace />} />
                 </Routes>
               </Suspense>
