@@ -123,7 +123,7 @@ const TYPE_META = {
 };
 
 // ─── Update Modal ──────────────────────────────────────────────────────────────
-function UpdateModal({ onClose, previewUrl }) {
+function UpdateModal({ onClose, onDismiss, previewUrl }) {
   const [expandedVersion, setExpandedVersion] = useState(UPDATES[0].version);
 
   const handlePreview = () => {
@@ -266,7 +266,7 @@ function UpdateModal({ onClose, previewUrl }) {
             <ExternalLink size={15} className="opacity-70" />
           </button>
           <button
-            onClick={onClose}
+            onClick={() => { onClose(); onDismiss?.(); }}
             className="w-full border border-gray-200 text-gray-600 py-3 rounded-xl font-semibold text-sm"
           >
             Dismiss
@@ -279,10 +279,20 @@ function UpdateModal({ onClose, previewUrl }) {
   return createPortal(modalContent, document.body);
 }
 
+const BANNER_DISMISS_KEY = 'px_banner_dismissed_v';
+
 // ─── Preview Update Banner ─────────────────────────────────────────────────────
 export default function PreviewUpdateBanner({ previewUrl }) {
-  const [dismissed, setDismissed] = useState(false);
+  const latestVersion = UPDATES[0].version;
+  const [dismissed, setDismissed] = useState(
+    () => localStorage.getItem(BANNER_DISMISS_KEY) === latestVersion
+  );
   const [showModal, setShowModal] = useState(false);
+
+  const dismiss = () => {
+    localStorage.setItem(BANNER_DISMISS_KEY, latestVersion);
+    setDismissed(true);
+  };
 
   if (dismissed) return null;
 
@@ -318,7 +328,7 @@ export default function PreviewUpdateBanner({ previewUrl }) {
           </button>
 
           <button
-            onClick={() => setDismissed(true)}
+            onClick={dismiss}
             className="relative z-10 p-1 text-white/60 hover:text-white flex-shrink-0"
           >
             <X size={15} />
@@ -329,6 +339,7 @@ export default function PreviewUpdateBanner({ previewUrl }) {
       {showModal && (
         <UpdateModal
           onClose={() => setShowModal(false)}
+          onDismiss={dismiss}
           previewUrl={previewUrl}
         />
       )}
