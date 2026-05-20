@@ -2,33 +2,30 @@ import React, { useState } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { RefreshCw, X } from 'lucide-react';
 
-const DISMISS_SESSION_KEY = 'pwa_update_dismissed';
+const DISMISS_KEY = 'pwa_update_dismissed_at';
+const SUPPRESS_MS = 48 * 60 * 60 * 1000; // 48 hours — covers same waiting SW across reloads
 
 export default function PWAUpdatePrompt() {
   const [visible, setVisible] = useState(false);
 
-  const {
-    updateServiceWorker,
-  } = useRegisterSW({
+  const { updateServiceWorker } = useRegisterSW({
     onNeedRefresh() {
-      if (!sessionStorage.getItem(DISMISS_SESSION_KEY)) {
-        setVisible(true);
-      }
+      const raw = localStorage.getItem(DISMISS_KEY);
+      if (raw && Date.now() - parseInt(raw, 10) < SUPPRESS_MS) return;
+      setVisible(true);
     },
     onRegistered(r) {
-      if (r) {
-        setInterval(() => r.update(), 60 * 60 * 1000);
-      }
+      if (r) setInterval(() => r.update(), 60 * 60 * 1000);
     },
   });
 
   const handleUpdate = () => {
-    sessionStorage.removeItem(DISMISS_SESSION_KEY);
+    localStorage.removeItem(DISMISS_KEY);
     updateServiceWorker(true);
   };
 
   const handleDismiss = () => {
-    sessionStorage.setItem(DISMISS_SESSION_KEY, '1');
+    localStorage.setItem(DISMISS_KEY, Date.now().toString());
     setVisible(false);
   };
 
