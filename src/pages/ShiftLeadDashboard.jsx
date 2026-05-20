@@ -8,6 +8,16 @@ import { useAppStore } from '../store/appStore';
 
 const QUOTE_STORAGE_KEY = 'px_shift_lead_daily_quote';
 
+const FALLBACK_QUOTES = [
+  { quote: "Every great shift starts with a great attitude. Lead with energy and your team will follow.", author: "— The Panda Way" },
+  { quote: "Serve every guest like they're the first guest of the day — that's the Panda difference.", author: "— Panda Wisdom" },
+  { quote: "Great operations don't happen by accident. They happen because great leaders show up ready.", author: "— Panda Leadership" },
+  { quote: "Your energy sets the tone. Make it a shift everyone remembers for the right reasons.", author: "— The Panda Spirit" },
+  { quote: "When you take care of your team, your team takes care of the guests. That's the Panda way.", author: "— Panda Values" },
+  { quote: "Consistency is the foundation of excellence. Show up the same way every single shift.", author: "— Panda Excellence" },
+  { quote: "A good shift lead doesn't just manage — they inspire. Be the reason your team gives their best.", author: "— Panda Leadership" },
+];
+
 function getTodayString() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -57,17 +67,27 @@ export default function ShiftLeadDashboard() {
   const firstName = user?.name?.split(' ')[0] || user?.email?.split('@')[0] || 'there';
   const today = format(new Date(), 'EEEE, MMMM d');
 
+  const getLocalFallback = () => {
+    const idx = new Date().getDay() % FALLBACK_QUOTES.length;
+    return { ...FALLBACK_QUOTES[idx], date: getTodayString() };
+  };
+
   const fetchQuote = async () => {
     setQuoteLoading(true);
     setQuoteError(false);
     try {
       const res = await fetch('/api/daily-quote');
       if (!res.ok) throw new Error('non-ok');
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) throw new Error('not-json');
       const data = await res.json();
+      if (!data?.quote) throw new Error('empty');
       setQuote(data);
       saveCachedQuote(data);
     } catch {
-      setQuoteError(true);
+      const fallback = getLocalFallback();
+      setQuote(fallback);
+      saveCachedQuote(fallback);
     } finally {
       setQuoteLoading(false);
     }
