@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { getRoleShortLabel, isAdminUser } from '../lib/roles';
+import { canAccessPath } from '../lib/permissions';
 
 const sections = [
   {
@@ -94,6 +95,8 @@ export default function DesktopSidebar() {
             {section.items.map(item => {
               // Hide admin-only items for non-admin users
               if (item.adminOnly && !isAdmin) return null;
+              // Hide restricted items for shift leads
+              if (!canAccessPath(user, item.path)) return null;
               const Icon     = item.icon;
               const isActive = location.pathname === item.path ||
                 (item.path !== '/' && location.pathname.startsWith(item.path));
