@@ -26,6 +26,13 @@ function emptyRow(user) {
   };
 }
 
+function fmtDate(d) {
+  if (!d) return '';
+  const parts = d.split('-');
+  if (parts.length === 3) return `${parts[1]}/${parts[2]}/${parts[0].slice(2)}`;
+  return d;
+}
+
 // Auto-expanding textarea — grows with content, never shows scrollbar
 function AutoTextarea({ value, onChange, placeholder, className }) {
   const ref = useRef(null);
@@ -116,7 +123,7 @@ export default function WorkFileModal({ associate, onClose }) {
         <tbody>
           ${rows.map(r => `
             <tr>
-              <td>${r.date || ''}</td>
+              <td>${fmtDate(r.date)}</td>
               <td><strong>${r.key || ''}</strong></td>
               <td>${r.details || ''}</td>
               <td class="sub-label">${r.addedBy?.name || ''}</td>
@@ -243,8 +250,8 @@ export default function WorkFileModal({ associate, onClose }) {
                   {/* DATE */}
                   <div className="border-r border-gray-100 self-stretch">
                     <input
-                      className="w-full h-full px-2 py-1.5 text-xs bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-primary"
-                      placeholder="MM/DD/YY"
+                      type="date"
+                      className="w-full h-full px-1.5 py-1.5 text-xs bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-primary"
                       value={row.date}
                       onChange={e => updateRow(row.id, 'date', e.target.value)}
                     />
