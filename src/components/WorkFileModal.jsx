@@ -248,13 +248,18 @@ export default function WorkFileModal({ associate, onClose }) {
                   idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'
                 }`}>
                   {/* DATE */}
-                  <div className="border-r border-gray-100 self-stretch">
+                  <div className="border-r border-gray-100 self-stretch relative">
                     <input
                       type="date"
-                      className="w-full h-full px-1.5 py-1.5 text-xs bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-primary"
+                      className={`w-full h-full px-2 py-1.5 text-xs bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-primary ${!row.date ? '[color-scheme:light] text-transparent' : ''}`}
                       value={row.date}
                       onChange={e => updateRow(row.id, 'date', e.target.value)}
                     />
+                    {!row.date && (
+                      <span className="absolute inset-0 flex items-center px-2 text-xs text-gray-400 pointer-events-none select-none">
+                        MM/DD/YY
+                      </span>
+                    )}
                   </div>
                   {/* KEY */}
                   <div className="border-r border-gray-100 self-stretch">
