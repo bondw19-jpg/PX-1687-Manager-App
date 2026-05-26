@@ -14,7 +14,7 @@ import { openPrintWindow, statsRowHtml, badgeHtml, disciplineColor, printAssocia
 // ─────────────────────────────────────────────────────────────────────────────
 // PANDA EXPRESS ATTENDANCE POINT SYSTEM
 // Effective for Panda Express Store #1687 — Aligned with corporate policy
-// Points roll off after 90 days; recovery bonuses at 30 and 60 day streaks
+// Points roll off after 6 months (180 days); recovery bonuses at 60 and 120 day streaks
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Main category definitions with subcategories and point values
@@ -130,16 +130,16 @@ export function getCallInCategory(callIn) {
   return PX_ATTENDANCE_POLICY.categories.find(c => c.id === legacyMap[callIn.type]) || CALL_IN_TYPES[1];
 }
 
-// 90-day rolling window — raw sum, no recovery applied
+// 6-month rolling window (180 days) — raw sum, no recovery applied
 export function get90DayPoints(callIns, associateId) {
-  const cutoff = subDays(new Date(), 90);
+  const cutoff = subDays(new Date(), 180);
   return callIns
     .filter(c => c.associateId === associateId && isAfter(new Date(c.date), cutoff))
     .reduce((sum, c) => sum + getCallInPoints(c), 0);
 }
 
 export function get90DayCallIns(callIns, associateId) {
-  const cutoff = subDays(new Date(), 90);
+  const cutoff = subDays(new Date(), 180);
   return callIns.filter(
     c => c.associateId === associateId && isAfter(new Date(c.date), cutoff)
   );
@@ -149,13 +149,13 @@ export function get90DayCallIns(callIns, associateId) {
  * getEffectivePoints(callIns, associateId) → number
  *
  * PX Attendance Point Recovery — fully automatic:
- *   - Start with raw 90-day rolling points
+ *   - Start with raw 6-month rolling points
  *   - Find the most recent call-in date for this associate
  *   - Count days since that incident (the "clean streak")
  *   - Apply deduction:
- *       60+ days clean → −1.0 pt  (capped at 0)
- *       30–59 days clean → −0.5 pt (capped at 0)
- *       < 30 days clean  → no deduction
+ *       120+ days clean → −1.0 pt  (capped at 0)
+ *       60–119 days clean → −0.5 pt (capped at 0)
+ *       < 60 days clean  → no deduction
  *   - Associates with zero incidents always show 0
  *
  * This function is used everywhere discipline levels, leaderboard,
@@ -176,8 +176,8 @@ export function getEffectivePoints(callIns, associateId) {
   const cleanDays = differenceInDays(new Date(), lastDate);
 
   let recovery = 0;
-  if (cleanDays >= 60) recovery = 1.0;
-  else if (cleanDays >= 30) recovery = 0.5;
+  if (cleanDays >= 120) recovery = 1.0;
+  else if (cleanDays >= 60) recovery = 0.5;
 
   return Math.max(0, Math.round((rawPts - recovery) * 10) / 10);
 }
@@ -188,7 +188,7 @@ export function getEffectivePoints(callIns, associateId) {
  */
 export function getCleanStreak(callIns, associateId) {
   const recent = get90DayCallIns(callIns, associateId);
-  if (recent.length === 0) return { days: 90, recovery: 0, label: '90+ days clean ✅' };
+  if (recent.length === 0) return { days: 180, recovery: 0, label: '180+ days clean ✅' };
 
   const lastDate = recent
     .map(c => new Date(c.date))
@@ -198,14 +198,14 @@ export function getCleanStreak(callIns, associateId) {
   let recovery = 0;
   let label = '';
 
-  if (days >= 60) {
+  if (days >= 120) {
     recovery = 1.0;
     label = `${days}-day clean streak → −1.0 pt applied ✅`;
-  } else if (days >= 30) {
+  } else if (days >= 60) {
     recovery = 0.5;
     label = `${days}-day clean streak → −0.5 pt applied ✅`;
   } else if (days > 0) {
-    const next = 30 - days;
+    const next = 60 - days;
     label = `${days}-day clean streak · ${next} day${next !== 1 ? 's' : ''} until −0.5 pt recovery`;
   } else {
     label = 'Incident today — recovery streak reset';
@@ -409,7 +409,7 @@ function LogCallInModal({ onClose, onSave, associates }) {
                 <p><strong>0 points</strong> — Protected/emergency category. No points assessed.</p>
               ) : (
                 <>
-                  <p><strong>+{pointValue} point{pointValue !== 1 ? 's' : ''}</strong> added to 90-day rolling total</p>
+                  <p><strong>+{pointValue} point{pointValue !== 1 ? 's' : ''}</strong> added to 6-month rolling total</p>
                   <p className="mt-0.5 opacity-80">{discipline.emoji} Discipline level: {discipline.label} — {discipline.action}</p>
                 </>
               )}
@@ -507,9 +507,9 @@ function LogCallInModal({ onClose, onSave, associates }) {
               <Info size={12} /> PX Attendance Point Recovery
             </p>
             <ul className="text-xs text-gray-500 space-y-0.5">
-              <li>• Points expire after <strong>90 days</strong> (rolling window)</li>
-              <li>• 30-day incident-free: <strong>−0.5 pt recovery</strong></li>
-              <li>• 60-day incident-free: <strong>−1 pt recovery</strong></li>
+              <li>• Points expire after <strong>6 months</strong> (rolling window)</li>
+              <li>• 60-day incident-free: <strong>−0.5 pt recovery</strong></li>
+              <li>• 120-day incident-free: <strong>−1 pt recovery</strong></li>
               <li>• Protected absences (FMLA, jury duty, etc.) = <strong>0 points</strong></li>
             </ul>
           </div>
@@ -687,7 +687,7 @@ function CallInDetailModal({ callIn, onClose, onDelete, associates, allCallIns }
                 <p>Protected absence — <strong>0 points</strong> assessed. Documentation on file.</p>
               ) : (
                 <>
-                  <p>+{pts} point{pts !== 1 ? 's' : ''} counted toward 90-day rolling total</p>
+                  <p>+{pts} point{pts !== 1 ? 's' : ''} counted toward 6-month rolling total</p>
                   <p className="mt-0.5 opacity-80">
                     {discipline.emoji} <strong>{discipline.label}</strong> — {discipline.action}
                   </p>
@@ -702,9 +702,9 @@ function CallInDetailModal({ callIn, onClose, onDelete, associates, allCallIns }
               <TrendingDown size={12} /> Point Recovery Reminders
             </p>
             <ul className="text-xs text-gray-400 space-y-0.5">
-              <li>• Points expire automatically after 90 days</li>
-              <li>• 30-day clean streak → −0.5 pt recovery</li>
-              <li>• 60-day clean streak → −1 pt recovery</li>
+              <li>• Points expire automatically after 6 months</li>
+              <li>• 60-day clean streak → −0.5 pt recovery</li>
+              <li>• 120-day clean streak → −1 pt recovery</li>
             </ul>
           </div>
 
@@ -831,15 +831,15 @@ function DisciplineLegend() {
             <ul className="text-xs text-gray-500 space-y-1">
               <li className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
-                30-day clean streak → <strong>−0.5 pt</strong> recovery bonus
+                60-day clean streak → <strong>−0.5 pt</strong> recovery bonus
               </li>
               <li className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
-                60-day clean streak → <strong>−1 pt</strong> recovery bonus
+                120-day clean streak → <strong>−1 pt</strong> recovery bonus
               </li>
               <li className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-gray-400 flex-shrink-0" />
-                All points expire after <strong>90 days</strong> (rolling)
+                All points expire after <strong>6 months</strong> (rolling)
               </li>
             </ul>
           </div>
@@ -877,7 +877,7 @@ function AssociateReportPicker({ associates, callIns, onPrint }) {
       </p>
       <p className="text-xs text-gray-400 mb-3">
         Select an associate to generate a personalized attendance summary they can review and sign.
-        Includes their 90-day incidents, current standing, clean streak, and the full discipline scale.
+        Includes their 6-month incidents, current standing, clean streak, and the full discipline scale.
       </p>
 
       <div className="flex gap-2 items-start">
@@ -947,7 +947,7 @@ function PointsLeaderboard({ callIns, associates, onPrintAssociate }) {
     <div className="bg-white rounded-xl shadow-sm p-4">
       <div className="flex items-center gap-2 font-semibold text-gray-800 mb-3">
         <Shield size={18} className="text-primary" />
-        90-Day Attendance Points
+        6-Month Attendance Points
         <span className="ml-auto text-xs text-gray-400 font-normal">Rolling window</span>
       </div>
       <div className="space-y-2.5">
@@ -1088,9 +1088,9 @@ export default function CallIns() {
         </tbody>
       </table>
 
-      <h2 class="section-title">90-Day Points by Associate</h2>
+      <h2 class="section-title">6-Month Points by Associate</h2>
       <table>
-        <thead><tr><th>Associate</th><th>90-Day Points</th><th>Incidents</th><th>Discipline Level</th></tr></thead>
+        <thead><tr><th>Associate</th><th>6-Month Points</th><th>Incidents</th><th>Discipline Level</th></tr></thead>
         <tbody>
           ${[...associates].sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(a => {
             const pts = getEffectivePoints(callIns, a.id);
@@ -1216,7 +1216,7 @@ export default function CallIns() {
         {/* Per-associate attendance report picker */}
         <AssociateReportPicker associates={associates} callIns={callIns} onPrint={handlePrintAssociate} />
 
-        {/* 90-day points leaderboard */}
+        {/* 6-month points leaderboard */}
         <PointsLeaderboard callIns={callIns} associates={associates} onPrintAssociate={handlePrintAssociate} />
 
         {/* Discipline scale (collapsible) */}
