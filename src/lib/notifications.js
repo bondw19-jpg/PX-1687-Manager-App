@@ -42,7 +42,7 @@ function getCallInPoints(c) {
 }
 
 function get90DayCallIns(callIns, associateId) {
-  const cutoff = subDays(new Date(), 90);
+  const cutoff = subDays(new Date(), 180);
   return callIns.filter(
     c => c.associateId === associateId && isAfter(new Date(c.date), cutoff)
   );
@@ -50,10 +50,10 @@ function get90DayCallIns(callIns, associateId) {
 
 /**
  * getEffectivePoints — mirrors the logic in CallIns.jsx.
- * Applies 30/60-day clean-streak recovery automatically:
- *   60+ days clean → −1.0 pt
- *   30–59 days clean → −0.5 pt
- *   < 30 days clean → no deduction
+ * Applies 60/120-day clean-streak recovery automatically:
+ *   120+ days clean → −1.0 pt
+ *   60–119 days clean → −0.5 pt
+ *   < 60 days clean → no deduction
  */
 function getEffectivePoints(callIns, associateId) {
   const recent = get90DayCallIns(callIns, associateId);
@@ -68,8 +68,8 @@ function getEffectivePoints(callIns, associateId) {
 
   const cleanDays = differenceInDays(new Date(), lastDate);
   let recovery = 0;
-  if (cleanDays >= 60) recovery = 1.0;
-  else if (cleanDays >= 30) recovery = 0.5;
+  if (cleanDays >= 120) recovery = 1.0;
+  else if (cleanDays >= 60) recovery = 0.5;
 
   return Math.max(0, Math.round((rawPts - recovery) * 10) / 10);
 }
@@ -104,7 +104,7 @@ export function generateNotifications({
   const alerts = [];
   const today  = new Date();
 
-  // ── 1. ATTENDANCE: per-associate 90-day point thresholds ──────────────────
+  // ── 1. ATTENDANCE: per-associate 6-month point thresholds ──────────────────
   associates.forEach(a => {
     const pts   = getEffectivePoints(callIns, a.id);
     const count = get90DayCount(callIns, a.id);
@@ -116,7 +116,7 @@ export function generateNotifications({
         type: 'attendance', level: 'critical',
         icon: '🔴',
         title: `${a.name} — Termination Eligible`,
-        body:  `${pts} pts in 90 days (${count} incident${count !== 1 ? 's' : ''}). Immediate action required.`,
+        body:  `${pts} pts in 6 months (${count} incident${count !== 1 ? 's' : ''}). Immediate action required.`,
         link: '/callins',
         ts: Date.now(),
       });
@@ -126,7 +126,7 @@ export function generateNotifications({
         type: 'attendance', level: 'critical',
         icon: '⚠️',
         title: `${a.name} — Final Written Warning`,
-        body:  `${pts} pts in 90 days. Issue Final Written Warning per PX policy.`,
+        body:  `${pts} pts in 6 months. Issue Final Written Warning per PX policy.`,
         link: '/callins',
         ts: Date.now(),
       });
@@ -136,7 +136,7 @@ export function generateNotifications({
         type: 'attendance', level: 'warning',
         icon: '📋',
         title: `${a.name} — First Written Warning`,
-        body:  `${pts} pts in 90 days. Issue First Written Warning.`,
+        body:  `${pts} pts in 6 months. Issue First Written Warning.`,
         link: '/callins',
         ts: Date.now(),
       });
@@ -146,7 +146,7 @@ export function generateNotifications({
         type: 'attendance', level: 'info',
         icon: '💬',
         title: `${a.name} — Coaching Needed`,
-        body:  `${pts} pts in 90 days. Schedule a coaching conversation.`,
+        body:  `${pts} pts in 6 months. Schedule a coaching conversation.`,
         link: '/callins',
         ts: Date.now(),
       });
