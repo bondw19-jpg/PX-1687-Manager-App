@@ -191,17 +191,36 @@ function ShiftTab() {
 function CustomChecklistModal({ checklist, onSave, onClose }) {
   const { associates } = useAppStore();
   const isNew = !checklist;
-  const [name, setName]         = useState(checklist?.name || '');
-  const [items, setItems]       = useState(checklist?.items || []);
-  const [newText, setNewText]   = useState('');
+  const [name, setName]       = useState(checklist?.name || '');
+  const [items, setItems]     = useState(checklist?.items || []);
+  const [assignees, setAssignees] = useState(checklist?.assignees || []);
+  const [assignLevel, setAssignLevel] = useState(() => {
+    if (!checklist?.assignees?.length) return '';
+    if (checklist.assignees.length > 1) return 'All Team';
+    return checklist.assignees[0]?.name || '';
+  });
+  const [newText, setNewText] = useState('');
   const [newAssignee, setNewAssignee] = useState('');
   const inputRef = useRef(null);
 
-  // Sorted associate names for dropdown
   const assocNames = [...(associates || [])]
     .map(a => a.name || `${a.firstName || ''} ${a.lastName || ''}`.trim())
     .filter(Boolean)
     .sort((a, b) => a.localeCompare(b));
+
+  const handleAssignLevelChange = (val) => {
+    setAssignLevel(val);
+    if (val === 'All Team') {
+      setAssignees(assocNames.map(n => ({ name: n, completed: false })));
+    } else if (val) {
+      setAssignees([{ name: val, completed: false }]);
+    } else {
+      setAssignees([]);
+    }
+  };
+
+  const removeAssignee = (name) =>
+    setAssignees(prev => prev.filter(a => a.name !== name));
 
   const addItem = () => {
     const text = newText.trim();
@@ -219,17 +238,16 @@ function CustomChecklistModal({ checklist, onSave, onClose }) {
 
   const removeItem = (id) => setItems(prev => prev.filter(i => i.id !== id));
 
-  // Update the assignee of an existing item inline
   const updateAssignee = (id, assignee) =>
     setItems(prev => prev.map(i => i.id === id ? { ...i, assignee } : i));
 
   const handleSave = () => {
     if (!name.trim()) return alert('Please enter a checklist name.');
-    if (items.length === 0) return alert('Add at least one item.');
     onSave({
       id:        checklist?.id || `cl_${Date.now()}`,
       name:      name.trim(),
       items,
+      assignees,
       createdAt: checklist?.createdAt || new Date().toISOString(),
     });
   };
@@ -256,9 +274,45 @@ function CustomChecklistModal({ checklist, onSave, onClose }) {
             />
           </div>
 
-          {/* Add item row */}
+          {/* Checklist-level Assign To */}
           <div>
-            <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Add Task</label>
+            <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Assign Checklist To</label>
+            <div className="flex items-center gap-2">
+              <User size={14} className="text-gray-400 flex-shrink-0" />
+              <select
+                className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 bg-white"
+                value={assignLevel}
+                onChange={e => handleAssignLevelChange(e.target.value)}>
+                <option value="">No assignment</option>
+                <option value="All Team">⭐ All Team</option>
+                {assocNames.map(n => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Assignee chips */}
+            {assignees.length > 0 && (
+              <div className="mt-2.5 flex flex-wrap gap-2">
+                {assignees.map(a => (
+                  <div key={a.name} className="flex items-center gap-1.5 bg-red-50 border border-red-100 text-primary text-xs font-semibold px-2.5 py-1.5 rounded-full">
+                    <User size={11} />
+                    {a.name}
+                    <button
+                      onClick={() => removeAssignee(a.name)}
+                      className="ml-0.5 text-red-400 hover:text-red-600"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Add task row */}
+          <div>
+            <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Tasks <span className="font-normal text-gray-400">(optional)</span></label>
             <div className="flex gap-2 mb-2">
               <input
                 ref={inputRef}
@@ -273,14 +327,14 @@ function CustomChecklistModal({ checklist, onSave, onClose }) {
                 <Plus size={15} /> Add
               </button>
             </div>
-            {/* Assign To row */}
+            {/* Per-task assign */}
             <div className="flex items-center gap-2">
               <User size={14} className="text-gray-400 flex-shrink-0" />
               <select
                 className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 bg-white"
                 value={newAssignee}
                 onChange={e => setNewAssignee(e.target.value)}>
-                <option value="">Assign to (optional)</option>
+                <option value="">Assign task to (optional)</option>
                 <option value="All Team">⭐ All Team</option>
                 {assocNames.map(n => (
                   <option key={n} value={n}>{n}</option>
@@ -302,7 +356,6 @@ function CustomChecklistModal({ checklist, onSave, onClose }) {
                       <Trash2 size={14} />
                     </button>
                   </div>
-                  {/* Per-item assignee */}
                   <div className="flex items-center gap-2 pl-7">
                     <User size={12} className="text-gray-400 flex-shrink-0" />
                     <select
@@ -341,7 +394,8 @@ function CustomChecklistModal({ checklist, onSave, onClose }) {
 
 // ─── Custom Checklist Detail (use / check off) ────────────────────────────────
 function CustomChecklistDetail({ checklist, onUpdate, onBack }) {
-  const [items, setItems] = useState(checklist.items || []);
+  const [items, setItems]       = useState(checklist.items || []);
+  const [assignees, setAssignees] = useState(checklist.assignees || []);
   const checked = items.filter(i => i.checked).length;
   const total   = items.length;
   const pct     = total > 0 ? Math.round((checked / total) * 100) : 0;
@@ -349,13 +403,20 @@ function CustomChecklistDetail({ checklist, onUpdate, onBack }) {
   const toggle = (id) =>
     setItems(prev => prev.map(i => i.id === id ? { ...i, checked: !i.checked } : i));
 
+  const toggleAssignee = (name) =>
+    setAssignees(prev => prev.map(a => a.name === name ? { ...a, completed: !a.completed } : a));
+
+  const removeAssignee = (name) =>
+    setAssignees(prev => prev.filter(a => a.name !== name));
+
   const resetAll = () => {
     if (!window.confirm('Reset all items?')) return;
     setItems(prev => prev.map(i => ({ ...i, checked: false })));
+    setAssignees(prev => prev.map(a => ({ ...a, completed: false })));
   };
 
   const handleSave = () => {
-    onUpdate({ ...checklist, items });
+    onUpdate({ ...checklist, items, assignees });
   };
 
   const handlePrint = () => {
@@ -425,7 +486,45 @@ function CustomChecklistDetail({ checklist, onUpdate, onBack }) {
         </div>
       </div>
 
-      {/* Items */}
+      {/* Assignees completion tracker */}
+      {assignees.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+            <p className="text-xs font-bold text-gray-600 uppercase tracking-wide flex items-center gap-1.5">
+              <User size={13} /> Assigned To
+            </p>
+            <span className="text-xs text-gray-400">
+              {assignees.filter(a => a.completed).length}/{assignees.length} completed
+            </span>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {assignees.map(a => (
+              <div key={a.name} className={`flex items-center gap-3 px-4 py-3 transition-all ${a.completed ? 'bg-green-50/60' : ''}`}>
+                <button onClick={() => toggleAssignee(a.name)} className="flex-shrink-0">
+                  {a.completed
+                    ? <CheckCircle2 size={22} className="text-green-500" />
+                    : <Circle size={22} className="text-gray-300" />}
+                </button>
+                <span className={`flex-1 text-sm font-medium ${a.completed ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                  {a.name}
+                </span>
+                {a.completed && (
+                  <span className="text-[11px] font-semibold text-green-600 bg-green-100 px-2 py-0.5 rounded-full flex-shrink-0">Done</span>
+                )}
+                <button
+                  onClick={() => removeAssignee(a.name)}
+                  className="p-1 text-gray-300 hover:text-red-500 flex-shrink-0"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tasks */}
+      {items.length > 0 && (
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         <div className="divide-y divide-gray-50">
           {items.map(item => (
@@ -450,6 +549,7 @@ function CustomChecklistDetail({ checklist, onUpdate, onBack }) {
           ))}
         </div>
       </div>
+      )}
 
       <button onClick={handleSave}
         className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2">
