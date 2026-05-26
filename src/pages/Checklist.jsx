@@ -620,8 +620,9 @@ function MyChecklistsTab() {
       ) : (
         <div className="space-y-2">
           {[...customChecklists].sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || '')).map(cl => {
-            const done  = (cl.items || []).filter(i => i.checked).length;
-            const total = (cl.items || []).length;
+            const done  = (cl.items || []).filter(i => i.checked).length
+                        + (cl.assignees || []).filter(a => a.completed).length;
+            const total = (cl.items || []).length + (cl.assignees || []).length;
             const pct   = total > 0 ? Math.round((done / total) * 100) : 0;
             // Collect unique assignees for display
             const assignees = [...new Set((cl.items || []).map(i => i.assignee).filter(Boolean))];
