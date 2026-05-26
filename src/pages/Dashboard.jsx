@@ -203,7 +203,7 @@ export default function Dashboard() {
 
   // ── Attendance analytics ──────────────────────────────────────────────────
   const POINTS_MAP = { 'No-Show': 3, 'Unexcused': 2, 'Late/Tardy': 1, 'Excused': 0 };
-  const cutoff90 = subDays(new Date(), 90);
+  const cutoff90 = subDays(new Date(), 180);
 
   // Top 3 by incidents this month
   const topAbsent = (() => {
@@ -217,7 +217,7 @@ export default function Dashboard() {
     return Object.values(map).sort((a, b) => b.pts - a.pts).slice(0, 3);
   })();
 
-  // At-risk associates (5+ pts in 90 days)
+  // At-risk associates (5+ pts in 6 months)
   const atRisk = associates.filter(a => {
     const pts = callIns
       .filter(c => c.associateId === a.id && isAfter(new Date(c.date || 0), cutoff90))
