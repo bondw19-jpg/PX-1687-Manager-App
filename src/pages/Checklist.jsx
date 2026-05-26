@@ -281,6 +281,7 @@ function CustomChecklistModal({ checklist, onSave, onClose }) {
                 value={newAssignee}
                 onChange={e => setNewAssignee(e.target.value)}>
                 <option value="">Assign to (optional)</option>
+                <option value="All Team">⭐ All Team</option>
                 {assocNames.map(n => (
                   <option key={n} value={n}>{n}</option>
                 ))}
@@ -309,6 +310,7 @@ function CustomChecklistModal({ checklist, onSave, onClose }) {
                       value={item.assignee || ''}
                       onChange={e => updateAssignee(item.id, e.target.value)}>
                       <option value="">Unassigned</option>
+                      <option value="All Team">⭐ All Team</option>
                       {assocNames.map(n => (
                         <option key={n} value={n}>{n}</option>
                       ))}
