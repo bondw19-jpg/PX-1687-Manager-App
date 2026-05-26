@@ -682,7 +682,7 @@ function MyChecklistsTab() {
 
 // ─── Main Checklist Page ──────────────────────────────────────────────────────
 export default function Checklist() {
-  const [mainTab, setMainTab] = useState('shift'); // 'shift' | 'custom'
+  const [mainTab, setMainTab] = useState('custom'); // 'shift' | 'custom'
 
   return (
     <div className="min-h-screen bg-background">
@@ -692,17 +692,17 @@ export default function Checklist() {
       <div className="desktop-page-content p-4 lg:p-0 space-y-4">
         {/* Main tabs */}
         <div className="flex bg-white rounded-xl shadow-sm overflow-hidden">
+          <button onClick={() => setMainTab('custom')}
+            className={`flex-1 py-3 text-sm font-semibold border-b-2 transition-all flex items-center justify-center gap-2 ${
+              mainTab === 'custom' ? 'border-primary text-primary bg-red-50' : 'border-transparent text-gray-500'
+            }`}>
+            <ListChecks size={16} /> Team Checklists
+          </button>
           <button onClick={() => setMainTab('shift')}
             className={`flex-1 py-3 text-sm font-semibold border-b-2 transition-all flex items-center justify-center gap-2 ${
               mainTab === 'shift' ? 'border-primary text-primary bg-red-50' : 'border-transparent text-gray-500'
             }`}>
             <ClipboardCheck size={16} /> Shift Checklists
-          </button>
-          <button onClick={() => setMainTab('custom')}
-            className={`flex-1 py-3 text-sm font-semibold border-b-2 transition-all flex items-center justify-center gap-2 ${
-              mainTab === 'custom' ? 'border-primary text-primary bg-red-50' : 'border-transparent text-gray-500'
-            }`}>
-            <ListChecks size={16} /> Team Checklist
           </button>
         </div>
 
