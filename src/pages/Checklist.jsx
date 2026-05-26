@@ -396,8 +396,10 @@ function CustomChecklistModal({ checklist, onSave, onClose }) {
 function CustomChecklistDetail({ checklist, onUpdate, onBack }) {
   const [items, setItems]       = useState(checklist.items || []);
   const [assignees, setAssignees] = useState(checklist.assignees || []);
-  const checked = items.filter(i => i.checked).length;
-  const total   = items.length;
+  const checkedItems       = items.filter(i => i.checked).length;
+  const completedAssignees = assignees.filter(a => a.completed).length;
+  const checked = checkedItems + completedAssignees;
+  const total   = items.length + assignees.length;
   const pct     = total > 0 ? Math.round((checked / total) * 100) : 0;
 
   const toggle = (id) =>
