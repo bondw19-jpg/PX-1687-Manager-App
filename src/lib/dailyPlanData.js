@@ -131,6 +131,7 @@ export const SEVEN_ACTIONS = {
       { id: 'tue_boh_0', task: 'Deep clean and polish, gaskets, wheels, vent, cables, doors, hinges, cover panel' },
       { id: 'tue_boh_1', task: 'Remove warmer metal parts, clean, replace' },
       { id: 'tue_boh_2', task: "Deep clean cook's condiment cart" },
+      { id: 'tue_boh_3', task: 'Deep clean thawing cabinet' },
     ],
   },
   3: {
