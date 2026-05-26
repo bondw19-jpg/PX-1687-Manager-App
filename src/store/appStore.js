@@ -279,7 +279,7 @@ export const useAppStore = create(
         // trail — regardless of whether a discipline threshold has been crossed.
         // Protected / emergency categories (0 pts) are skipped.
         if (doc.associateId) {
-          const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 90);
+          const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 180);
 
           // Resolve point value — supports new subtype system and legacy types
           const getDocPoints = (x) => {
@@ -302,7 +302,7 @@ export const useAppStore = create(
           const catKey = getCatKey(doc);
           // Skip protected / emergency (0 pts, no catKey)
           if (catKey) {
-            // Build the full 90-day window for this associate (include the new doc)
+            // Build the full 6-month window for this associate (include the new doc)
             // Note: set() already ran above so get().callIns may already contain doc;
             // de-duplicate by id to avoid double-counting.
             const allRecent = get().callIns.filter(x =>
@@ -344,7 +344,7 @@ export const useAppStore = create(
               id:      Date.now() + Math.random(),
               date:    doc.date,
               key:     catKey,
-              details: `Auto [PX Policy]: ${subtypeLabel} — incident #${count} / ${pts} pts in 90 days${recoveryNote}${disciplineNote}.${doc.reason ? ' Reason: ' + doc.reason : ''}${doc.managerNote ? ' Note: ' + doc.managerNote : ''}`,
+              details: `Auto [PX Policy]: ${subtypeLabel} — incident #${count} / ${pts} pts in 6 months${recoveryNote}${disciplineNote}.${doc.reason ? ' Reason: ' + doc.reason : ''}${doc.managerNote ? ' Note: ' + doc.managerNote : ''}`,
               addedBy: u ? { uid: u.uid, name: firstName(u.name || u.email?.split('@')[0]) } : null,
             };
             const existing    = get().workFiles[doc.associateId] || { rows: [] };
