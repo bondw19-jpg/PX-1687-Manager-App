@@ -368,7 +368,7 @@ export function disciplineLabel(pts) {
  *  - Associate info header
  *  - Current standing card (effective points, discipline level)
  *  - Clean-streak & recovery status
- *  - Full incident log (90-day window, sorted newest first)
+ *  - Full incident log (6-month window, sorted newest first)
  *  - Complete discipline scale explanation
  *  - Acknowledgment / signature block
  *
@@ -378,7 +378,7 @@ export function disciplineLabel(pts) {
 export function printAssociateAttendanceReport(associate, allCallIns) {
   // ── helpers ────────────────────────────────────────────────────────────────
   const today   = new Date();
-  const cutoff  = new Date(today); cutoff.setDate(cutoff.getDate() - 90);
+  const cutoff  = new Date(today); cutoff.setDate(cutoff.getDate() - 180);
 
   function safeDate(str) {
     try { const d = new Date(str); return isNaN(d) ? null : d; } catch { return null; }
@@ -449,14 +449,14 @@ export function printAssociateAttendanceReport(associate, allCallIns) {
       .filter(Boolean)
       .reduce((latest, d) => (d > latest ? d : latest), new Date(0));
     cleanDays = Math.floor((today - lastDate) / 86400000);
-    if (cleanDays >= 60)      { recovery = 1.0; streakLabel = `${cleanDays}-day clean streak → −1.0 pt recovery applied ✅`; }
-    else if (cleanDays >= 30) { recovery = 0.5; streakLabel = `${cleanDays}-day clean streak → −0.5 pt recovery applied ✅`; }
+    if (cleanDays >= 120)     { recovery = 1.0; streakLabel = `${cleanDays}-day clean streak → −1.0 pt recovery applied ✅`; }
+    else if (cleanDays >= 60) { recovery = 0.5; streakLabel = `${cleanDays}-day clean streak → −0.5 pt recovery applied ✅`; }
     else {
-      const next = cleanDays < 30 ? 30 - cleanDays : 60 - cleanDays;
+      const next = cleanDays < 60 ? 60 - cleanDays : 120 - cleanDays;
       streakLabel = `${cleanDays}-day clean streak · ${next} more day${next !== 1 ? 's' : ''} until next recovery bonus`;
     }
   } else {
-    cleanDays = 90; streakLabel = '90+ days incident-free ✅';
+    cleanDays = 180; streakLabel = '180+ days incident-free ✅';
   }
   const effectivePts = Math.max(0, Math.round((rawPts - recovery) * 10) / 10);
   const dc = disciplineColorCss(effectivePts);
@@ -465,7 +465,7 @@ export function printAssociateAttendanceReport(associate, allCallIns) {
   const printDate = today.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
   const incidentRows = recent90.length === 0
-    ? '<tr><td colspan="5" style="text-align:center;color:#888;padding:16px">No incidents in the past 90 days ✅</td></tr>'
+    ? '<tr><td colspan="5" style="text-align:center;color:#888;padding:16px">No incidents in the past 6 months ✅</td></tr>'
     : recent90.map(c => {
         const pts = getPoints(c);
         const isZero = pts === 0;
@@ -489,7 +489,7 @@ export function printAssociateAttendanceReport(associate, allCallIns) {
     return d && d < cutoff;
   });
   const expiredSection = allRows.length > 0 ? `
-    <h2 class="section-title" style="color:#999;border-color:#ddd">Expired Records (older than 90 days — 0 pts)</h2>
+    <h2 class="section-title" style="color:#999;border-color:#ddd">Expired Records (older than 6 months — 0 pts)</h2>
     <table>
       <thead><tr>
         <th>Date</th><th>Category</th><th>Type</th><th style="width:60px">Original Pts</th>
@@ -527,7 +527,7 @@ export function printAssociateAttendanceReport(associate, allCallIns) {
     <div style="border:2px solid ${dc.border};background:${dc.bg};border-radius:10px;padding:14px 18px;margin-bottom:16px">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
         <div>
-          <div style="font-size:11px;font-weight:bold;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Current Standing — 90-Day Rolling Window</div>
+          <div style="font-size:11px;font-weight:bold;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Current Standing — 6-Month Rolling Window</div>
           <div style="font-size:22px;font-weight:bold;color:${dc.text}">${dc.label}</div>
         </div>
         <div style="text-align:right">
@@ -552,8 +552,8 @@ export function printAssociateAttendanceReport(associate, allCallIns) {
       </div>
     </div>` : ''}
 
-    <!-- 90-day incident log -->
-    <h2 class="section-title">Attendance Incidents — Past 90 Days (${recent90.length} record${recent90.length !== 1 ? 's' : ''})</h2>
+    <!-- 6-month incident log -->
+    <h2 class="section-title">Attendance Incidents — Past 6 Months (${recent90.length} record${recent90.length !== 1 ? 's' : ''})</h2>
     <table>
       <thead><tr>
         <th style="width:90px">Date</th>
@@ -593,9 +593,9 @@ export function printAssociateAttendanceReport(associate, allCallIns) {
         <div class="legend-item">🚫 No-Show (no contact): <strong>3.0 pts</strong></div>
         <div class="legend-item">🛡️ FMLA / Jury / Military / Bereavement: <strong>0 pts</strong></div>
         <div class="legend-item">🏥 Emergency (with documentation): <strong>0 pts</strong></div>
-        <div class="legend-item">♻️ 30-day clean streak: <strong>−0.5 pt recovery</strong></div>
-        <div class="legend-item">♻️ 60-day clean streak: <strong>−1.0 pt recovery</strong></div>
-        <div class="legend-item" style="grid-column:1/-1;color:#888">All points expire after 90 days on a rolling basis.</div>
+        <div class="legend-item">♻️ 60-day clean streak: <strong>−0.5 pt recovery</strong></div>
+        <div class="legend-item">♻️ 120-day clean streak: <strong>−1.0 pt recovery</strong></div>
+        <div class="legend-item" style="grid-column:1/-1;color:#888">All points expire after 6 months on a rolling basis.</div>
       </div>
     </div>
 
@@ -605,7 +605,7 @@ export function printAssociateAttendanceReport(associate, allCallIns) {
         Associate Acknowledgment
       </div>
       <p style="font-size:11px;color:#555;margin-bottom:18px">
-        I acknowledge that I have reviewed my attendance record for the past 90 days and understand my current standing
+        I acknowledge that I have reviewed my attendance record for the past 6 months and understand my current standing
         under the Panda Express Attendance Point System. I understand the point values, the progressive discipline scale,
         and the recovery bonus for incident-free periods.
       </p>
@@ -628,7 +628,7 @@ export function printAssociateAttendanceReport(associate, allCallIns) {
 
   openPrintWindow({
     title: `Attendance Review — ${associate.name || 'Associate'}`,
-    subtitle: `Printed ${printDate} · 90-Day Rolling Window`,
+    subtitle: `Printed ${printDate} · 6-Month Rolling Window`,
     html,
   });
 }
