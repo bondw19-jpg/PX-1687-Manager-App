@@ -210,7 +210,7 @@ function ViewAssociateModal({ associate, onClose }) {
           <div className={`rounded-xl p-3 border ${pointsColor(pts)}`}>
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-bold flex items-center gap-1.5">
-                <Shield size={13} /> 90-Day Attendance Points
+                <Shield size={13} /> 6-Month Attendance Points
               </p>
               <span className="text-lg font-bold">{pointsEmoji(pts)} {pts} pt{pts !== 1 ? 's' : ''}</span>
             </div>
@@ -220,7 +220,7 @@ function ViewAssociateModal({ associate, onClose }) {
                 style={{ width: `${Math.min(100, (pts / 8) * 100)}%` }} />
             </div>
             <p className="text-[11px] opacity-80">
-              {pts === 0 ? 'No incidents in the last 90 days — great attendance!' :
+              {pts === 0 ? 'No incidents in the last 6 months — great attendance!' :
                pts <= 2 ? `${incidents.length} incident${incidents.length !== 1 ? 's' : ''} — within acceptable range` :
                pts <= 4 ? `${incidents.length} incidents — verbal warning recommended` :
                `${incidents.length} incidents — written warning / counseling required`}
@@ -329,7 +329,7 @@ export default function Associates() {
       <table>
         <thead><tr>
           <th>Name</th><th>Position</th><th>Employee ID</th>
-          <th>Status</th><th>Hire Date</th><th>90-Day Pts</th><th>Discipline Level</th>
+          <th>Status</th><th>Hire Date</th><th>6-Month Pts</th><th>Discipline Level</th>
         </tr></thead>
         <tbody>
           ${list.map(a => {
@@ -479,7 +479,7 @@ export default function Associates() {
                       <User size={9} /> Added by {assoc.createdBy.name}
                     </p>
                   )}
-                  {/* 90-day attendance points badge */}
+                  {/* 6-month attendance points badge */}
                   {(() => {
                     const pts = get90DayPoints(callIns, assoc.id);
                     const cnt = get90DayCallIns(callIns, assoc.id).length;
