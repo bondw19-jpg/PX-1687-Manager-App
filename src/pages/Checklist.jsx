@@ -422,34 +422,62 @@ function CustomChecklistDetail({ checklist, onUpdate, onBack }) {
   };
 
   const handlePrint = () => {
-    const todayLabel = format(new Date(), 'MMM d, yyyy');
-    const hasAssignees = items.some(i => i.assignee);
+    const todayLabel  = format(new Date(), 'MMM d, yyyy');
+    const hasItemAssignees = items.some(i => i.assignee);
+
+    const assigneesSection = assignees.length > 0 ? `
+      <h2 class="section-title">👥 Assigned To — Completion Status</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:40px">#</th>
+            <th>Team Member</th>
+            <th style="width:100px">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${assignees.map((a, i) =>
+            '<tr>' +
+            '<td>' + (i + 1) + '</td>' +
+            '<td style="' + (a.completed ? 'text-decoration:line-through;color:#888' : 'font-weight:600') + '">' + a.name + '</td>' +
+            '<td>' + (a.completed ? '✅ Done' : '☐ Pending') + '</td>' +
+            '</tr>'
+          ).join('')}
+        </tbody>
+      </table>` : '';
+
+    const tasksSection = items.length > 0 ? `
+      <h2 class="section-title">✅ Tasks (${checkedItems}/${items.length} completed)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:40px">#</th>
+            <th>Task</th>
+            ${hasItemAssignees ? '<th style="width:130px">Assigned To</th>' : ''}
+            <th style="width:90px">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${items.map((item, i) =>
+            '<tr>' +
+            '<td>' + (i + 1) + '</td>' +
+            '<td style="' + (item.checked ? 'text-decoration:line-through;color:#888' : '') + '">' + item.text + '</td>' +
+            (hasItemAssignees ? '<td style="font-size:11px;color:#666">' + (item.assignee || '—') + '</td>' : '') +
+            '<td>' + (item.checked ? '✅ Done' : '☐ Pending') + '</td>' +
+            '</tr>'
+          ).join('')}
+        </tbody>
+      </table>` : '';
+
     const html = `
       ${statsRowHtml([
         { value: checked + '/' + total, label: 'Completed' },
         { value: pct + '%',             label: 'Completion Rate' },
         { value: todayLabel,            label: 'Date' },
       ])}
-      <h2 class="section-title">📋 ${checklist.name} — ${todayLabel}</h2>
-      <table>
-        <thead>
-          <tr>
-            <th style="width:40px">#</th>
-            <th>Task</th>
-            ${hasAssignees ? '<th style="width:120px">Assigned To</th>' : ''}
-            <th style="width:80px">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${items.map((item, i) => '<tr>' +
-            '<td>' + (i + 1) + '</td>' +
-            '<td style="' + (item.checked ? 'text-decoration:line-through;color:#888' : '') + '">' + item.text + '</td>' +
-            (hasAssignees ? '<td style="font-size:11px;color:#666">' + (item.assignee || '—') + '</td>' : '') +
-            '<td>' + (item.checked ? '✅ Done' : '☐ Pending') + '</td>' +
-          '</tr>').join('')}
-        </tbody>
-      </table>
-      <p style="margin-top:10px;font-size:11px;color:#888">Manager sign-off: ___________________________________  Date: _________________</p>`;
+      ${assigneesSection}
+      ${tasksSection}
+      <p style="margin-top:16px;font-size:11px;color:#888">Manager sign-off: ___________________________________  Date: _________________</p>`;
     openPrintWindow({ title: checklist.name, subtitle: todayLabel, html });
   };
 
