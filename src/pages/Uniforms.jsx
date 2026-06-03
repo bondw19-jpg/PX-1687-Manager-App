@@ -44,15 +44,11 @@ const SIZE_OPTIONS = [
 ];
 
 const ITEM_COLORS = {
-  'Hat / Cap':    ['Black', 'Red', 'Other'],
-  'Shirt':        ['Black', 'Red', 'Other'],
-  'Apron':        ['Black', 'Other'],
-  'Back Brace':   ['Black', 'Beige', 'Other'],
-  'Full Uniform': ['Black', 'Red', 'Other'],
-  'Other':        ['Black', 'Red', 'White', 'Gray', 'Khaki', 'Navy', 'Other'],
+  'Shirt': ['Red', 'Black'],
+  'Other': ['Black', 'Red', 'White', 'Gray', 'Khaki', 'Navy', 'Other'],
 };
 const colorOptionsFor = (item) => ITEM_COLORS[item] || [];
-const ALL_COLORS = ['Black', 'Red', 'White', 'Gray', 'Khaki', 'Navy', 'Beige', 'Other'];
+const ALL_COLORS = ['Black', 'Red', 'White', 'Gray', 'Khaki', 'Navy', 'Other'];
 
 const ISSUE_TYPES = [
   { value: 'compliant', label: 'Compliant' },
@@ -169,7 +165,7 @@ function UniformModal({ record, associates, onClose }) {
         <ModalHeader icon={<Shirt size={20} />} title={record ? 'Edit Uniform Check' : 'New Uniform Check'} subtitle="Track compliance, replacements, and follow-up." onClose={onClose} />
         <div className="modal-body p-4 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Field label="Associate"><select value={form.associateId} onChange={e => setField('associateId', e.target.value)} className="form-select"><option value="">Select associate...</option>{associates.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>
+            <Field label="Associate"><select value={form.associateId} onChange={e => setField('associateId', e.target.value)} className="form-select"><option value="">Select associate...</option>{[...associates].sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>
             <Field label="Check Date"><input type="date" value={form.date} onChange={e => setField('date', e.target.value)} className="form-input" /></Field>
             <Field label="Uniform Item"><select value={form.item} onChange={e => setField('item', e.target.value)} className="form-select">{UNIFORM_ITEMS.map(item => <option key={item} value={item}>{item}</option>)}</select></Field>
             <Field label="Issue Type"><select value={form.issueType} onChange={e => setField('issueType', e.target.value)} className="form-select">{ISSUE_TYPES.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
@@ -408,7 +404,7 @@ function AssociateItemModal({ record, associates, inventory, managerQtyByInvento
         <ModalHeader icon={<UserRound size={20} />} title={record ? 'Edit Associate Item' : 'Issue Associate Item'} subtitle="Track uniforms issued to associates." onClose={onClose} />
         <div className="modal-body p-4 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Field label="Associate"><select value={form.associateId} onChange={e => setField('associateId', e.target.value)} className="form-select"><option value="">Select associate...</option>{associates.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>
+            <Field label="Associate"><select value={form.associateId} onChange={e => setField('associateId', e.target.value)} className="form-select"><option value="">Select associate...</option>{[...associates].sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>
             <Field label="Quantity"><input type="number" min="1" value={form.qty} onChange={e => setField('qty', e.target.value)} className="form-input" /></Field>
             <Field label="Issued Date"><input type="date" value={form.issuedDate} onChange={e => setField('issuedDate', e.target.value)} className="form-input" /></Field>
             <Field label="Status"><select value={form.status} onChange={e => setField('status', e.target.value)} className="form-select">{Object.entries(ASSOCIATE_ITEM_STATUS).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</select></Field>
