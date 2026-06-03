@@ -227,7 +227,7 @@ function InventoryModal({ record, onClose }) {
 }
 
 function ManagerStockModal({ record, inventory, managerQtyByInventoryId, associateQtyByInventoryId, managers, onClose }) {
-  const { addManagerUniformStock, updateManagerUniformStock } = useAppStore();
+  const { addManagerUniformStock, updateManagerUniformStock, addUniformInventoryItem } = useAppStore();
   const [form, setForm] = useState(() => ({
     managerName: record?.managerName || '',
     inventoryItemId: record?.inventoryItemId || '',
@@ -254,8 +254,36 @@ function ManagerStockModal({ record, inventory, managerQtyByInventoryId, associa
     e.preventDefault();
     if (!form.managerName) return alert('Please choose a manager.');
     if (!form.item) return alert('Please choose a uniform item.');
+
+    let inventoryItemId = form.inventoryItemId;
+
+    // Auto-create an inventory item if this item+size+color has no record yet
+    if (!inventoryItemId && form.item) {
+      const existing = inventory.find(
+        i => i.item === form.item && i.size === (form.size || '') && i.color === (form.color || '')
+      );
+      if (existing) {
+        inventoryItemId = existing.id;
+      } else {
+        const newId = `uniform_inventory_${Date.now()}`;
+        addUniformInventoryItem({
+          id: newId,
+          item: form.item,
+          size: form.size || '',
+          color: form.color || '',
+          onHandQty: 0,
+          reorderPoint: 2,
+          location: '',
+          notes: 'Auto-created from Manager On-Hand entry',
+          updatedAt: new Date().toISOString(),
+        });
+        inventoryItemId = newId;
+      }
+    }
+
     const payload = {
       ...form,
+      inventoryItemId,
       qty: num(form.qty),
       updatedAt: new Date().toISOString(),
     };
