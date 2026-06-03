@@ -617,7 +617,7 @@ export const useAppStore = create(
         fsDel('uniforms', id);
       },
       addUniformInventoryItem: (entry) => {
-        const doc = { ...entry, id: `uniform_inventory_${Date.now()}`, createdAt: new Date().toISOString() };
+        const doc = { id: `uniform_inventory_${Date.now()}`, ...entry, createdAt: new Date().toISOString() };
         set(s => ({ uniformInventory: [doc, ...(s.uniformInventory || [])] }));
         fsWrite('uniformInventory', doc.id, doc);
       },
