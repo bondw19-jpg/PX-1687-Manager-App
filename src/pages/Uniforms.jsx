@@ -428,16 +428,49 @@ function AssociateItemModal({ record, associates, inventory, managerQtyByInvento
 }
 
 function Uniforms() {
-  const { uniforms = [], uniformInventory = [], managerUniformStock = [], associateUniformItems = [], associates = [], storeName, user, addUniformInventoryItem, updateManagerUniformStock } = useAppStore();
+  const { uniforms = [], uniformInventory = [], managerUniformStock = [], associateUniformItems = [], associates = [], storeName, user, addUniformInventoryItem, updateUniformInventoryItem, deleteUniformInventoryItem, updateManagerUniformStock, updateAssociateUniformItem } = useAppStore();
 
-  // One-time backfill: ensure every Manager On-Hand record is linked to an inventory item,
-  // auto-creating inventory items for any that don't exist yet. Idempotent — stabilizes once all linked.
+  // Self-healing inventory maintenance. Runs in two idempotent phases (one per render pass)
+  // so each pass makes only one kind of change and the data converges, then stays quiet:
+  //   1. Dedupe — merge inventory items that share the same item+size+color (sum on-hand qty,
+  //      keep the richest location/notes), re-point manager + associate records to the survivor.
+  //   2. Backfill — link any Manager On-Hand record that has no inventory item to one, creating it if needed.
   useEffect(() => {
+    const norm = (v) => String(v || '').trim().toLowerCase();
+    const keyOf = (o) => `${norm(o.item)}||${norm(o.size)}||${norm(o.color)}`;
+    const AUTO_NOTE = 'Auto-created from Manager On-Hand entry';
+
+    // ── Phase 1: dedupe ──────────────────────────────────────────────────────
+    const groups = {};
+    uniformInventory.forEach(inv => { (groups[keyOf(inv)] ||= []).push(inv); });
+
+    const remap = {};        // duplicate inventoryId -> survivor inventoryId
+    const invPatches = [];   // { id, patch }
+    const invDeletes = [];   // id
+
+    Object.values(groups).forEach(group => {
+      if (group.length <= 1) return;
+      const survivor = group[0];
+      const totalQty = group.reduce((s, i) => s + (Number(i.onHandQty) || 0), 0);
+      const reorder = Math.max(2, ...group.map(i => Number(i.reorderPoint) || 0));
+      const location = group.map(i => i.location).find(Boolean) || '';
+      const notes = group.map(i => i.notes).find(n => n && n !== AUTO_NOTE) || survivor.notes || '';
+      invPatches.push({ id: survivor.id, patch: { onHandQty: totalQty, reorderPoint: reorder, location, notes } });
+      group.slice(1).forEach(dup => { remap[dup.id] = survivor.id; invDeletes.push(dup.id); });
+    });
+
+    if (invDeletes.length > 0) {
+      invPatches.forEach(p => updateUniformInventoryItem(p.id, p.patch));
+      managerUniformStock.forEach(r => { if (remap[r.inventoryItemId]) updateManagerUniformStock(r.id, { inventoryItemId: remap[r.inventoryItemId] }); });
+      associateUniformItems.forEach(r => { if (remap[r.inventoryItemId]) updateAssociateUniformItem(r.id, { inventoryItemId: remap[r.inventoryItemId] }); });
+      invDeletes.forEach(id => deleteUniformInventoryItem(id));
+      return; // let the dedupe settle before running the backfill
+    }
+
+    // ── Phase 2: backfill ────────────────────────────────────────────────────
     const validInvIds = new Set(uniformInventory.map(i => i.id));
     const keyToInvId = {};
-    uniformInventory.forEach(i => {
-      keyToInvId[`${i.item}||${i.size || ''}||${i.color || ''}`] = i.id;
-    });
+    uniformInventory.forEach(i => { keyToInvId[keyOf(i)] = i.id; });
 
     const newInvItems = [];
     const stockUpdates = [];
@@ -445,7 +478,7 @@ function Uniforms() {
     managerUniformStock.forEach(rec => {
       if (!rec.item) return;
       if (rec.inventoryItemId && validInvIds.has(rec.inventoryItemId)) return;
-      const key = `${rec.item}||${rec.size || ''}||${rec.color || ''}`;
+      const key = keyOf(rec);
       let invId = keyToInvId[key];
       if (!invId) {
         invId = `uniform_inventory_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -458,7 +491,7 @@ function Uniforms() {
           onHandQty: 0,
           reorderPoint: 2,
           location: '',
-          notes: 'Auto-created from Manager On-Hand entry',
+          notes: AUTO_NOTE,
           updatedAt: new Date().toISOString(),
         });
       }
@@ -468,7 +501,7 @@ function Uniforms() {
     if (newInvItems.length === 0 && stockUpdates.length === 0) return;
     newInvItems.forEach(addUniformInventoryItem);
     stockUpdates.forEach(u => updateManagerUniformStock(u.id, { inventoryItemId: u.inventoryItemId }));
-  }, [managerUniformStock, uniformInventory, addUniformInventoryItem, updateManagerUniformStock]);
+  }, [managerUniformStock, uniformInventory, associateUniformItems, addUniformInventoryItem, updateUniformInventoryItem, deleteUniformInventoryItem, updateManagerUniformStock, updateAssociateUniformItem]);
 
   const [activeTab, setActiveTab] = useState('inventory');
   const [query, setQuery] = useState('');
@@ -503,8 +536,29 @@ function Uniforms() {
 
   const inventoryFiltered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return uniformInventory.filter(item => !q || [item.item, item.size, item.color, item.location, item.notes].filter(Boolean).some(v => String(v).toLowerCase().includes(q))).sort((a, b) => String(a.item).localeCompare(String(b.item)) || String(a.size).localeCompare(String(b.size)));
+    return uniformInventory
+      .filter(item => !q || [item.item, item.size, item.color, item.location, item.notes].filter(Boolean).some(v => String(v).toLowerCase().includes(q)))
+      .sort((a, b) =>
+        String(a.item).localeCompare(String(b.item)) ||
+        String(a.size).localeCompare(String(b.size)) ||
+        String(a.color).localeCompare(String(b.color))
+      );
   }, [uniformInventory, query]);
+
+  const inventoryGroups = useMemo(() => {
+    const order = [...UNIFORM_ITEMS, 'Other'];
+    const byItem = {};
+    inventoryFiltered.forEach(item => {
+      const name = item.item || 'Other';
+      (byItem[name] ||= []).push(item);
+    });
+    return Object.keys(byItem)
+      .sort((a, b) => {
+        const ia = order.indexOf(a), ib = order.indexOf(b);
+        return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib) || a.localeCompare(b);
+      })
+      .map(name => ({ name, items: byItem[name] }));
+  }, [inventoryFiltered]);
 
   const managerFiltered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -651,7 +705,22 @@ function Uniforms() {
         </section>
 
         {activeTab === 'checks' && (filtered.length > 0 ? <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">{filtered.map(record => <UniformCard key={record.id} record={record} associates={associates} onEdit={openEdit} />)}</section> : <EmptyState icon={<Shirt size={28} />} title="No uniform checks yet" text="Add the first uniform check to track compliance, replacement needs, and follow-up. Non-compliant records automatically create a key C Work File entry." action="Add Uniform Check" onClick={openAdd} />)}
-        {activeTab === 'inventory' && (inventoryFiltered.length > 0 ? <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">{inventoryFiltered.map(item => <InventoryCard key={item.id} item={item} managerQty={managerQtyByInventoryId[item.id] || 0} associateQty={associateQtyByInventoryId[item.id] || 0} onEdit={openInventoryEdit} />)}</section> : <EmptyState icon={<Boxes size={28} />} title="No uniform inventory yet" text="Add store inventory by item, size, color, and location so managers can see what is available before ordering or replacing uniforms." action="Add Inventory Item" onClick={openInventoryAdd} />)}
+        {activeTab === 'inventory' && (inventoryFiltered.length > 0 ? (
+          <div className="space-y-6">
+            {inventoryGroups.map(group => (
+              <section key={group.name}>
+                <div className="flex items-center gap-2 mb-3 px-1">
+                  <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">{group.name}</h3>
+                  <span className="text-xs font-semibold text-gray-500 bg-gray-100 rounded-full px-2 py-0.5">{group.items.length}</span>
+                  <div className="flex-1 h-px bg-gray-200" />
+                </div>
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  {group.items.map(item => <InventoryCard key={item.id} item={item} managerQty={managerQtyByInventoryId[item.id] || 0} associateQty={associateQtyByInventoryId[item.id] || 0} onEdit={openInventoryEdit} />)}
+                </div>
+              </section>
+            ))}
+          </div>
+        ) : <EmptyState icon={<Boxes size={28} />} title="No uniform inventory yet" text="Add store inventory by item, size, color, and location so managers can see what is available before ordering or replacing uniforms." action="Add Inventory Item" onClick={openInventoryAdd} />)}
         {activeTab === 'managers' && (
           managerUniformStock.length === 0
             ? <EmptyState icon={<Warehouse size={28} />} title="No manager on-hand stock yet" text="Assign uniform items to a manager to show who currently has extra shirts, hats, aprons, name tags, or other uniform supplies on hand." action="Assign Manager Stock" onClick={openManagerAdd} />
