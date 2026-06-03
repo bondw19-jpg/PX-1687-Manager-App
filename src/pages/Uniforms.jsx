@@ -471,7 +471,7 @@ function AssociateItemModal({ record, associates, inventory, managerStock = [], 
 }
 
 function Uniforms() {
-  const { uniforms = [], uniformInventory = [], managerUniformStock = [], associateUniformItems = [], associates = [], storeName, user, addUniformInventoryItem, updateUniformInventoryItem, deleteUniformInventoryItem, updateManagerUniformStock, updateAssociateUniformItem } = useAppStore();
+  const { uniforms = [], uniformInventory = [], managerUniformStock = [], associateUniformItems = [], associates = [], storeName, user, addUniformInventoryItem, updateUniformInventoryItem, deleteUniformInventoryItem, updateManagerUniformStock, deleteManagerUniformStock, updateAssociateUniformItem } = useAppStore();
 
   // Self-healing inventory maintenance. Runs in two idempotent phases (one per render pass)
   // so each pass makes only one kind of change and the data converges, then stays quiet:
@@ -516,6 +516,39 @@ function Uniforms() {
       return; // let the dedupe settle before running the backfill
     }
 
+    // ── Phase 1b: dedupe manager stock ───────────────────────────────────────
+    // Merge manager records that are the exact same manager + item + size (+ color for color items):
+    // sum their qty, keep the richest link/location/notes, and re-point any issued associate items.
+    const mgrKeyOf = (o) => colorOptionsFor(o.item).length > 0
+      ? `${norm(o.managerName)}||${norm(o.item)}||${norm(o.size)}||${norm(o.color)}`
+      : `${norm(o.managerName)}||${norm(o.item)}||${norm(o.size)}`;
+    const mgrGroups = {};
+    managerUniformStock.forEach(r => { (mgrGroups[mgrKeyOf(r)] ||= []).push(r); });
+
+    const mgrRemap = {};     // duplicate managerStockId -> survivor id
+    const mgrPatches = [];   // { id, patch }
+    const mgrDeletes = [];   // id
+
+    Object.values(mgrGroups).forEach(group => {
+      if (group.length <= 1) return;
+      const survivor = group[0];
+      if (!norm(survivor.managerName) || !norm(survivor.item)) return; // never merge blank rows
+      const totalQty = group.reduce((s, r) => s + (Number(r.qty) || 0), 0);
+      const location = group.map(r => r.location).find(Boolean) || '';
+      const notes = group.map(r => r.notes).find(Boolean) || '';
+      const inventoryItemId = group.map(r => r.inventoryItemId).find(Boolean) || '';
+      const color = colorOptionsFor(survivor.item).length > 0 ? survivor.color : '';
+      mgrPatches.push({ id: survivor.id, patch: { qty: totalQty, location, notes, inventoryItemId, color } });
+      group.slice(1).forEach(dup => { mgrRemap[dup.id] = survivor.id; mgrDeletes.push(dup.id); });
+    });
+
+    if (mgrDeletes.length > 0) {
+      mgrPatches.forEach(p => updateManagerUniformStock(p.id, p.patch));
+      associateUniformItems.forEach(r => { if (mgrRemap[r.sourceManagerStockId]) updateAssociateUniformItem(r.id, { sourceManagerStockId: mgrRemap[r.sourceManagerStockId] }); });
+      mgrDeletes.forEach(id => deleteManagerUniformStock(id));
+      return; // let the merge settle before running the backfill
+    }
+
     // ── Phase 2: backfill ────────────────────────────────────────────────────
     const validInvIds = new Set(uniformInventory.map(i => i.id));
     const keyToInvId = {};
@@ -550,7 +583,7 @@ function Uniforms() {
     if (newInvItems.length === 0 && stockUpdates.length === 0) return;
     newInvItems.forEach(addUniformInventoryItem);
     stockUpdates.forEach(u => updateManagerUniformStock(u.id, { inventoryItemId: u.inventoryItemId }));
-  }, [managerUniformStock, uniformInventory, associateUniformItems, addUniformInventoryItem, updateUniformInventoryItem, deleteUniformInventoryItem, updateManagerUniformStock, updateAssociateUniformItem]);
+  }, [managerUniformStock, uniformInventory, associateUniformItems, addUniformInventoryItem, updateUniformInventoryItem, deleteUniformInventoryItem, updateManagerUniformStock, deleteManagerUniformStock, updateAssociateUniformItem]);
 
   const [activeTab, setActiveTab] = useState('inventory');
   const [query, setQuery] = useState('');
