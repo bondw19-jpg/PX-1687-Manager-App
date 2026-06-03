@@ -569,6 +569,7 @@ function Uniforms() {
           managerUniformStock.length === 0
             ? <EmptyState icon={<Warehouse size={28} />} title="No manager on-hand stock yet" text="Assign uniform items to a manager to show who currently has extra shirts, hats, aprons, name tags, or other uniform supplies on hand." action="Assign Manager Stock" onClick={openManagerAdd} />
             : <section className="space-y-4">
+                {/* Item Locator */}
                 <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 space-y-3">
                   <div className="flex items-center gap-2 mb-1">
                     <Search size={16} className="text-primary" />
@@ -599,14 +600,6 @@ function Uniforms() {
                   </div>
                 </div>
 
-                {!locatorItem && (
-                  <div className="bg-gray-50 rounded-2xl border border-dashed border-gray-300 p-8 text-center">
-                    <div className="w-14 h-14 rounded-2xl bg-purple-50 text-purple-600 mx-auto flex items-center justify-center"><Warehouse size={28} /></div>
-                    <p className="mt-3 font-semibold text-gray-700">Select an item above to find who has it</p>
-                    <p className="mt-1 text-sm text-gray-400">Filter by size or color to narrow results</p>
-                  </div>
-                )}
-
                 {locatorItem && locatorResults.length === 0 && (
                   <div className="bg-yellow-50 rounded-2xl border border-yellow-200 p-6 text-center">
                     <p className="font-semibold text-yellow-800">No manager has <span className="font-bold">{locatorItem}{locatorSize ? ` · ${locatorSize}` : ''}{locatorColor ? ` · ${locatorColor}` : ''}</span> on hand</p>
@@ -633,6 +626,27 @@ function Uniforms() {
                         </button>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {/* All Manager Stock Cards with inventory counts */}
+                {managerFiltered.length > 0 && (
+                  <div className="space-y-3">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide px-1">
+                      All Manager Stock ({managerFiltered.length})
+                    </p>
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                      {managerFiltered.map(record => (
+                        <ManagerStockCard
+                          key={record.id}
+                          record={record}
+                          inventory={uniformInventory}
+                          managerQtyByInventoryId={managerQtyByInventoryId}
+                          associateQtyByInventoryId={associateQtyByInventoryId}
+                          onEdit={openManagerEdit}
+                        />
+                      ))}
+                    </div>
                   </div>
                 )}
               </section>
