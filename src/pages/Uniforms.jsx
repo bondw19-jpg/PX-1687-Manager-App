@@ -338,7 +338,6 @@ function AssociateItemModal({ record, associates, inventory, managerQtyByInvento
     e.preventDefault();
     if (!form.associateId) return alert('Please choose an associate.');
     if (!form.item) return alert('Please choose an item.');
-    if (!form.inventoryItemId) return alert('Please link an inventory item. Select from the dropdown or add inventory items first.');
     const payload = {
       ...form,
       associateName: associateName(associates, form.associateId),
@@ -371,7 +370,15 @@ function AssociateItemModal({ record, associates, inventory, managerQtyByInvento
             <Field label="Issued Date"><input type="date" value={form.issuedDate} onChange={e => setField('issuedDate', e.target.value)} className="form-input" /></Field>
             <Field label="Status"><select value={form.status} onChange={e => setField('status', e.target.value)} className="form-select">{Object.entries(ASSOCIATE_ITEM_STATUS).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</select></Field>
           </div>
-          <Field label="Link Inventory Item (Required)"><select value={form.inventoryItemId} onChange={e => handleInventoryChoice(e.target.value)} className="form-select"><option value="">Select inventory item...</option>{inventory.map(item => <option key={item.id} value={item.id}>{item.item} · {item.size || 'One Size'} · {item.color} (Available: {getAvailableQty(item.id)})</option>)}</select></Field>
+          <Field label="Link Inventory Item (Optional)">
+            <select value={form.inventoryItemId} onChange={e => handleInventoryChoice(e.target.value)} className="form-select">
+              <option value="">— No link —</option>
+              {inventory.map(item => <option key={item.id} value={item.id}>{item.item} · {item.size || 'One Size'} · {item.color} (Available: {getAvailableQty(item.id)})</option>)}
+            </select>
+            {inventory.length === 0 && (
+              <p className="text-xs text-gray-400 mt-1">No inventory items yet — add items under the <span className="font-semibold">Inventory</span> tab to enable stock tracking.</p>
+            )}
+          </Field>
           {form.status === 'returned' && <Field label="Returned Date"><input type="date" value={form.returnedDate} onChange={e => setField('returnedDate', e.target.value)} className="form-input" /></Field>}
           <Field label="Notes"><textarea rows={2} value={form.notes} onChange={e => setField('notes', e.target.value)} placeholder="Condition, replacement reason, follow-up notes..." className="form-textarea" /></Field>
         </div>
