@@ -43,9 +43,16 @@ const SIZE_OPTIONS = [
   'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'One Size', 'N/A'
 ];
 
-const COLOR_OPTIONS = [
-  'Black', 'Red', 'White', 'Gray', 'Khaki', 'Navy', 'Other'
-];
+const ITEM_COLORS = {
+  'Hat / Cap':    ['Black', 'Red', 'Other'],
+  'Shirt':        ['Black', 'Red', 'Other'],
+  'Apron':        ['Black', 'Other'],
+  'Back Brace':   ['Black', 'Beige', 'Other'],
+  'Full Uniform': ['Black', 'Red', 'Other'],
+  'Other':        ['Black', 'Red', 'White', 'Gray', 'Khaki', 'Navy', 'Other'],
+};
+const colorOptionsFor = (item) => ITEM_COLORS[item] || [];
+const ALL_COLORS = ['Black', 'Red', 'White', 'Gray', 'Khaki', 'Navy', 'Beige', 'Other'];
 
 const ISSUE_TYPES = [
   { value: 'compliant', label: 'Compliant' },
@@ -213,7 +220,9 @@ function InventoryModal({ record, onClose }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Field label="Uniform Item"><select value={form.item} onChange={e => setField('item', e.target.value)} className="form-select">{UNIFORM_ITEMS.filter(i => i !== 'Full Uniform').map(item => <option key={item} value={item}>{item}</option>)}</select></Field>
             <Field label="Size"><select value={form.size} onChange={e => setField('size', e.target.value)} className="form-select"><option value="">Select size...</option>{SIZE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}</select></Field>
-            <Field label="Color"><select value={form.color} onChange={e => setField('color', e.target.value)} className="form-select"><option value="">Select color...</option>{COLOR_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}</select></Field>
+            {colorOptionsFor(form.item).length > 0 && (
+              <Field label="Color"><select value={form.color} onChange={e => setField('color', e.target.value)} className="form-select"><option value="">Select color...</option>{colorOptionsFor(form.item).map(c => <option key={c} value={c}>{c}</option>)}</select></Field>
+            )}
             <Field label="On-Hand Qty"><input type="number" min="0" value={form.onHandQty} onChange={e => setField('onHandQty', e.target.value)} className="form-input" /></Field>
             <Field label="Reorder Point"><input type="number" min="0" value={form.reorderPoint} onChange={e => setField('reorderPoint', e.target.value)} className="form-input" /></Field>
             <Field label="Storage Location"><input value={form.location} onChange={e => setField('location', e.target.value)} placeholder="Office cabinet, back room bin" className="form-input" /></Field>
@@ -247,7 +256,11 @@ function ManagerStockModal({ record, inventory, managerQtyByInventoryId, associa
   };
 
   const handleField = (field, value) => {
-    setForm(prev => syncInventoryLink({ ...prev, [field]: value }));
+    setForm(prev => {
+      const next = { ...prev, [field]: value };
+      if (field === 'item' && !colorOptionsFor(value).includes(prev.color)) next.color = '';
+      return syncInventoryLink(next);
+    });
   };
 
   const handleSubmit = (e) => {
@@ -319,12 +332,14 @@ function ManagerStockModal({ record, inventory, managerQtyByInventoryId, associa
                 {SIZE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </Field>
-            <Field label="Color">
-              <select value={form.color} onChange={e => handleField('color', e.target.value)} className="form-select">
-                <option value="">Select color...</option>
-                {COLOR_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </Field>
+            {colorOptionsFor(form.item).length > 0 && (
+              <Field label="Color">
+                <select value={form.color} onChange={e => handleField('color', e.target.value)} className="form-select">
+                  <option value="">Select color...</option>
+                  {colorOptionsFor(form.item).map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </Field>
+            )}
           </div>
           <Field label="Notes"><textarea rows={2} value={form.notes} onChange={e => handleField('notes', e.target.value)} placeholder="Condition, storage location, or instructions..." className="form-textarea" /></Field>
         </div>
@@ -670,7 +685,7 @@ function Uniforms() {
                       <label className="text-xs font-semibold text-gray-600">Color <span className="text-gray-400 font-normal">(optional)</span></label>
                       <select value={locatorColor} onChange={e => setLocatorColor(e.target.value)} className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white">
                         <option value="">Any color</option>
-                        {COLOR_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                        {ALL_COLORS.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
                   </div>
