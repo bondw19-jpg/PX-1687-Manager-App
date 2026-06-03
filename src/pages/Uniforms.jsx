@@ -345,10 +345,11 @@ function ManagerStockModal({ record, inventory, managerQtyByInventoryId, associa
   );
 }
 
-function AssociateItemModal({ record, associates, inventory, managerQtyByInventoryId, associateQtyByInventoryId, onClose }) {
+function AssociateItemModal({ record, associates, inventory, managerStock = [], issuedQtyByManagerStockId = {}, managerQtyByInventoryId, associateQtyByInventoryId, onClose }) {
   const { addAssociateUniformItem, updateAssociateUniformItem } = useAppStore();
   const [form, setForm] = useState(() => ({
     associateId: record?.associateId || '',
+    sourceManagerStockId: record?.sourceManagerStockId || '',
     inventoryItemId: record?.inventoryItemId || '',
     item: record?.item || '',
     size: record?.size || '',
@@ -373,13 +374,48 @@ function AssociateItemModal({ record, associates, inventory, managerQtyByInvento
     }));
   };
 
+  // Net on-hand a manager currently holds for one of their stock records, adding back this record's own
+  // issued qty (when editing) so the option doesn't appear smaller than it really is.
+  const managerNetOnHand = (ms) => {
+    const issued = issuedQtyByManagerStockId[ms.id] || 0;
+    const ownBack = record?.id && record?.sourceManagerStockId === ms.id ? num(record.qty) : 0;
+    return num(ms.qty) - issued + ownBack;
+  };
+
+  const handleManagerSourceChoice = (id) => {
+    const ms = managerStock.find(m => m.id === id);
+    if (!ms) { setField('sourceManagerStockId', ''); return; }
+    setForm(prev => ({
+      ...prev,
+      sourceManagerStockId: id,
+      inventoryItemId: ms.inventoryItemId || prev.inventoryItemId,
+      item: ms.item || prev.item,
+      size: ms.size || prev.size,
+      color: ms.color || prev.color,
+    }));
+  };
+
+  const managerSourceOptions = [...managerStock]
+    .filter(ms => ms.id === form.sourceManagerStockId || managerNetOnHand(ms) > 0)
+    .sort((a, b) => (a.managerName || '').localeCompare(b.managerName || '') || (a.item || '').localeCompare(b.item || ''));
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.associateId) return alert('Please choose an associate.');
     if (!form.item) return alert('Please choose an item.');
+    if (!form.sourceManagerStockId && managerSourceOptions.length > 0) {
+      return alert("Select which manager these items come from so their on-hand count updates. If they come straight from store stock, leave it blank — but a manager's count won't change.");
+    }
+    if (form.sourceManagerStockId) {
+      const ms = managerStock.find(m => m.id === form.sourceManagerStockId);
+      if (ms && num(form.qty) > managerNetOnHand(ms)) {
+        return alert(`${ms.managerName} only has ${managerNetOnHand(ms)} on hand. Lower the quantity or pick a different source.`);
+      }
+    }
     const payload = {
       ...form,
       associateName: associateName(associates, form.associateId),
+      sourceManagerName: form.sourceManagerStockId ? (managerStock.find(m => m.id === form.sourceManagerStockId)?.managerName || '') : '',
       qty: num(form.qty),
       updatedAt: new Date().toISOString(),
     };
@@ -409,6 +445,13 @@ function AssociateItemModal({ record, associates, inventory, managerQtyByInvento
             <Field label="Issued Date"><input type="date" value={form.issuedDate} onChange={e => setField('issuedDate', e.target.value)} className="form-input" /></Field>
             <Field label="Status"><select value={form.status} onChange={e => setField('status', e.target.value)} className="form-select">{Object.entries(ASSOCIATE_ITEM_STATUS).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</select></Field>
           </div>
+          <Field label="Issue From Manager">
+            <select value={form.sourceManagerStockId} onChange={e => handleManagerSourceChoice(e.target.value)} className="form-select">
+              <option value="">— Straight from store stock (no manager deduction) —</option>
+              {managerSourceOptions.map(ms => <option key={ms.id} value={ms.id}>{ms.managerName} · {ms.item} · {ms.size || 'One Size'}{ms.color ? ` · ${ms.color}` : ''} ({managerNetOnHand(ms)} on hand)</option>)}
+            </select>
+            <p className="text-xs text-gray-400 mt-1">Picking a manager deducts this quantity from their on-hand count.</p>
+          </Field>
           <Field label="Link Inventory Item (Optional)">
             <select value={form.inventoryItemId} onChange={e => handleInventoryChoice(e.target.value)} className="form-select">
               <option value="">— No link —</option>
@@ -609,6 +652,14 @@ function Uniforms() {
     return acc;
   }, {}), [associateUniformItems]);
 
+  // Qty currently issued to associates that was sourced FROM a specific manager's on-hand stock.
+  // Used to derive each manager's net on-hand (original qty minus what they've handed out) without mutating data,
+  // so returns/edits/deletes reconcile automatically.
+  const issuedQtyByManagerStockId = useMemo(() => associateUniformItems.reduce((acc, r) => {
+    if (r.sourceManagerStockId && ISSUED_ASSOCIATE_STATUSES.includes(r.status || 'active')) acc[r.sourceManagerStockId] = (acc[r.sourceManagerStockId] || 0) + num(r.qty);
+    return acc;
+  }, {}), [associateUniformItems]);
+
   // Enhanced stats with inventory flow
   const stats = useMemo(() => {
     const storeOnHand = uniformInventory.reduce((sum, item) => sum + num(item.onHandQty), 0);
@@ -805,6 +856,7 @@ function Uniforms() {
                           inventory={uniformInventory}
                           managerQtyByInventoryId={managerQtyByInventoryId}
                           associateQtyByInventoryId={associateQtyByInventoryId}
+                          issuedFromThisManager={issuedQtyByManagerStockId[record.id] || 0}
                           onEdit={openManagerEdit}
                         />
                       ))}
@@ -821,7 +873,7 @@ function Uniforms() {
       {showModal && <UniformModal record={modalRecord} associates={activeAssociates} onClose={() => setShowModal(false)} />}
       {showInventoryModal && <InventoryModal record={inventoryRecord} onClose={() => setShowInventoryModal(false)} />}
       {showManagerModal && <ManagerStockModal record={managerRecord} inventory={uniformInventory} managerQtyByInventoryId={managerQtyByInventoryId} associateQtyByInventoryId={associateQtyByInventoryId} managers={managers} onClose={() => setShowManagerModal(false)} />}
-      {showAssociateItemModal && <AssociateItemModal record={associateItemRecord} associates={activeAssociates} inventory={uniformInventory} managerQtyByInventoryId={managerQtyByInventoryId} associateQtyByInventoryId={associateQtyByInventoryId} onClose={() => setShowAssociateItemModal(false)} />}
+      {showAssociateItemModal && <AssociateItemModal record={associateItemRecord} associates={activeAssociates} inventory={uniformInventory} managerStock={managerUniformStock} issuedQtyByManagerStockId={issuedQtyByManagerStockId} managerQtyByInventoryId={managerQtyByInventoryId} associateQtyByInventoryId={associateQtyByInventoryId} onClose={() => setShowAssociateItemModal(false)} />}
     </div>
   );
 }
