@@ -171,8 +171,19 @@ export function InventoryCard({ item, managerQty, associateQty, onEdit }) {
 }
 
 // ─── ManagerStockCard ──────────────────────────────────────────────────────
-export function ManagerStockCard({ record, onEdit }) {
+export function ManagerStockCard({ record, inventory = [], managerQtyByInventoryId = {}, associateQtyByInventoryId = {}, onEdit }) {
   const { deleteManagerUniformStock } = useAppStore();
+
+  const invItem = record.inventoryItemId ? inventory.find(i => i.id === record.inventoryItemId) : null;
+  const storeQty    = invItem ? (Number(invItem.onHandQty) || 0) : null;
+  const managerTotal = invItem ? (managerQtyByInventoryId[invItem.id] || 0) : null;
+  const assocTotal  = invItem ? (associateQtyByInventoryId[invItem.id] || 0) : null;
+  const available   = invItem ? Math.max(0, storeQty + managerTotal - assocTotal) : null;
+  const stockStatus = invItem
+    ? (available <= 0 ? 'out' : available <= (Number(invItem.reorderPoint) || 2) ? 'low' : 'ok')
+    : null;
+  const stockColor  = stockStatus === 'out' ? 'red' : stockStatus === 'low' ? 'yellow' : 'green';
+  const stockLabel  = stockStatus === 'out' ? 'Out of Stock' : stockStatus === 'low' ? 'Low Stock' : 'In Stock';
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
@@ -185,6 +196,45 @@ export function ManagerStockCard({ record, onEdit }) {
           {record.qty}
         </span>
       </div>
+
+      {invItem && (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Inventory Counts</p>
+            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full bg-${stockColor}-100 text-${stockColor}-700`}>
+              {stockLabel}
+            </span>
+          </div>
+          <div className="grid grid-cols-4 gap-1.5 text-xs">
+            <div className="bg-blue-50 rounded-lg p-2 text-center">
+              <p className="text-blue-600 font-semibold leading-none mb-0.5">Store</p>
+              <p className="text-lg font-bold text-blue-700">{storeQty}</p>
+            </div>
+            <div className="bg-purple-50 rounded-lg p-2 text-center">
+              <p className="text-purple-600 font-semibold leading-none mb-0.5">Mgr Total</p>
+              <p className="text-lg font-bold text-purple-700">{managerTotal}</p>
+            </div>
+            <div className="bg-red-50 rounded-lg p-2 text-center">
+              <p className="text-red-500 font-semibold leading-none mb-0.5">Issued</p>
+              <p className="text-lg font-bold text-red-600">{assocTotal}</p>
+            </div>
+            <div className="bg-green-50 rounded-lg p-2 text-center">
+              <p className="text-green-600 font-semibold leading-none mb-0.5">Available</p>
+              <p className="text-lg font-bold text-green-700">{available}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!invItem && record.inventoryItemId && (
+        <p className="text-xs text-yellow-600 bg-yellow-50 border border-yellow-100 rounded-lg px-2.5 py-1.5">
+          ⚠ Linked inventory item not found — it may have been deleted.
+        </p>
+      )}
+      {!record.inventoryItemId && (
+        <p className="text-xs text-gray-400 italic">Not linked to an inventory item</p>
+      )}
+
       {record.location && <p className="text-xs text-gray-600"><span className="font-semibold">Location:</span> {record.location}</p>}
       {record.notes && <p className="text-xs text-gray-600"><span className="font-semibold">Notes:</span> {record.notes}</p>}
       <div className="flex gap-2 pt-2 border-t border-gray-100">
