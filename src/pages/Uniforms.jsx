@@ -437,7 +437,11 @@ function Uniforms() {
   //   2. Backfill — link any Manager On-Hand record that has no inventory item to one, creating it if needed.
   useEffect(() => {
     const norm = (v) => String(v || '').trim().toLowerCase();
-    const keyOf = (o) => `${norm(o.item)}||${norm(o.size)}||${norm(o.color)}`;
+    // Identity key: color only matters for items that actually have color options (Shirt / Other),
+    // so a "Hat · Black" and a colorless "Hat" are treated as the same SKU and merged.
+    const keyOf = (o) => colorOptionsFor(o.item).length > 0
+      ? `${norm(o.item)}||${norm(o.size)}||${norm(o.color)}`
+      : `${norm(o.item)}||${norm(o.size)}`;
     const AUTO_NOTE = 'Auto-created from Manager On-Hand entry';
 
     // ── Phase 1: dedupe ──────────────────────────────────────────────────────
@@ -451,11 +455,13 @@ function Uniforms() {
     Object.values(groups).forEach(group => {
       if (group.length <= 1) return;
       const survivor = group[0];
+      if (!norm(survivor.item)) return; // never merge rows with no item — could be unrelated/malformed data
       const totalQty = group.reduce((s, i) => s + (Number(i.onHandQty) || 0), 0);
       const reorder = Math.max(2, ...group.map(i => Number(i.reorderPoint) || 0));
       const location = group.map(i => i.location).find(Boolean) || '';
       const notes = group.map(i => i.notes).find(n => n && n !== AUTO_NOTE) || survivor.notes || '';
-      invPatches.push({ id: survivor.id, patch: { onHandQty: totalQty, reorderPoint: reorder, location, notes } });
+      const color = colorOptionsFor(survivor.item).length > 0 ? survivor.color : '';
+      invPatches.push({ id: survivor.id, patch: { onHandQty: totalQty, reorderPoint: reorder, location, notes, color } });
       group.slice(1).forEach(dup => { remap[dup.id] = survivor.id; invDeletes.push(dup.id); });
     });
 
