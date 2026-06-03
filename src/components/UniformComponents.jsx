@@ -171,8 +171,11 @@ export function InventoryCard({ item, managerQty, associateQty, onEdit }) {
 }
 
 // ─── ManagerStockCard ──────────────────────────────────────────────────────
-export function ManagerStockCard({ record, inventory = [], managerQtyByInventoryId = {}, associateQtyByInventoryId = {}, onEdit }) {
+export function ManagerStockCard({ record, inventory = [], managerQtyByInventoryId = {}, associateQtyByInventoryId = {}, issuedFromThisManager = 0, onEdit }) {
   const { deleteManagerUniformStock } = useAppStore();
+
+  const totalQty = Number(record.qty) || 0;
+  const netOnHand = Math.max(0, totalQty - issuedFromThisManager);
 
   const invItem = record.inventoryItemId ? inventory.find(i => i.id === record.inventoryItemId) : null;
   const storeQty    = invItem ? (Number(invItem.onHandQty) || 0) : null;
@@ -192,9 +195,14 @@ export function ManagerStockCard({ record, inventory = [], managerQtyByInventory
           <p className="font-bold text-gray-900">{record.managerName}</p>
           <p className="text-xs text-gray-500">{record.item} · {record.size || 'One Size'} · {record.color}</p>
         </div>
-        <span className="text-lg font-bold text-purple-700 bg-purple-50 px-3 py-1 rounded-lg">
-          {record.qty}
-        </span>
+        <div className="text-right">
+          <span className="text-lg font-bold text-purple-700 bg-purple-50 px-3 py-1 rounded-lg">
+            {netOnHand}
+          </span>
+          {issuedFromThisManager > 0 && (
+            <p className="text-[11px] text-gray-500 mt-1">{issuedFromThisManager} issued · {totalQty} total</p>
+          )}
+        </div>
       </div>
 
       {invItem && (
@@ -289,6 +297,7 @@ export function AssociateItemCard({ record, associates, onEdit }) {
           </div>
         )}
       </div>
+      {record.sourceManagerName && <p className="text-xs text-gray-600"><span className="font-semibold">From:</span> {record.sourceManagerName}</p>}
       {record.notes && <p className="text-xs text-gray-600"><span className="font-semibold">Notes:</span> {record.notes}</p>}
       <div className="flex gap-2 pt-2 border-t border-gray-100">
         <button
