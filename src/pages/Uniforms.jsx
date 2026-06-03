@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle, Boxes, CheckCircle2, ClipboardCheck, Edit3, Filter,
   PackagePlus, Printer, Search, Shirt, Trash2, UserRound, Warehouse, X, TrendingDown
@@ -417,7 +417,48 @@ function AssociateItemModal({ record, associates, inventory, managerQtyByInvento
 }
 
 function Uniforms() {
-  const { uniforms = [], uniformInventory = [], managerUniformStock = [], associateUniformItems = [], associates = [], storeName, user } = useAppStore();
+  const { uniforms = [], uniformInventory = [], managerUniformStock = [], associateUniformItems = [], associates = [], storeName, user, addUniformInventoryItem, updateManagerUniformStock } = useAppStore();
+
+  // One-time backfill: ensure every Manager On-Hand record is linked to an inventory item,
+  // auto-creating inventory items for any that don't exist yet. Idempotent — stabilizes once all linked.
+  useEffect(() => {
+    const validInvIds = new Set(uniformInventory.map(i => i.id));
+    const keyToInvId = {};
+    uniformInventory.forEach(i => {
+      keyToInvId[`${i.item}||${i.size || ''}||${i.color || ''}`] = i.id;
+    });
+
+    const newInvItems = [];
+    const stockUpdates = [];
+
+    managerUniformStock.forEach(rec => {
+      if (!rec.item) return;
+      if (rec.inventoryItemId && validInvIds.has(rec.inventoryItemId)) return;
+      const key = `${rec.item}||${rec.size || ''}||${rec.color || ''}`;
+      let invId = keyToInvId[key];
+      if (!invId) {
+        invId = `uniform_inventory_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        keyToInvId[key] = invId;
+        newInvItems.push({
+          id: invId,
+          item: rec.item,
+          size: rec.size || '',
+          color: rec.color || '',
+          onHandQty: 0,
+          reorderPoint: 2,
+          location: '',
+          notes: 'Auto-created from Manager On-Hand entry',
+          updatedAt: new Date().toISOString(),
+        });
+      }
+      stockUpdates.push({ id: rec.id, inventoryItemId: invId });
+    });
+
+    if (newInvItems.length === 0 && stockUpdates.length === 0) return;
+    newInvItems.forEach(addUniformInventoryItem);
+    stockUpdates.forEach(u => updateManagerUniformStock(u.id, { inventoryItemId: u.inventoryItemId }));
+  }, [managerUniformStock, uniformInventory, addUniformInventoryItem, updateManagerUniformStock]);
+
   const [activeTab, setActiveTab] = useState('inventory');
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
