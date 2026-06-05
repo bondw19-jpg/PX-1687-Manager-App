@@ -91,6 +91,11 @@ export default function WorkFileModal({ associate, onClose }) {
 
   const handlePrint = () => {
     const filledRows = rows.filter(r => r.date || r.key || r.details);
+    // Escape HTML so user text can't break the layout, and preserve line breaks typed into Details.
+    const esc = (s) => String(s ?? '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+    const multiline = (s) => esc(s).replace(/\r?\n/g, '<br>');
     const html = `
       ${infoGridHtml([
         ['Associate Name',  associate.name],
@@ -123,10 +128,10 @@ export default function WorkFileModal({ associate, onClose }) {
         <tbody>
           ${rows.map(r => `
             <tr>
-              <td>${fmtDate(r.date)}</td>
-              <td><strong>${r.key || ''}</strong></td>
-              <td>${r.details || ''}</td>
-              <td class="sub-label">${r.addedBy?.name || ''}</td>
+              <td>${esc(fmtDate(r.date))}</td>
+              <td><strong>${esc(r.key || '')}</strong></td>
+              <td style="line-height:1.5; word-break:break-word">${multiline(r.details || '')}</td>
+              <td class="sub-label">${esc(r.addedBy?.name || '')}</td>
             </tr>`).join('')}
         </tbody>
       </table>
