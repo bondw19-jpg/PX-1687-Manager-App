@@ -50,6 +50,17 @@ const ITEM_COLORS = {
 const colorOptionsFor = (item) => ITEM_COLORS[item] || [];
 const ALL_COLORS = ['Black', 'Red', 'White', 'Gray', 'Khaki', 'Navy', 'Other'];
 
+// Normalized identity helpers so the same uniform (item + size, plus color only when the
+// item actually has color options) is always recognized as one SKU — regardless of
+// capitalization or stray spaces. Used to prevent duplicate rows at creation time.
+const normKey = (v) => String(v || '').trim().toLowerCase();
+const sameUniform = (a, b) => {
+  if (normKey(a?.item) !== normKey(b?.item)) return false;
+  if (normKey(a?.size) !== normKey(b?.size)) return false;
+  if (colorOptionsFor(a?.item).length === 0) return true;
+  return normKey(a?.color) === normKey(b?.color);
+};
+
 const ISSUE_TYPES = [
   { value: 'compliant', label: 'Compliant' },
   { value: 'incomplete', label: 'Incomplete Uniform' },
@@ -182,7 +193,7 @@ function UniformModal({ record, associates, onClose }) {
 }
 
 function InventoryModal({ record, onClose }) {
-  const { addUniformInventoryItem, updateUniformInventoryItem } = useAppStore();
+  const { addUniformInventoryItem, updateUniformInventoryItem, uniformInventory = [] } = useAppStore();
   const [form, setForm] = useState(() => ({
     item: record?.item || 'Shirt',
     size: record?.size || '',
@@ -203,8 +214,14 @@ function InventoryModal({ record, onClose }) {
       reorderPoint: num(form.reorderPoint),
       updatedAt: new Date().toISOString(),
     };
-    if (record?.id) updateUniformInventoryItem(record.id, payload);
-    else addUniformInventoryItem(payload);
+    if (record?.id) {
+      updateUniformInventoryItem(record.id, payload);
+    } else {
+      // Reuse an existing row for the same SKU instead of creating a duplicate.
+      const existing = uniformInventory.find(i => sameUniform(i, payload));
+      if (existing) updateUniformInventoryItem(existing.id, payload);
+      else addUniformInventoryItem(payload);
+    }
     onClose();
   };
 
@@ -247,7 +264,7 @@ function ManagerStockModal({ record, inventory, managerQtyByInventoryId, associa
 
   // Auto-link inventory item if item+size+color match
   const syncInventoryLink = (nextForm) => {
-    const match = inventory.find(i => i.item === nextForm.item && i.size === nextForm.size && i.color === nextForm.color);
+    const match = inventory.find(i => sameUniform(i, nextForm));
     return { ...nextForm, inventoryItemId: match?.id || '' };
   };
 
@@ -268,9 +285,7 @@ function ManagerStockModal({ record, inventory, managerQtyByInventoryId, associa
 
     // Auto-create an inventory item if this item+size+color has no record yet
     if (!inventoryItemId && form.item) {
-      const existing = inventory.find(
-        i => i.item === form.item && i.size === (form.size || '') && i.color === (form.color || '')
-      );
+      const existing = inventory.find(i => sameUniform(i, form));
       if (existing) {
         inventoryItemId = existing.id;
       } else {
@@ -485,6 +500,8 @@ function Uniforms() {
     const keyOf = (o) => colorOptionsFor(o.item).length > 0
       ? `${norm(o.item)}||${norm(o.size)}||${norm(o.color)}`
       : `${norm(o.item)}||${norm(o.size)}`;
+    // Recency of a row, used to pick which duplicate's quantity to trust when merging.
+    const tsOf = (o) => { const t = Date.parse(o?.updatedAt || ''); return Number.isNaN(t) ? 0 : t; };
     const AUTO_NOTE = 'Auto-created from Manager On-Hand entry';
 
     // ── Phase 1: dedupe ──────────────────────────────────────────────────────
@@ -497,15 +514,18 @@ function Uniforms() {
 
     Object.values(groups).forEach(group => {
       if (group.length <= 1) return;
-      const survivor = group[0];
+      const ordered = [...group].sort((a, b) => tsOf(b) - tsOf(a));
+      const survivor = ordered[0];
       if (!norm(survivor.item)) return; // never merge rows with no item — could be unrelated/malformed data
-      const totalQty = group.reduce((s, i) => s + (Number(i.onHandQty) || 0), 0);
+      // Duplicate rows are the same physical stock recorded twice (usually a cross-device sync echo),
+      // so keep the most recently updated quantity rather than adding them together (which inflates counts).
+      const onHandQty = Number(survivor.onHandQty) || 0;
       const reorder = Math.max(2, ...group.map(i => Number(i.reorderPoint) || 0));
-      const location = group.map(i => i.location).find(Boolean) || '';
-      const notes = group.map(i => i.notes).find(n => n && n !== AUTO_NOTE) || survivor.notes || '';
+      const location = ordered.map(i => i.location).find(Boolean) || '';
+      const notes = ordered.map(i => i.notes).find(n => n && n !== AUTO_NOTE) || survivor.notes || '';
       const color = colorOptionsFor(survivor.item).length > 0 ? survivor.color : '';
-      invPatches.push({ id: survivor.id, patch: { onHandQty: totalQty, reorderPoint: reorder, location, notes, color } });
-      group.slice(1).forEach(dup => { remap[dup.id] = survivor.id; invDeletes.push(dup.id); });
+      invPatches.push({ id: survivor.id, patch: { onHandQty, reorderPoint: reorder, location, notes, color } });
+      ordered.slice(1).forEach(dup => { remap[dup.id] = survivor.id; invDeletes.push(dup.id); });
     });
 
     if (invDeletes.length > 0) {
@@ -531,15 +551,17 @@ function Uniforms() {
 
     Object.values(mgrGroups).forEach(group => {
       if (group.length <= 1) return;
-      const survivor = group[0];
+      const ordered = [...group].sort((a, b) => tsOf(b) - tsOf(a));
+      const survivor = ordered[0];
       if (!norm(survivor.managerName) || !norm(survivor.item)) return; // never merge blank rows
-      const totalQty = group.reduce((s, r) => s + (Number(r.qty) || 0), 0);
-      const location = group.map(r => r.location).find(Boolean) || '';
-      const notes = group.map(r => r.notes).find(Boolean) || '';
-      const inventoryItemId = group.map(r => r.inventoryItemId).find(Boolean) || '';
+      // Same as inventory: keep the latest quantity instead of summing duplicate rows together.
+      const qty = Number(survivor.qty) || 0;
+      const location = ordered.map(r => r.location).find(Boolean) || '';
+      const notes = ordered.map(r => r.notes).find(Boolean) || '';
+      const inventoryItemId = ordered.map(r => r.inventoryItemId).find(Boolean) || '';
       const color = colorOptionsFor(survivor.item).length > 0 ? survivor.color : '';
-      mgrPatches.push({ id: survivor.id, patch: { qty: totalQty, location, notes, inventoryItemId, color } });
-      group.slice(1).forEach(dup => { mgrRemap[dup.id] = survivor.id; mgrDeletes.push(dup.id); });
+      mgrPatches.push({ id: survivor.id, patch: { qty, location, notes, inventoryItemId, color } });
+      ordered.slice(1).forEach(dup => { mgrRemap[dup.id] = survivor.id; mgrDeletes.push(dup.id); });
     });
 
     if (mgrDeletes.length > 0) {
