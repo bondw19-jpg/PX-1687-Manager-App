@@ -516,6 +516,129 @@ export async function clearAllPrivateData(uid) {
   return deleted;
 }
 
+// ── Cloud Snapshots (automatic full-state backups) ────────────────────────────
+// A snapshot is a single point-in-time copy of all shared store data, written to:
+//   stores/store_1687/backups/{id}     ← heavy: full data blob + metadata
+//   stores/store_1687/backupMeta/{id}  ← light: metadata only (fast listing)
+// Auto snapshots use a deterministic id `auto_YYYY-MM-DD`, so at most ONE is kept
+// per calendar day (re-running the same day overwrites that day's doc). Manual
+// snapshots use `manual_<timestamp>`. Snapshots are NEVER auto-deleted — old
+// days accumulate so historical data is always recoverable.
+
+const SNAPSHOT_COLLS = [
+  'associates', 'callIns', 'teamEvents', 'teamNotes', 'reviews', 'tasks',
+  'uniforms', 'uniformInventory', 'managerUniformStock', 'associateUniformItems',
+  'contacts', 'announcements',
+];
+
+// localStorage guard: remembers the last day this device wrote a daily snapshot.
+const SNAPSHOT_LAST_KEY = 'panda-cloud-snapshot-last';
+
+function ymdLocal(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function buildSnapshotPayload(state) {
+  const data = {};
+  for (const coll of SNAPSHOT_COLLS) {
+    data[coll] = Array.isArray(state[coll]) ? state[coll].map(stripAttachmentDataUrls) : [];
+  }
+  data.workFiles = (state.workFiles && typeof state.workFiles === 'object') ? state.workFiles : {};
+  data.checklists = (state.checklists && typeof state.checklists === 'object') ? state.checklists : {};
+  data.customChecklists = Array.isArray(state.customChecklists) ? state.customChecklists : [];
+  return data;
+}
+
+function snapshotCounts(data) {
+  const counts = {};
+  for (const coll of SNAPSHOT_COLLS) counts[coll] = Array.isArray(data[coll]) ? data[coll].length : 0;
+  counts.workFiles = data.workFiles ? Object.keys(data.workFiles).length : 0;
+  counts.customChecklists = Array.isArray(data.customChecklists) ? data.customChecklists.length : 0;
+  return counts;
+}
+
+function snapshotTotal(counts) {
+  return Object.values(counts).reduce((s, n) => s + (typeof n === 'number' ? n : 0), 0);
+}
+
+// Write a full-state snapshot to Firestore. Returns { id, recordTotal, counts, createdAt }.
+export async function writeCloudSnapshot(state, meta = {}) {
+  const { setDoc, serverTimestamp, doc } = await import('firebase/firestore');
+  const db = await getDb();
+  const now = new Date();
+  const auto = !!meta.auto;
+  const dayKey = meta.dayKey || ymdLocal(now);
+  const id = auto ? `auto_${dayKey}` : `manual_${now.getTime()}`;
+
+  const data = buildSnapshotPayload(state);
+  const counts = snapshotCounts(data);
+  const recordTotal = snapshotTotal(counts);
+
+  const metaDoc = {
+    id,
+    auto,
+    dayKey,
+    createdAt: now.toISOString(),
+    appVersion: meta.appVersion || '',
+    createdBy: meta.createdBy || null,
+    counts,
+    recordTotal,
+  };
+
+  // Heavy doc: full data blob + metadata (read only on restore).
+  await setDoc(doc(db, 'stores', STORE_ID, 'backups', id), {
+    ...metaDoc,
+    data,
+    _updatedAt: serverTimestamp(),
+  });
+  // Light doc: metadata only, used for fast listing without downloading blobs.
+  await setDoc(doc(db, 'stores', STORE_ID, 'backupMeta', id), {
+    ...metaDoc,
+    _updatedAt: serverTimestamp(),
+  });
+
+  console.log(`[FS] ☁️ Cloud snapshot written: ${id} (${recordTotal} records)`);
+  return { id, recordTotal, counts, createdAt: metaDoc.createdAt };
+}
+
+// Write at most one automatic snapshot per calendar day per device.
+export async function maybeWriteDailySnapshot(state, meta = {}) {
+  try {
+    const today = ymdLocal();
+    if (localStorage.getItem(SNAPSHOT_LAST_KEY) === today) return null;
+    const result = await writeCloudSnapshot(state, { ...meta, auto: true, dayKey: today });
+    localStorage.setItem(SNAPSHOT_LAST_KEY, today);
+    return result;
+  } catch (e) {
+    console.warn('[FS] daily snapshot skipped:', e?.code || e?.message);
+    return null;
+  }
+}
+
+// List snapshot metadata (newest first). Lightweight — no data blobs downloaded.
+export async function listCloudSnapshots(max = 90) {
+  const { getDocs, query, orderBy, limit, collection } = await import('firebase/firestore');
+  const db = await getDb();
+  const q = query(
+    collection(db, 'stores', STORE_ID, 'backupMeta'),
+    orderBy('createdAt', 'desc'),
+    limit(max),
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => d.data());
+}
+
+// Fetch a single snapshot's full data blob for restore.
+export async function getCloudSnapshot(id) {
+  const { getDoc, doc } = await import('firebase/firestore');
+  const db = await getDb();
+  const s = await getDoc(doc(db, 'stores', STORE_ID, 'backups', id));
+  return s.exists() ? s.data() : null;
+}
+
 // ── Snapshot helpers ──────────────────────────────────────────────────────────
 function subscribeCollection(collName, callback) {
   let unsub = () => {};
