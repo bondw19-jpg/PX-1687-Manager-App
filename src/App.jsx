@@ -102,6 +102,35 @@ function AutoConnectFirestore() {
   return null;
 }
 
+// ── Automatic daily cloud snapshot ────────────────────────────────────────────
+// Once a real user is signed in AND live Firestore sync is active, write one
+// full-state snapshot per calendar day (guarded in localStorage). We wait a few
+// seconds after connecting so Firestore listeners hydrate the store first —
+// the snapshot then captures live cloud data, not the initial empty state.
+function AutoCloudSnapshot() {
+  const { user, dbReady, dbMode } = useAppStore();
+  const connected = dbReady && dbMode === 'firestore';
+  const isRealUser = user && user.uid && user.uid !== 'demo_user';
+
+  useEffect(() => {
+    if (!connected || !isRealUser) return;
+    const t = setTimeout(async () => {
+      try {
+        const { maybeWriteDailySnapshot } = await import('./lib/firestoreSync');
+        await maybeWriteDailySnapshot(useAppStore.getState(), {
+          appVersion: '2.1.2',
+          createdBy: { uid: user.uid, name: user.name || user.email || '' },
+        });
+      } catch (e) {
+        console.warn('[AutoCloudSnapshot] failed:', e?.message);
+      }
+    }, 12000);
+    return () => clearTimeout(t);
+  }, [connected, isRealUser, user?.uid]);
+
+  return null;
+}
+
 function AuthSessionGate({ children }) {
   const [authReady, setAuthReady] = useState(false);
   const setUser = useAppStore(s => s.setUser);
@@ -231,6 +260,7 @@ export default function App() {
           {(authReady) => (
             <>
               <AutoConnectFirestore />
+              <AutoCloudSnapshot />
               <Suspense fallback={<LoadingSpinner />}>
                 <Routes>
                   <Route path="/login"         element={<Login />} />
