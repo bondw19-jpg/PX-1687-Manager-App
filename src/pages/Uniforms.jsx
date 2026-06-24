@@ -490,8 +490,9 @@ function Uniforms() {
 
   // Self-healing inventory maintenance. Runs in two idempotent phases (one per render pass)
   // so each pass makes only one kind of change and the data converges, then stays quiet:
-  //   1. Dedupe — merge inventory items that share the same item+size+color (sum on-hand qty,
-  //      keep the richest location/notes), re-point manager + associate records to the survivor.
+  //   1. Dedupe — merge inventory items that share the same item+size+color (keep the most
+  //      recently updated on-hand qty, plus the richest location/notes), re-point manager +
+  //      associate records to the survivor.
   //   2. Backfill — link any Manager On-Hand record that has no inventory item to one, creating it if needed.
   useEffect(() => {
     const norm = (v) => String(v || '').trim().toLowerCase();
@@ -538,7 +539,7 @@ function Uniforms() {
 
     // ── Phase 1b: dedupe manager stock ───────────────────────────────────────
     // Merge manager records that are the exact same manager + item + size (+ color for color items):
-    // sum their qty, keep the richest link/location/notes, and re-point any issued associate items.
+    // keep the most recently updated qty, the richest link/location/notes, and re-point any issued associate items.
     const mgrKeyOf = (o) => colorOptionsFor(o.item).length > 0
       ? `${norm(o.managerName)}||${norm(o.item)}||${norm(o.size)}||${norm(o.color)}`
       : `${norm(o.managerName)}||${norm(o.item)}||${norm(o.size)}`;
