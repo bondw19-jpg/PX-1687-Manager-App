@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Download, Upload, RotateCcw, Trash2, CheckCircle2, AlertCircle,
   Clock, Database, Shield, ChevronDown, ChevronUp, X, HardDrive,
@@ -311,6 +311,81 @@ export default function BackupManager() {
   const [connecting, setConnecting] = useState(false);
   const [syncingCloud, setSyncingCloud] = useState(false); // true while pushing to Firestore after import/restore
   const [syncProgress, setSyncProgress] = useState('');    // progress message shown to user
+
+  // ── Cloud snapshots (automatic daily + manual point-in-time backups) ──────
+  const [cloudSnaps, setCloudSnaps]     = useState([]);
+  const [loadingCloud, setLoadingCloud] = useState(false);
+  const [cloudBusy, setCloudBusy]       = useState(false); // true while creating a manual snapshot
+
+  const isCloudConnected = dbReady && dbMode === 'firestore';
+
+  const loadCloudSnapshots = async () => {
+    if (!isCloudConnected) return;
+    setLoadingCloud(true);
+    try {
+      const { listCloudSnapshots } = await import('../lib/firestoreSync');
+      setCloudSnaps(await listCloudSnapshots());
+    } catch {
+      // Non-fatal — the section simply shows empty. Local backups still work.
+    } finally {
+      setLoadingCloud(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isCloudConnected) loadCloudSnapshots();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCloudConnected]);
+
+  // Create a manual cloud snapshot of the current data right now.
+  const handleCloudBackupNow = async () => {
+    if (!isCloudConnected || cloudBusy) return;
+    setCloudBusy(true);
+    try {
+      const { writeCloudSnapshot } = await import('../lib/firestoreSync');
+      await writeCloudSnapshot(useAppStore.getState(), {
+        auto: false,
+        appVersion: APP_VERSION,
+        createdBy: user ? { uid: user.uid, name: user.name || user.email || '' } : null,
+      });
+      showToast('Cloud snapshot saved!');
+      await loadCloudSnapshots();
+    } catch {
+      showToast('Cloud snapshot failed.', 'error');
+    } finally {
+      setCloudBusy(false);
+    }
+  };
+
+  // Restore a cloud snapshot — auto-saves current data locally first, then
+  // writes the snapshot to local storage and force-syncs it to Firestore.
+  const handleRestoreCloudSnapshot = (snap) => {
+    setConfirm({
+      title:        'Restore this cloud snapshot?',
+      message:      `Restores all ${snap.recordTotal || 0} records from ${format(new Date(snap.createdAt), 'MMM d, yyyy h:mm a')} back into your data. Records are merged in — matching items are overwritten with the snapshot version and nothing is deleted. Your current data is auto-saved first.`,
+      confirmLabel: 'Restore Now',
+      danger:       true,
+      onConfirm: async () => {
+        setConfirm(null);
+        setRestoring(true);
+        try {
+          const { getCloudSnapshot } = await import('../lib/firestoreSync');
+          const full = await getCloudSnapshot(snap.id);
+          if (!full?.data) throw new Error('snapshot-not-found');
+          createAutoBackup(); // local safety copy before overwriting
+          const existing = getAppData();
+          const version  = existing?.version ?? 6;
+          const appData  = sanitizeRestoredAppData({ state: full.data, version });
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+          await pushToCloudAndReload(appData, 'Snapshot restored!');
+        } catch {
+          showToast('Restore failed.', 'error');
+          setRestoring(false);
+        }
+      },
+      onCancel: () => setConfirm(null),
+    });
+  };
 
   // ── Helper: push imported/restored data to Firestore then reload ──────────
   const pushToCloudAndReload = async (data, successMsg) => {
@@ -688,6 +763,127 @@ export default function BackupManager() {
             this is the safest option and works even if you clear browser data. Use{' '}
             <strong>Import File</strong> to restore from a saved file.
           </div>
+        </div>
+
+        {/* ── Cloud Snapshots ─────────────────────────────────────────── */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-bold text-gray-800 text-sm flex items-center gap-2">
+              <Cloud size={16} className="text-gray-400" />
+              Cloud Snapshots
+              {cloudSnaps.length > 0 && (
+                <span className="bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded-full font-medium">
+                  {cloudSnaps.length}
+                </span>
+              )}
+            </h2>
+            {isCloudConnected && (
+              <button
+                onClick={loadCloudSnapshots}
+                disabled={loadingCloud}
+                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg disabled:opacity-50"
+                title="Refresh"
+              >
+                <RefreshCw size={15} className={loadingCloud ? 'animate-spin' : ''} />
+              </button>
+            )}
+          </div>
+
+          {!isCloudConnected ? (
+            <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 flex items-start gap-2.5 text-xs text-gray-500">
+              <CloudOff size={16} className="flex-shrink-0 mt-0.5 text-gray-400" />
+              <span>Cloud snapshots back up all team data to Firebase automatically once a day while you're signed in with cloud sync. Connect cloud sync above to enable them.</span>
+            </div>
+          ) : (
+            <>
+              <div className="bg-green-50 border border-green-100 rounded-xl p-3 flex gap-2.5 text-xs text-green-800 mb-3">
+                <Shield size={14} className="flex-shrink-0 mt-0.5" />
+                <div>
+                  <strong>Automatic protection on.</strong> A full snapshot of all team data is saved to the cloud once a day. Snapshots are kept and never auto-deleted, so you can recover data from any day.
+                </div>
+              </div>
+
+              <button
+                onClick={handleCloudBackupNow}
+                disabled={cloudBusy}
+                className="w-full flex items-center justify-center gap-2 bg-green-600 text-white py-3 rounded-xl font-semibold text-sm shadow-sm hover:bg-green-700 disabled:opacity-60 transition-all mb-3"
+              >
+                {cloudBusy ? <RefreshCw size={16} className="animate-spin" /> : <Cloud size={16} />}
+                {cloudBusy ? 'Saving snapshot…' : 'Back Up to Cloud Now'}
+              </button>
+
+              {loadingCloud && cloudSnaps.length === 0 ? (
+                <div className="bg-white rounded-xl p-6 flex items-center justify-center gap-2 text-sm text-gray-400 shadow-sm">
+                  <RefreshCw size={16} className="animate-spin" /> Loading snapshots…
+                </div>
+              ) : cloudSnaps.length === 0 ? (
+                <div className="bg-white rounded-xl p-6 flex flex-col items-center text-center shadow-sm">
+                  <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center mb-2">
+                    <Cloud size={22} className="text-gray-300" />
+                  </div>
+                  <p className="text-xs text-gray-400">
+                    No cloud snapshots yet. One is created automatically each day,<br />
+                    or tap "Back Up to Cloud Now" to create one immediately.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {cloudSnaps.map(snap => (
+                    <div key={snap.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                      <div className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center flex-shrink-0">
+                            <Cloud size={20} className="text-green-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-semibold text-sm text-gray-800">
+                                {format(new Date(snap.createdAt), 'MMM d, yyyy · h:mm a')}
+                              </p>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                                snap.auto ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-600'
+                              }`}>
+                                {snap.auto ? 'auto · daily' : 'manual'}
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              {snap.recordTotal || 0} records
+                              {snap.createdBy?.name ? ` · by ${snap.createdBy.name}` : ''}
+                            </p>
+                          </div>
+                        </div>
+                        {snap.counts && (
+                          <div className="flex flex-wrap gap-2 mt-3">
+                            {[
+                              { label: 'Associates', val: snap.counts.associates },
+                              { label: 'Call-Ins',   val: snap.counts.callIns },
+                              { label: 'Team Notes', val: snap.counts.teamNotes },
+                              { label: 'Tasks',      val: snap.counts.tasks },
+                              { label: 'Uniforms',   val: snap.counts.uniforms },
+                              { label: 'Reviews',    val: snap.counts.reviews },
+                              { label: 'Work Files', val: snap.counts.workFiles },
+                            ].filter(c => typeof c.val === 'number').map(({ label, val }) => (
+                              <span key={label} className="text-xs bg-gray-50 border border-gray-100 text-gray-600 px-2 py-1 rounded-lg">
+                                {val} {label}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex border-t border-gray-100">
+                        <button
+                          onClick={() => handleRestoreCloudSnapshot(snap)}
+                          className="flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-semibold text-primary hover:bg-red-50 transition-colors"
+                        >
+                          <RotateCcw size={14} /> Restore
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         {/* Saved Backups List */}
