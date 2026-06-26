@@ -614,9 +614,16 @@ export const useAppStore = create(
         set(s => ({ interviews: (s.interviews || []).map(i => i.id === id ? { ...i, ...payload } : i) }));
         fsUpdate('interviews', id, payload);
       },
-      deleteInterview: (id) => {
-        set(s => ({ interviews: (s.interviews || []).filter(i => i.id !== id) }));
-        fsDel('interviews', id);
+      // Soft-archive only — never hard-delete interview history.
+      archiveInterview: (id) => {
+        const payload = { archived: true, updatedAt: new Date().toISOString() };
+        set(s => ({ interviews: (s.interviews || []).map(i => i.id === id ? { ...i, ...payload } : i) }));
+        fsUpdate('interviews', id, payload);
+      },
+      restoreInterview: (id) => {
+        const payload = { archived: false, updatedAt: new Date().toISOString() };
+        set(s => ({ interviews: (s.interviews || []).map(i => i.id === id ? { ...i, ...payload } : i) }));
+        fsUpdate('interviews', id, payload);
       },
 
       // ── Tasks ─────────────────────────────────────────────────────────────

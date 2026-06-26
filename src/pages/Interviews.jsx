@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import {
   Plus, X, Search, Pencil, Printer, ArrowLeft, UserPlus, ClipboardList,
-  Archive, ChevronRight, CheckCircle2, XCircle, AlertTriangle, Calendar, Trash2,
+  Archive, ChevronRight, CheckCircle2, XCircle, AlertTriangle, Calendar,
 } from 'lucide-react';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
@@ -328,10 +328,13 @@ function InterviewForm({ candidate, interview, currentUserName, onBack, onSave }
 
 // ─── Candidate detail ───────────────────────────────────────────────────────
 function CandidateDetail({ candidate, interviews, onBack, onEdit, onArchive, onRestore, onSetStatus, onNewInterview, onEditInterview }) {
-  const list = interviews
+  const { archiveInterview, restoreInterview } = useAppStore();
+  const [showArchivedIvs, setShowArchivedIvs] = useState(false);
+  const all = interviews
     .filter(i => i.candidateId === candidate.id)
     .sort((a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date));
-  const { deleteInterview } = useAppStore();
+  const archivedCount = all.filter(i => i.archived).length;
+  const list = all.filter(i => showArchivedIvs ? i.archived : !i.archived);
 
   return (
     <div className="px-4 lg:px-8 py-4 lg:py-6 max-w-3xl mx-auto">
@@ -407,16 +410,27 @@ function CandidateDetail({ candidate, interviews, onBack, onEdit, onArchive, onR
 
       {/* Interviews */}
       <div className="flex items-center justify-between mb-2">
-        <h2 className="font-bold text-gray-900">Interviews ({list.length})</h2>
+        <h2 className="font-bold text-gray-900">
+          {showArchivedIvs ? 'Archived Interviews' : 'Interviews'} ({list.length})
+        </h2>
         <button onClick={() => onNewInterview(candidate)} className="flex items-center gap-1.5 bg-primary text-white px-3 py-2 rounded-xl text-sm font-semibold hover:bg-primary-dark">
           <Plus size={16} /> New Interview
         </button>
       </div>
 
+      {archivedCount > 0 && (
+        <button
+          onClick={() => setShowArchivedIvs(s => !s)}
+          className="text-xs font-semibold text-gray-500 hover:text-primary mb-2"
+        >
+          {showArchivedIvs ? '← Back to active interviews' : `View archived (${archivedCount})`}
+        </button>
+      )}
+
       {list.length === 0 ? (
         <div className="bg-white rounded-xl border border-dashed border-gray-300 p-8 text-center text-gray-400">
           <ClipboardList size={32} className="mx-auto mb-2 opacity-50" />
-          <p className="text-sm">No interviews yet. Start the first round.</p>
+          <p className="text-sm">{showArchivedIvs ? 'No archived interviews.' : 'No interviews yet. Start the first round.'}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -446,9 +460,15 @@ function CandidateDetail({ candidate, interviews, onBack, onEdit, onArchive, onR
                   <button onClick={() => printInterviewSheet(iv, candidate)} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-gray-50 text-gray-700 hover:bg-gray-100 text-sm font-semibold">
                     <Printer size={15} /> Print
                   </button>
-                  <button onClick={() => { if (confirm('Remove this interview record? This cannot be undone.')) deleteInterview(iv.id); }} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 text-sm font-semibold" title="Delete interview">
-                    <Trash2 size={15} />
-                  </button>
+                  {iv.archived ? (
+                    <button onClick={() => restoreInterview(iv.id)} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm font-semibold" title="Restore interview">
+                      <Archive size={15} /> Restore
+                    </button>
+                  ) : (
+                    <button onClick={() => archiveInterview(iv.id)} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-gray-50 text-gray-600 hover:bg-red-50 hover:text-red-600 text-sm font-semibold" title="Archive interview">
+                      <Archive size={15} />
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -485,9 +505,11 @@ export default function Interviews() {
       .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
   }, [candidates, search, showArchived]);
 
+  const activeInterviewsFor = (candidateId) =>
+    interviews.filter(i => i.candidateId === candidateId && !i.archived);
+
   const latestRecommendation = (candidateId) => {
-    const list = interviews
-      .filter(i => i.candidateId === candidateId)
+    const list = activeInterviewsFor(candidateId)
       .sort((a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date));
     if (list.length === 0) return null;
     return scoreInterview(list[0].ratings);
@@ -597,7 +619,7 @@ export default function Interviews() {
         ) : (
           <div className="space-y-3">
             {visible.map(c => {
-              const count = interviews.filter(i => i.candidateId === c.id).length;
+              const count = activeInterviewsFor(c.id).length;
               const rec = latestRecommendation(c.id);
               return (
                 <button
