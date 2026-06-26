@@ -4,7 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, PhoneMissed, Star, Calendar,
   ClipboardCheck, StickyNote, ListChecks, Megaphone, BookUser, Shirt,
-  Settings, LogOut, X, HardDrive, ShieldCheck, ClipboardList
+  Settings, LogOut, X, HardDrive, ShieldCheck, ClipboardList, UserSearch
 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { getRoleShortLabel, isAdminUser, isShiftLeadUser } from '../lib/roles';
@@ -24,6 +24,7 @@ const sections = [
       { label: 'Call-In Tracker',  icon: PhoneMissed,     path: '/callins' },
       { label: 'Performance',      icon: Star,            path: '/reviews' },
       { label: 'Uniform Tracker',  icon: Shirt,           path: '/uniforms' },
+      { label: 'Interviews',       icon: UserSearch,      path: '/interviews' },
     ]
   },
   {
