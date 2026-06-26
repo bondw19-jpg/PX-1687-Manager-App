@@ -650,7 +650,8 @@ export function printAssociateAttendanceReport(associate, allCallIns) {
  */
 export async function printInterviewSheet(interview, candidate = {}) {
   const {
-    COMPETENCIES, ALSO_CONSIDER, AVAILABILITY_DAYS, ratingLabel, scoreInterview,
+    COMPETENCIES, ALSO_CONSIDER, AVAILABILITY_DAYS, INTERVIEW_STEPS,
+    IMPERMISSIBLE_WARNING, ratingLabel, scoreInterview,
   } = await import('./interviewContent');
 
   const ratings = interview.ratings || {};
@@ -684,6 +685,13 @@ export async function printInterviewSheet(interview, candidate = {}) {
   const decisionColor = score.recommend ? 'green' : 'red';
   const decisionLabel = score.count === 0 ? 'Not Scored' : score.recommendation;
 
+  const stepsHtml = INTERVIEW_STEPS.map((s, i) => {
+    const points = s.points.length
+      ? `<ul style="margin:2px 0 0 16px;font-size:10px;color:#555">${s.points.map(p => `<li>${p.replace(/</g, '&lt;')}</li>`).join('')}</ul>`
+      : '';
+    return `<li style="margin-bottom:4px"><strong>Step ${i + 1}: ${s.title}</strong>${points}</li>`;
+  }).join('');
+
   const html = `
     ${infoGridHtml([
       ['Candidate Name', candidateName],
@@ -693,6 +701,13 @@ export async function printInterviewSheet(interview, candidate = {}) {
       ['Interview Date', date],
       ['Open Schedule', openSchedule],
     ])}
+
+    <h2 class="section-title">Interview Process — 6 Steps</h2>
+    <ol style="margin-left:16px;font-size:11px;color:#333">${stepsHtml}</ol>
+
+    <div class="discipline-box red">
+      <strong>Reminder:</strong> ${IMPERMISSIBLE_WARNING}
+    </div>
 
     <h2 class="section-title">Availability</h2>
     <div class="info-grid">${availRows}</div>

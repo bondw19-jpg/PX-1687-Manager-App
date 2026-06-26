@@ -6,6 +6,7 @@ export const SHIFT_LEAD_PATHS = new Set([
   '/daily-plan',
   '/tasks',
   '/announcements',
+  '/interviews',
 ]);
 
 export function canAccessPath(user, path) {
