@@ -7,6 +7,7 @@ import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import { badgeHtml, infoGridHtml, openPrintWindow, statsRowHtml } from '../lib/printReport';
+import { colorOptionsFor, uniformSkuKey } from '../lib/uniformSku';
 import {
   ModalHeader,
   ModalFooter,
@@ -43,23 +44,12 @@ const SIZE_OPTIONS = [
   'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'One Size', 'N/A'
 ];
 
-const ITEM_COLORS = {
-  'Shirt': ['Red', 'Black'],
-  'Other': ['Black', 'Red', 'White', 'Gray', 'Khaki', 'Navy', 'Other'],
-};
-const colorOptionsFor = (item) => ITEM_COLORS[item] || [];
 const ALL_COLORS = ['Black', 'Red', 'White', 'Gray', 'Khaki', 'Navy', 'Other'];
 
-// Normalized identity helpers so the same uniform (item + size, plus color only when the
-// item actually has color options) is always recognized as one SKU — regardless of
-// capitalization or stray spaces. Used to prevent duplicate rows at creation time.
-const normKey = (v) => String(v || '').trim().toLowerCase();
-const sameUniform = (a, b) => {
-  if (normKey(a?.item) !== normKey(b?.item)) return false;
-  if (normKey(a?.size) !== normKey(b?.size)) return false;
-  if (colorOptionsFor(a?.item).length === 0) return true;
-  return normKey(a?.color) === normKey(b?.color);
-};
+// Identity of an existing row: prefer the stored stable SKU key, falling back to a
+// freshly computed one for rows saved before the key existed. Matching on the stored
+// key (instead of comparing live text fields) is what keeps the same uniform as one row.
+const rowSku = (o) => o?.skuKey || uniformSkuKey(o);
 
 const ISSUE_TYPES = [
   { value: 'compliant', label: 'Compliant' },
@@ -218,7 +208,8 @@ function InventoryModal({ record, onClose }) {
       updateUniformInventoryItem(record.id, payload);
     } else {
       // Reuse an existing row for the same SKU instead of creating a duplicate.
-      const existing = uniformInventory.find(i => sameUniform(i, payload));
+      const payloadSku = uniformSkuKey(payload);
+      const existing = uniformInventory.find(i => rowSku(i) === payloadSku);
       if (existing) updateUniformInventoryItem(existing.id, payload);
       else addUniformInventoryItem(payload);
     }
@@ -262,9 +253,10 @@ function ManagerStockModal({ record, inventory, managerQtyByInventoryId, associa
 
   const setField = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
 
-  // Auto-link inventory item if item+size+color match
+  // Auto-link inventory item when the SKU matches a stored row.
   const syncInventoryLink = (nextForm) => {
-    const match = inventory.find(i => sameUniform(i, nextForm));
+    const nextSku = uniformSkuKey(nextForm);
+    const match = inventory.find(i => rowSku(i) === nextSku);
     return { ...nextForm, inventoryItemId: match?.id || '' };
   };
 
@@ -283,9 +275,10 @@ function ManagerStockModal({ record, inventory, managerQtyByInventoryId, associa
 
     let inventoryItemId = form.inventoryItemId;
 
-    // Auto-create an inventory item if this item+size+color has no record yet
+    // Auto-create an inventory item if this SKU has no record yet
     if (!inventoryItemId && form.item) {
-      const existing = inventory.find(i => sameUniform(i, form));
+      const formSku = uniformSkuKey(form);
+      const existing = inventory.find(i => rowSku(i) === formSku);
       if (existing) {
         inventoryItemId = existing.id;
       } else {
@@ -496,11 +489,10 @@ function Uniforms() {
   //   2. Backfill — link any Manager On-Hand record that has no inventory item to one, creating it if needed.
   useEffect(() => {
     const norm = (v) => String(v || '').trim().toLowerCase();
-    // Identity key: color only matters for items that actually have color options (Shirt / Other),
-    // so a "Hat · Black" and a colorless "Hat" are treated as the same SKU and merged.
-    const keyOf = (o) => colorOptionsFor(o.item).length > 0
-      ? `${norm(o.item)}||${norm(o.size)}||${norm(o.color)}`
-      : `${norm(o.item)}||${norm(o.size)}`;
+    // Identity key: use each row's stored stable SKU key (falling back to a computed
+    // one for rows saved before the key existed). This keeps merging based on a single
+    // stored identity rather than re-deriving it from live text fields every time.
+    const keyOf = (o) => o.skuKey || uniformSkuKey(o);
     // Recency of a row, used to pick which duplicate's quantity to trust when merging.
     const tsOf = (o) => { const t = Date.parse(o?.updatedAt || ''); return Number.isNaN(t) ? 0 : t; };
     const AUTO_NOTE = 'Auto-created from Manager On-Hand entry';
@@ -540,9 +532,7 @@ function Uniforms() {
     // ── Phase 1b: dedupe manager stock ───────────────────────────────────────
     // Merge manager records that are the exact same manager + item + size (+ color for color items):
     // keep the most recently updated qty, the richest link/location/notes, and re-point any issued associate items.
-    const mgrKeyOf = (o) => colorOptionsFor(o.item).length > 0
-      ? `${norm(o.managerName)}||${norm(o.item)}||${norm(o.size)}||${norm(o.color)}`
-      : `${norm(o.managerName)}||${norm(o.item)}||${norm(o.size)}`;
+    const mgrKeyOf = (o) => `${norm(o.managerName)}||${o.skuKey || uniformSkuKey(o)}`;
     const mgrGroups = {};
     managerUniformStock.forEach(r => { (mgrGroups[mgrKeyOf(r)] ||= []).push(r); });
 

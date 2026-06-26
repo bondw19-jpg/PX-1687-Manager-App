@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { normalizeUserProfile } from '../lib/roles';
+import { uniformSkuKey } from '../lib/uniformSku';
 
 // Returns only the first name (first word) from a full name string
 function firstName(str) {
@@ -617,12 +618,18 @@ export const useAppStore = create(
         fsDel('uniforms', id);
       },
       addUniformInventoryItem: (entry) => {
-        const doc = { id: `uniform_inventory_${Date.now()}`, ...entry, createdAt: new Date().toISOString() };
+        const base = { id: `uniform_inventory_${Date.now()}`, ...entry, createdAt: new Date().toISOString() };
+        // Stamp a stable SKU key so this uniform is always recognized as one row.
+        const doc = { ...base, skuKey: uniformSkuKey(base) };
         set(s => ({ uniformInventory: [doc, ...(s.uniformInventory || [])] }));
         fsWrite('uniformInventory', doc.id, doc);
       },
       updateUniformInventoryItem: (id, d) => {
-        const payload = { ...d, updatedAt: new Date().toISOString() };
+        // Recompute the SKU key from the existing row merged with this change, so
+        // partial patches (e.g. dedupe re-pointing) still carry a correct key.
+        const existing = (get().uniformInventory || []).find(r => r.id === id);
+        const merged = { ...(existing || {}), ...d };
+        const payload = { ...d, skuKey: uniformSkuKey(merged), updatedAt: new Date().toISOString() };
         set(s => ({ uniformInventory: (s.uniformInventory || []).map(r => r.id === id ? { ...r, ...payload } : r) }));
         fsUpdate('uniformInventory', id, payload);
       },
@@ -631,12 +638,18 @@ export const useAppStore = create(
         fsDel('uniformInventory', id);
       },
       addManagerUniformStock: (entry) => {
-        const doc = { ...entry, id: `manager_uniform_stock_${Date.now()}`, createdAt: new Date().toISOString() };
+        const base = { ...entry, id: `manager_uniform_stock_${Date.now()}`, createdAt: new Date().toISOString() };
+        // Stamp a stable SKU key so this uniform is always recognized as one row.
+        const doc = { ...base, skuKey: uniformSkuKey(base) };
         set(s => ({ managerUniformStock: [doc, ...(s.managerUniformStock || [])] }));
         fsWrite('managerUniformStock', doc.id, doc);
       },
       updateManagerUniformStock: (id, d) => {
-        const payload = { ...d, updatedAt: new Date().toISOString() };
+        // Recompute the SKU key from the existing row merged with this change, so
+        // partial patches (e.g. dedupe re-pointing) still carry a correct key.
+        const existing = (get().managerUniformStock || []).find(r => r.id === id);
+        const merged = { ...(existing || {}), ...d };
+        const payload = { ...d, skuKey: uniformSkuKey(merged), updatedAt: new Date().toISOString() };
         set(s => ({ managerUniformStock: (s.managerUniformStock || []).map(r => r.id === id ? { ...r, ...payload } : r) }));
         fsUpdate('managerUniformStock', id, payload);
       },
@@ -716,7 +729,7 @@ export const useAppStore = create(
     {
       name: 'panda-manager-storage',
       storage: createBackupStorage(),
-      version: 6,
+      version: 7,
       migrate: (persistedState, fromVersion) => {
         const state = { ...(persistedState || {}) };
         if ((fromVersion ?? -1) < 1) {
@@ -745,6 +758,15 @@ export const useAppStore = create(
           // never appear under a different signed-in user after account switching.
           state.myNotes = [];
           state.myEvents = [];
+        }
+        if ((fromVersion ?? -1) < 7) {
+          // Backfill a stable SKU key onto every uniform row so identity no longer
+          // relies on live text matching. Idempotent and quantity-preserving: it
+          // only adds/refreshes the skuKey field and never sums or removes rows.
+          if (Array.isArray(state.uniformInventory))
+            state.uniformInventory = state.uniformInventory.map(r => ({ ...r, skuKey: uniformSkuKey(r) }));
+          if (Array.isArray(state.managerUniformStock))
+            state.managerUniformStock = state.managerUniformStock.map(r => ({ ...r, skuKey: uniformSkuKey(r) }));
         }
         return state;
       },
