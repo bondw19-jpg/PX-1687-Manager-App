@@ -187,7 +187,7 @@ function InterviewForm({ candidate, interview, currentUserName, onBack, onSave }
   };
 
   return (
-    <div className="px-4 lg:px-8 py-4 lg:py-6 max-w-4xl mx-auto pb-32">
+    <div className="px-4 lg:px-8 py-4 lg:py-6 max-w-4xl mx-auto pb-[calc(150px+env(safe-area-inset-bottom,0px))] lg:pb-32">
       <button onClick={onBack} className="flex items-center gap-1.5 text-sm font-semibold text-gray-500 hover:text-primary mb-4">
         <ArrowLeft size={16} /> Back to candidate
       </button>
@@ -298,7 +298,7 @@ function InterviewForm({ candidate, interview, currentUserName, onBack, onSave }
       </div>
 
       {/* Sticky score bar */}
-      <div className="fixed bottom-0 left-0 right-0 lg:left-[260px] bg-white border-t border-gray-200 px-4 lg:px-8 py-3 z-30 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
+      <div className="fixed bottom-[calc(56px+env(safe-area-inset-bottom,0px))] lg:bottom-0 left-0 right-0 lg:left-[260px] bg-white border-t border-gray-200 px-4 lg:px-8 py-3 z-30 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className="text-center">
