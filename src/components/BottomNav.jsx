@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Home, Users, PhoneMissed, Calendar, ClipboardCheck,
-  StickyNote, ListChecks, BookUser, ShieldCheck, Shirt, ClipboardList
+  StickyNote, ListChecks, BookUser, ShieldCheck, Shirt, ClipboardList, UserSearch
 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { isAdminUser } from '../lib/roles';
@@ -17,6 +17,7 @@ const tabs = [
   { id: 'daily-plan', label: '5P7A',      icon: ClipboardList, path: '/daily-plan' },
   { id: 'notes',      label: 'Notes',     icon: StickyNote,    path: '/notes' },
   { id: 'uniforms',  label: 'Uniforms',  icon: Shirt,         path: '/uniforms' },
+  { id: 'interviews', label: 'Hiring',   icon: UserSearch,    path: '/interviews' },
   { id: 'tasks',     label: 'Tasks',     icon: ListChecks,    path: '/tasks' },
   { id: 'contacts',  label: 'Contacts',  icon: BookUser,      path: '/contacts' },
 ];

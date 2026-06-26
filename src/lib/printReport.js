@@ -632,3 +632,118 @@ export function printAssociateAttendanceReport(associate, allCallIns) {
     html,
   });
 }
+
+/**
+ * printInterviewSheet(interview, candidate)
+ *
+ * Generates and opens a completed candidate-interview sheet that mirrors the
+ * official Panda Express paper interview form: candidate header, availability,
+ * the 7 competencies with their recommended questions + STAR notes, the 1–5
+ * ratings, the "also consider" soft factors, and the final evaluation total /
+ * average with the Move Forward / Does Not Recommend decision.
+ *
+ * Imports the fixed interview content + scoring rule from interviewContent.js
+ * so the printed sheet always matches the on-screen form.
+ *
+ * @param {object} interview - interview record from the store
+ * @param {object} [candidate] - the candidate record (for header fallback fields)
+ */
+export async function printInterviewSheet(interview, candidate = {}) {
+  const {
+    COMPETENCIES, ALSO_CONSIDER, AVAILABILITY_DAYS, ratingLabel, scoreInterview,
+  } = await import('./interviewContent');
+
+  const ratings = interview.ratings || {};
+  const starNotes = interview.starNotes || {};
+  const score = scoreInterview(ratings);
+
+  const candidateName = interview.candidateName || candidate.name || 'Candidate';
+  const position = interview.position || candidate.position || '—';
+  const region = interview.region || candidate.region || '—';
+  const interviewer = interview.interviewerName || (interview.createdBy && interview.createdBy.name) || '—';
+  const date = interview.date || '—';
+
+  const availability = candidate.availability || {};
+  const availRows = AVAILABILITY_DAYS
+    .map(d => `<div class="info-row"><span class="info-label">${d.label}:</span><span class="info-value">${availability[d.key] || '—'}</span></div>`)
+    .join('');
+  const openSchedule = availability.openSchedule ? 'Yes' : 'No';
+
+  const competencyRows = COMPETENCIES.map(c => {
+    const r = Number(ratings[c.key]) || 0;
+    const ratingText = r > 0 ? `${r}/5 — ${ratingLabel(r)}` : '—';
+    const questions = c.questions.map(q => `<li style="margin-bottom:3px">${q}</li>`).join('');
+    const notes = (starNotes[c.key] || '').trim();
+    return `<tr>
+      <td style="width:150px;font-weight:bold;vertical-align:top">${c.label}<div style="margin-top:6px;font-weight:bold;color:#b91c1c">${ratingText}</div></td>
+      <td style="width:300px;vertical-align:top"><ul style="margin-left:14px;font-size:10px;color:#444">${questions}</ul></td>
+      <td style="vertical-align:top;white-space:pre-wrap">${notes ? notes.replace(/</g, '&lt;') : '<span style="color:#aaa">—</span>'}</td>
+    </tr>`;
+  }).join('');
+
+  const decisionColor = score.recommend ? 'green' : 'red';
+  const decisionLabel = score.count === 0 ? 'Not Scored' : score.recommendation;
+
+  const html = `
+    ${infoGridHtml([
+      ['Candidate Name', candidateName],
+      ['Position Applying For', position],
+      ['Region', region],
+      ['Interviewer Name', interviewer],
+      ['Interview Date', date],
+      ['Open Schedule', openSchedule],
+    ])}
+
+    <h2 class="section-title">Availability</h2>
+    <div class="info-grid">${availRows}</div>
+
+    ${statsRowHtml([
+      { value: score.total, label: 'Evaluation Total' },
+      { value: score.averageText, label: 'Average (of ' + (score.count || 0) + ')' },
+      { value: decisionLabel, label: 'Decision' },
+    ])}
+
+    <div class="discipline-box ${decisionColor}">
+      <strong>Decision Rule:</strong> Average ≥ 3 → <strong>Move Forward</strong>; below 3 → <strong>Does Not Recommend</strong>.
+      &nbsp; Result: ${badgeHtml(decisionLabel, decisionColor)}
+    </div>
+
+    <h2 class="section-title">Behavioral Competencies — Recommended Questions &amp; STAR Notes</h2>
+    <table>
+      <thead><tr>
+        <th style="width:150px">Competency / Rating</th>
+        <th style="width:300px">Recommended Questions</th>
+        <th>STAR Method (Situation, Task, Action, Result)</th>
+      </tr></thead>
+      <tbody>${competencyRows}</tbody>
+    </table>
+
+    <div class="legend">
+      <div class="legend-title">Rating Scale</div>
+      <div class="legend-grid">
+        <div class="legend-item"><span class="legend-key">1</span> Limited</div>
+        <div class="legend-item"><span class="legend-key">2</span> Fair</div>
+        <div class="legend-item"><span class="legend-key">3</span> Good</div>
+        <div class="legend-item"><span class="legend-key">4</span> Very Good</div>
+        <div class="legend-item"><span class="legend-key">5</span> Exceptional</div>
+      </div>
+    </div>
+
+    <h2 class="section-title">Also Consider</h2>
+    <div style="font-size:11px;color:#555;margin-bottom:10px">${ALSO_CONSIDER.join(' · ')}</div>
+    <div class="info-grid" style="grid-template-columns:1fr">
+      <div class="info-row"><span class="info-label">Soft-Factor Notes:</span><span class="info-value" style="white-space:pre-wrap">${(interview.alsoConsiderNotes || '—').replace(/</g, '&lt;')}</span></div>
+    </div>
+
+    <h2 class="section-title">Additional Notes</h2>
+    <div class="info-grid" style="grid-template-columns:1fr">
+      <div class="info-row"><span class="info-value" style="white-space:pre-wrap">${(interview.additionalNotes || '—').replace(/</g, '&lt;')}</span></div>
+    </div>
+  `;
+
+  openPrintWindow({
+    title: `Candidate Interview — ${candidateName}`,
+    subtitle: `${position} · ${date}`,
+    html,
+  });
+}

@@ -420,7 +420,7 @@ export async function batchImportToFirestore(data, uid) {
   // Shared collections
   const SHARED_COLLS = [
     'associates', 'callIns', 'teamEvents',
-    'teamNotes', 'reviews', 'tasks', 'uniforms', 'uniformInventory', 'managerUniformStock', 'associateUniformItems', 'contacts', 'announcements',
+    'teamNotes', 'reviews', 'candidates', 'interviews', 'tasks', 'uniforms', 'uniformInventory', 'managerUniformStock', 'associateUniformItems', 'contacts', 'announcements',
   ];
   for (const coll of SHARED_COLLS) {
     const items = data[coll];
@@ -477,7 +477,7 @@ export async function batchForceToFirestore(data, uid) {
 
   const SHARED_COLLS = [
     'associates', 'callIns', 'teamEvents',
-    'teamNotes', 'reviews', 'tasks', 'uniforms', 'uniformInventory', 'managerUniformStock', 'associateUniformItems', 'contacts', 'announcements',
+    'teamNotes', 'reviews', 'candidates', 'interviews', 'tasks', 'uniforms', 'uniformInventory', 'managerUniformStock', 'associateUniformItems', 'contacts', 'announcements',
   ];
   for (const coll of SHARED_COLLS) {
     const items = data[coll];
@@ -549,7 +549,8 @@ export async function clearAllPrivateData(uid) {
 // days accumulate so historical data is always recoverable.
 
 const SNAPSHOT_COLLS = [
-  'associates', 'callIns', 'teamEvents', 'teamNotes', 'reviews', 'tasks',
+  'associates', 'callIns', 'teamEvents', 'teamNotes', 'reviews',
+  'candidates', 'interviews', 'tasks',
   'uniforms', 'uniformInventory', 'managerUniformStock', 'associateUniformItems',
   'contacts', 'announcements',
 ];
@@ -809,6 +810,8 @@ export async function initFirestoreSync(set, get) {
       teamEvents:    'teamEvents',
       teamNotes:     'teamNotes',
       reviews:       'reviews',
+      candidates:    'candidates',
+      interviews:    'interviews',
       tasks:         'tasks',
       uniforms:      'uniforms',
       uniformInventory: 'uniformInventory',
@@ -993,7 +996,7 @@ export async function initFirestoreSync(set, get) {
           const data   = parsed?.state ?? parsed;
           const hasData = [
             'associates', 'callIns', 'teamNotes',
-            'reviews', 'tasks', 'uniforms', 'uniformInventory', 'managerUniformStock', 'associateUniformItems', 'contacts', 'announcements',
+            'reviews', 'candidates', 'interviews', 'tasks', 'uniforms', 'uniformInventory', 'managerUniformStock', 'associateUniformItems', 'contacts', 'announcements',
           ].some(k => Array.isArray(data[k]) && data[k].length > 0);
 
           if (hasData) {

@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, PhoneMissed, Star, Calendar,
   ClipboardCheck, StickyNote, ListChecks, Megaphone, BookUser, Shirt,
-  Settings, LogOut, ChevronRight, HardDrive, ShieldCheck, ClipboardList
+  Settings, LogOut, ChevronRight, HardDrive, ShieldCheck, ClipboardList, UserSearch
 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { getRoleShortLabel, isAdminUser } from '../lib/roles';
@@ -22,6 +22,7 @@ const sections = [
       { label: 'Associates',      icon: Users,           path: '/team' },
       { label: 'Call-In Tracker', icon: PhoneMissed,     path: '/callins' },
       { label: 'Performance',     icon: Star,            path: '/reviews' },
+      { label: 'Interviews',      icon: UserSearch,      path: '/interviews' },
       { label: 'Uniform Tracker', icon: Shirt,           path: '/uniforms' },
     ],
   },

@@ -17,6 +17,7 @@ const CalendarPage  = lazy(() => import('./pages/CalendarPage'));
 const Checklist     = lazy(() => import('./pages/Checklist'));
 const Notes         = lazy(() => import('./pages/Notes'));
 const Reviews       = lazy(() => import('./pages/Reviews'));
+const Interviews    = lazy(() => import('./pages/Interviews'));
 const Uniforms      = lazy(() => import('./pages/Uniforms'));
 const Tasks         = lazy(() => import('./pages/Tasks'));
 const Contacts      = lazy(() => import('./pages/Contacts'));
@@ -272,6 +273,7 @@ export default function App() {
                   <Route path="/daily-plan"    element={<PrivatePage authReady={authReady} path="/daily-plan"><DailyPlan /></PrivatePage>} />
                   <Route path="/notes"         element={<PrivatePage authReady={authReady} path="/notes"><Notes /></PrivatePage>} />
                   <Route path="/reviews"       element={<PrivatePage authReady={authReady} path="/reviews"><Reviews /></PrivatePage>} />
+                  <Route path="/interviews"    element={<PrivatePage authReady={authReady} path="/interviews"><Interviews /></PrivatePage>} />
                   <Route path="/uniforms"      element={<PrivatePage authReady={authReady} path="/uniforms"><Uniforms /></PrivatePage>} />
                   <Route path="/tasks"         element={<PrivatePage authReady={authReady} path="/tasks"><Tasks /></PrivatePage>} />
                   <Route path="/contacts"      element={<PrivatePage authReady={authReady} path="/contacts"><Contacts /></PrivatePage>} />

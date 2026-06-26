@@ -557,6 +557,68 @@ export const useAppStore = create(
         fsDel('reviews', id);
       },
 
+      // ── Candidates & Interviews ───────────────────────────────────────────
+      candidates: [],
+      interviews: [],
+      addCandidate: (c) => {
+        const u = get().user;
+        const doc = {
+          ...c,
+          id: `candidate_${Date.now()}`,
+          status: c.status || 'new',
+          archived: false,
+          createdAt: new Date().toISOString(),
+          createdBy: u ? { uid: u.uid, name: firstName(u.name || u.email?.split('@')[0]) } : null,
+        };
+        set(s => ({ candidates: [doc, ...(s.candidates || [])] }));
+        fsWrite('candidates', doc.id, doc);
+        return doc;
+      },
+      updateCandidate: (id, d) => {
+        const payload = { ...d, updatedAt: new Date().toISOString() };
+        set(s => ({ candidates: (s.candidates || []).map(c => c.id === id ? { ...c, ...payload } : c) }));
+        fsUpdate('candidates', id, payload);
+      },
+      // Soft-archive only — never hard-delete candidate data.
+      archiveCandidate: (id) => {
+        const payload = { archived: true, updatedAt: new Date().toISOString() };
+        set(s => ({ candidates: (s.candidates || []).map(c => c.id === id ? { ...c, ...payload } : c) }));
+        fsUpdate('candidates', id, payload);
+      },
+      restoreCandidate: (id) => {
+        const payload = { archived: false, updatedAt: new Date().toISOString() };
+        set(s => ({ candidates: (s.candidates || []).map(c => c.id === id ? { ...c, ...payload } : c) }));
+        fsUpdate('candidates', id, payload);
+      },
+      addInterview: (entry) => {
+        const u = get().user;
+        const doc = {
+          ...entry,
+          id: `interview_${Date.now()}`,
+          createdAt: new Date().toISOString(),
+          createdBy: u ? { uid: u.uid, name: firstName(u.name || u.email?.split('@')[0]) } : null,
+        };
+        set(s => ({ interviews: [doc, ...(s.interviews || [])] }));
+        fsWrite('interviews', doc.id, doc);
+        // Moving a candidate into the pipeline when their first interview is logged.
+        if (doc.candidateId) {
+          const cand = (get().candidates || []).find(c => c.id === doc.candidateId);
+          if (cand && (cand.status === 'new' || !cand.status)) {
+            get().updateCandidate(doc.candidateId, { status: 'interviewing' });
+          }
+        }
+        return doc;
+      },
+      updateInterview: (id, d) => {
+        const payload = { ...d, updatedAt: new Date().toISOString() };
+        set(s => ({ interviews: (s.interviews || []).map(i => i.id === id ? { ...i, ...payload } : i) }));
+        fsUpdate('interviews', id, payload);
+      },
+      deleteInterview: (id) => {
+        set(s => ({ interviews: (s.interviews || []).filter(i => i.id !== id) }));
+        fsDel('interviews', id);
+      },
+
       // ── Tasks ─────────────────────────────────────────────────────────────
       tasks: [],
       addTask: (t) => {
@@ -729,7 +791,7 @@ export const useAppStore = create(
     {
       name: 'panda-manager-storage',
       storage: createBackupStorage(),
-      version: 7,
+      version: 8,
       migrate: (persistedState, fromVersion) => {
         const state = { ...(persistedState || {}) };
         if ((fromVersion ?? -1) < 1) {
@@ -768,6 +830,11 @@ export const useAppStore = create(
           if (Array.isArray(state.managerUniformStock))
             state.managerUniformStock = state.managerUniformStock.map(r => ({ ...r, skuKey: uniformSkuKey(r) }));
         }
+        if ((fromVersion ?? -1) < 8) {
+          // Candidate Interview Module: ensure the new shared arrays exist.
+          if (!Array.isArray(state.candidates)) state.candidates = [];
+          if (!Array.isArray(state.interviews)) state.interviews = [];
+        }
         return state;
       },
       merge: (persisted, current) => ({
@@ -779,6 +846,8 @@ export const useAppStore = create(
         teamEvents:    Array.isArray(persisted?.teamEvents)    ? persisted.teamEvents    : current.teamEvents,
         teamNotes:     Array.isArray(persisted?.teamNotes)     ? persisted.teamNotes     : current.teamNotes,
         reviews:       Array.isArray(persisted?.reviews)       ? persisted.reviews       : current.reviews,
+        candidates:    Array.isArray(persisted?.candidates)    ? persisted.candidates    : current.candidates,
+        interviews:    Array.isArray(persisted?.interviews)    ? persisted.interviews    : current.interviews,
         tasks:         Array.isArray(persisted?.tasks)         ? persisted.tasks         : current.tasks,
         contacts:      Array.isArray(persisted?.contacts)      ? persisted.contacts      : current.contacts,
         uniforms:      Array.isArray(persisted?.uniforms)      ? persisted.uniforms      : current.uniforms,
@@ -819,6 +888,8 @@ export const useAppStore = create(
           customChecklists: state.customChecklists,
           teamNotes:     stripDataUrls(state.teamNotes),
           reviews:       state.reviews,
+          candidates:    state.candidates,
+          interviews:    state.interviews,
           tasks:         state.tasks,
           uniforms:      state.uniforms,
           uniformInventory: state.uniformInventory,
