@@ -25,12 +25,12 @@ export default function Header({ title, subtitle, showAdd = false, onAdd, rightI
             <Menu size={22} />
           </button>
 
-          <div className="flex-1 mx-3 text-white">
-            <div className="text-[10px] font-medium opacity-80 flex items-center gap-1">
-              <img src="/panda-icon-192.png" alt="" className="w-4 h-4" />
-              {storeName}
+          <div className="flex-1 mx-3 text-white min-w-0">
+            <div className="text-[10px] font-medium opacity-80 flex items-center gap-1 min-w-0">
+              <img src="/panda-icon-192.png" alt="" className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{storeName}</span>
             </div>
-            <div className="font-bold text-base leading-tight">{title || subtitle}</div>
+            <div className="font-bold text-base leading-tight truncate">{title || subtitle}</div>
           </div>
 
           <div className="flex items-center gap-2">
