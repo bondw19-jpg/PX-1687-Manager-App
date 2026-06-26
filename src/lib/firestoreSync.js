@@ -1,5 +1,6 @@
 import { loadOrCreateMemberProfile } from './memberRoles';
 import { normalizeUserProfile } from './roles';
+import { notifySaveError, notifySaveSuccess } from './saveToast';
 // firestoreSync.js
 // ─────────────────────────────────────────────────────────────────────────────
 // Loaded dynamically the first time the user connects Firebase.
@@ -186,8 +187,10 @@ export async function fsSetItem(collName, id, data) {
     const ref = await storeItem(collName, id);
     const safe = stripAttachmentDataUrls(data);
     await setDoc(ref, { ...safe, _updatedAt: serverTimestamp() }, { merge: true });
+    notifySaveSuccess();
   } catch (e) {
     console.warn(`[FS] set(${collName}/${id}):`, e?.code || e?.message);
+    notifySaveError();
   }
 }
 
@@ -197,13 +200,16 @@ export async function fsUpdateItem(collName, id, data) {
     const { updateDoc, serverTimestamp } = await import('firebase/firestore');
     const ref = await storeItem(collName, id);
     await updateDoc(ref, { ...safe, _updatedAt: serverTimestamp() });
+    notifySaveSuccess();
   } catch {
     try {
       const { setDoc, serverTimestamp } = await import('firebase/firestore');
       const ref = await storeItem(collName, id);
       await setDoc(ref, { ...safe, _updatedAt: serverTimestamp() }, { merge: true });
+      notifySaveSuccess();
     } catch (e2) {
       console.warn(`[FS] update(${collName}/${id}):`, e2?.code || e2?.message);
+      notifySaveError();
     }
   }
 }
@@ -213,8 +219,10 @@ export async function fsDeleteItem(collName, id) {
     const { deleteDoc } = await import('firebase/firestore');
     const ref = await storeItem(collName, id);
     await deleteDoc(ref);
+    notifySaveSuccess();
   } catch (e) {
     console.warn(`[FS] delete(${collName}/${id}):`, e?.code || e?.message);
+    notifySaveError();
   }
 }
 
@@ -231,8 +239,10 @@ export async function fsSetPrivateItem(collName, id, data, uidOverride) {
     const ref = await userItem(uid, collName, id);
     const safe = stripAttachmentDataUrls(data);
     await setDoc(ref, { ...safe, _updatedAt: serverTimestamp() }, { merge: true });
+    notifySaveSuccess();
   } catch (e) {
     console.warn(`[FS] setPrivate(${collName}/${id}):`, e?.code || e?.message);
+    notifySaveError();
   }
 }
 
@@ -244,13 +254,16 @@ export async function fsUpdatePrivateItem(collName, id, data, uidOverride) {
     const { updateDoc, serverTimestamp } = await import('firebase/firestore');
     const ref = await userItem(uid, collName, id);
     await updateDoc(ref, { ...safe, _updatedAt: serverTimestamp() });
+    notifySaveSuccess();
   } catch {
     try {
       const { setDoc, serverTimestamp } = await import('firebase/firestore');
       const ref = await userItem(uid, collName, id);
       await setDoc(ref, { ...safe, _updatedAt: serverTimestamp() }, { merge: true });
+      notifySaveSuccess();
     } catch (e2) {
       console.warn(`[FS] updatePrivate(${collName}/${id}):`, e2?.code || e2?.message);
+      notifySaveError();
     }
   }
 }
@@ -262,8 +275,10 @@ export async function fsDeletePrivateItem(collName, id, uidOverride) {
     const { deleteDoc } = await import('firebase/firestore');
     const ref = await userItem(uid, collName, id);
     await deleteDoc(ref);
+    notifySaveSuccess();
   } catch (e) {
     console.warn(`[FS] deletePrivate(${collName}/${id}):`, e?.code || e?.message);
+    notifySaveError();
   }
 }
 
@@ -275,8 +290,10 @@ export async function fsSaveChecklist(date, shift, items) {
     const db = await getDb();
     const ref = doc(db, 'stores', STORE_ID, 'checklists', `${date}_${shift}`);
     await setDoc(ref, { date, shift, items, _updatedAt: serverTimestamp() });
+    notifySaveSuccess();
   } catch (e) {
     console.warn(`[FS] saveChecklist(${date}/${shift}):`, e?.code || e?.message);
+    notifySaveError();
   }
 }
 
@@ -286,8 +303,10 @@ export async function fsSaveCustomChecklist(cl) {
     const db = await getDb();
     const ref = doc(db, 'stores', STORE_ID, 'customChecklists', cl.id);
     await setDoc(ref, { ...cl, _updatedAt: serverTimestamp() });
+    notifySaveSuccess();
   } catch (e) {
     console.warn(`[FS] saveCustomChecklist(${cl.id}):`, e?.code || e?.message);
+    notifySaveError();
   }
 }
 
@@ -296,8 +315,10 @@ export async function fsDeleteCustomChecklist(id) {
     const { deleteDoc, doc } = await import('firebase/firestore');
     const db = await getDb();
     await deleteDoc(doc(db, 'stores', STORE_ID, 'customChecklists', id));
+    notifySaveSuccess();
   } catch (e) {
     console.warn(`[FS] deleteCustomChecklist(${id}):`, e?.code || e?.message);
+    notifySaveError();
   }
 }
 
@@ -307,8 +328,10 @@ export async function fsSaveWorkFile(associateId, fileData) {
     const db = await getDb();
     const ref = doc(db, 'stores', STORE_ID, 'workFiles', associateId);
     await setDoc(ref, { associateId, ...fileData, _updatedAt: serverTimestamp() });
+    notifySaveSuccess();
   } catch (e) {
     console.warn(`[FS] saveWorkFile(${associateId}):`, e?.code || e?.message);
+    notifySaveError();
   }
 }
 
