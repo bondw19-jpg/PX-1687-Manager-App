@@ -1,16 +1,16 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Users, Calendar, ListChecks, Menu } from 'lucide-react';
+import { Home, PhoneCall, StickyNote, ClipboardList, Menu } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { canAccessPath } from '../lib/permissions';
 
 // The most-used destinations live on the bar; everything else is one tap away
 // under "More" (the side drawer). Keeps taps accurate on small phones.
 const primaryTabs = [
-  { id: 'home',     label: 'Home',     icon: Home,       path: '/' },
-  { id: 'team',     label: 'Team',     icon: Users,      path: '/team' },
-  { id: 'calendar', label: 'Calendar', icon: Calendar,   path: '/calendar' },
-  { id: 'tasks',    label: 'Tasks',    icon: ListChecks, path: '/tasks' },
+  { id: 'home',    label: 'Home',    icon: Home,          path: '/' },
+  { id: 'callin',  label: 'Call-In', icon: PhoneCall,     path: '/callins' },
+  { id: 'note',    label: 'Note',    icon: StickyNote,    path: '/notes' },
+  { id: 'fivepsa', label: '5P7A',    icon: ClipboardList, path: '/daily-plan' },
 ];
 
 export default function BottomNav() {
