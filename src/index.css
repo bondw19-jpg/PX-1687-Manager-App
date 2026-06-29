@@ -165,10 +165,15 @@ body {
   from { opacity: 0; transform: scale(0.96); }
   to   { opacity: 1; transform: scale(1); }
 }
+@keyframes slideDown {
+  from { transform: translateY(-12px); opacity: 0; }
+  to   { transform: translateY(0);     opacity: 1; }
+}
 
 .animate-slide-in-left { animation: slideInLeft 0.25s ease-out; }
 .animate-fade-in       { animation: fadeIn 0.2s ease-out; }
 .animate-slide-up      { animation: slideUp 0.3s ease-out; }
+.animate-slide-down    { animation: slideDown 0.2s ease-out; }
 .animate-fade-scale-in { animation: fadeScaleIn 0.2s ease-out; }
 
 /* Bottom nav active tab */

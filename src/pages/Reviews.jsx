@@ -5,6 +5,7 @@ import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import { openPrintWindow, statsRowHtml, starsHtml } from '../lib/printReport';
+import { toast, confirmDialog } from '../lib/uiDialog';
 
 const REVIEW_CATS = ['Attendance', 'Attitude', 'Performance', 'Teamwork', 'Food Safety'];
 
@@ -44,7 +45,7 @@ function ReviewModal({ review, associates, onClose, onSave }) {
   };
 
   const handleSave = () => {
-    if (!form.associateName) return alert('Select an associate');
+    if (!form.associateName) return toast('Select an associate', { type: 'error' });
     onSave(form);
     onClose();
   };
@@ -147,8 +148,9 @@ export default function Reviews() {
     .filter(r => r.associateName?.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-  const handleDelete = (id) => {
-    if (window.confirm('Delete this review?')) deleteReview(id);
+  const handleDelete = async (id) => {
+    const ok = await confirmDialog({ title: 'Delete this review?', confirmText: 'Delete', danger: true });
+    if (ok) deleteReview(id);
   };
 
   const handlePrint = () => {

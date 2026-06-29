@@ -4,6 +4,7 @@ import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import { openPrintWindow, statsRowHtml } from '../lib/printReport';
+import { toast, confirmDialog } from '../lib/uiDialog';
 
 const CONTACT_ICONS = {
   building: '🏢',
@@ -26,7 +27,7 @@ function ContactModal({ contact, onClose, onSave }) {
   });
 
   const handleSave = () => {
-    if (!form.name.trim()) return alert('Name is required');
+    if (!form.name.trim()) return toast('Name is required', { type: 'error' });
     onSave(form);
     onClose();
   };
@@ -128,8 +129,9 @@ export default function Contacts() {
     c.role?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleDelete = (id) => {
-    if (window.confirm('Delete this contact?')) deleteContact(id);
+  const handleDelete = async (id) => {
+    const ok = await confirmDialog({ title: 'Delete this contact?', confirmText: 'Delete', danger: true });
+    if (ok) deleteContact(id);
   };
 
   const handlePrint = () => {

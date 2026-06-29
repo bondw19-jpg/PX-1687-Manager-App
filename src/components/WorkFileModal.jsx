@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { X, Plus, Trash2, RefreshCw, Printer, User } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { openPrintWindow, infoGridHtml, statsRowHtml } from '../lib/printReport';
+import { toast, confirmDialog } from '../lib/uiDialog';
 
 const KEY_LEGEND = [
   { key: 'A', desc: 'No call, no show' },
@@ -68,8 +69,9 @@ export default function WorkFileModal({ associate, onClose }) {
 
   const addRow = () => setRows(prev => [...prev, emptyRow(user)]);
 
-  const clearRows = () => {
-    if (window.confirm('Clear all rows?')) {
+  const clearRows = async () => {
+    const ok = await confirmDialog({ title: 'Clear all rows?', confirmText: 'Clear', danger: true });
+    if (ok) {
       setRows([emptyRow(user), emptyRow(user), emptyRow(user)]);
     }
   };
@@ -78,15 +80,16 @@ export default function WorkFileModal({ associate, onClose }) {
     setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
   };
 
-  const removeRow = (id) => {
-    if (window.confirm('Remove this work file row? This cannot be undone.')) {
+  const removeRow = async (id) => {
+    const ok = await confirmDialog({ title: 'Remove this work file row?', message: 'This cannot be undone.', confirmText: 'Remove', danger: true });
+    if (ok) {
       setRows(prev => prev.filter(r => r.id !== id));
     }
   };
 
   const handleSave = () => {
     saveWorkFile(associate.id, { rows, savedAt: new Date().toISOString() });
-    alert('Work file saved!');
+    toast('Work file saved!', { type: 'success' });
   };
 
   const handlePrint = () => {

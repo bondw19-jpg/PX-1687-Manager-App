@@ -8,6 +8,7 @@ import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import { openPrintWindow, statsRowHtml } from '../lib/printReport';
+import { toast, confirmDialog } from '../lib/uiDialog';
 
 // ─── Shift Checklist (existing Opening / Mid / Closing) ───────────────────────
 const SHIFTS      = ['opening', 'mid', 'closing'];
@@ -33,11 +34,12 @@ function ShiftTab() {
 
   const handleSave = () => {
     saveChecklist(today, activeShift, items);
-    alert('Checklist saved!');
+    toast('Checklist saved!', { type: 'success' });
   };
 
-  const handleReset = () => {
-    if (!window.confirm('Reset all items for this shift?')) return;
+  const handleReset = async () => {
+    const ok = await confirmDialog({ title: 'Reset all items for this shift?', confirmText: 'Reset', danger: true });
+    if (!ok) return;
     const fresh = (checklistDefaults[activeShift] || []).map((text, i) => ({ id: i, text, checked: false }));
     setItems(fresh);
     saveChecklist(today, activeShift, fresh);
@@ -242,7 +244,7 @@ function CustomChecklistModal({ checklist, onSave, onClose }) {
     setItems(prev => prev.map(i => i.id === id ? { ...i, assignee } : i));
 
   const handleSave = () => {
-    if (!name.trim()) return alert('Please enter a checklist name.');
+    if (!name.trim()) return toast('Please enter a checklist name.', { type: 'error' });
     onSave({
       id:        checklist?.id || `cl_${Date.now()}`,
       name:      name.trim(),
@@ -411,8 +413,9 @@ function CustomChecklistDetail({ checklist, onUpdate, onBack }) {
   const removeAssignee = (name) =>
     setAssignees(prev => prev.filter(a => a.name !== name));
 
-  const resetAll = () => {
-    if (!window.confirm('Reset all items?')) return;
+  const resetAll = async () => {
+    const ok = await confirmDialog({ title: 'Reset all items?', confirmText: 'Reset', danger: true });
+    if (!ok) return;
     setItems(prev => prev.map(i => ({ ...i, checked: false })));
     setAssignees(prev => prev.map(a => ({ ...a, completed: false })));
   };
@@ -604,11 +607,12 @@ function MyChecklistsTab() {
   const handleUpdate = (cl) => {
     saveCustomChecklist(cl);
     setDetail(cl);
-    alert('Saved!');
+    toast('Saved!', { type: 'success' });
   };
 
-  const handleDelete = (id) => {
-    if (!window.confirm('Delete this checklist?')) return;
+  const handleDelete = async (id) => {
+    const ok = await confirmDialog({ title: 'Delete this checklist?', confirmText: 'Delete', danger: true });
+    if (!ok) return;
     deleteCustomChecklist(id);
     setDetail(null);
   };

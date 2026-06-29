@@ -13,6 +13,7 @@ import {
   RATING_SCALE, AVAILABILITY_DAYS, CANDIDATE_STATUSES, candidateStatusMeta,
   ratingLabel, scoreInterview,
 } from '../lib/interviewContent';
+import { toast } from '../lib/uiDialog';
 
 const STATUS_CLASS = {
   gray:   'bg-gray-100 text-gray-700',
@@ -48,7 +49,7 @@ function CandidateModal({ candidate, onClose, onSave }) {
     setForm(f => ({ ...f, availability: { ...(f.availability || {}), [key]: val } }));
 
   const handleSave = () => {
-    if (!form.name.trim()) return alert('Enter a candidate name');
+    if (!form.name.trim()) return toast('Enter a candidate name', { type: 'error' });
     onSave(form);
     onClose();
   };

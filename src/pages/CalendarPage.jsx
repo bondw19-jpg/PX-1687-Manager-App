@@ -5,6 +5,7 @@ import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import { openPrintWindow, statsRowHtml, badgeHtml } from '../lib/printReport';
+import { toast, confirmDialog } from '../lib/uiDialog';
 
 const EVENT_TYPES = ['Meeting', 'Inspection', 'Training', 'Other'];
 const EVENT_COLORS = {
@@ -20,8 +21,9 @@ function EventDetailModal({ event, onClose, onDelete }) {
 
   const colorClass = EVENT_COLORS[event.type] || 'bg-gray-400';
 
-  const handleDelete = () => {
-    if (window.confirm('Delete this event?')) {
+  const handleDelete = async () => {
+    const ok = await confirmDialog({ title: 'Delete this event?', confirmText: 'Delete', danger: true });
+    if (ok) {
       onDelete(event.id);
       onClose();
     }
@@ -162,7 +164,7 @@ function AddEventModal({ selectedDate, onClose, onSave }) {
   });
 
   const handleSave = () => {
-    if (!form.title.trim()) return alert('Title is required');
+    if (!form.title.trim()) return toast('Title is required', { type: 'error' });
     onSave(form);
     onClose();
   };

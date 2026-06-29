@@ -13,6 +13,7 @@ import { ADMIN_EMAIL, ROLE_KEYS, ROLE_OPTIONS, getRoleShortLabel, normalizeRole,
 import { updateMemberRole, updateMemberStatus, syncMemberFromPresence } from '../lib/memberRoles';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
+import { confirmDialog } from '../lib/uiDialog';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function getStorageSize(key) {
@@ -402,8 +403,9 @@ function ChecklistTemplates({ onToast }) {
     setNewItem('');
   };
 
-  const deleteItem = (idx) => {
-    if (window.confirm(`Remove checklist item "${items[idx]}"? This cannot be undone.`)) {
+  const deleteItem = async (idx) => {
+    const ok = await confirmDialog({ title: `Remove checklist item "${items[idx]}"?`, message: 'This cannot be undone.', confirmText: 'Remove', danger: true });
+    if (ok) {
       setItems(prev => prev.filter((_, i) => i !== idx));
     }
   };

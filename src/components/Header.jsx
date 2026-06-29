@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Menu, Plus } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import SideDrawer from './SideDrawer';
@@ -7,8 +7,7 @@ import { PreviewButton } from './PreviewUpdateBanner';
 const PREVIEW_URL = 'https://4173-il9welzg75eglof37wb6r-ea026bf9.sandbox.novita.ai';
 
 export default function Header({ title, subtitle, showAdd = false, onAdd, rightIcon, onRightClick }) {
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const { storeName } = useAppStore();
+  const { storeName, mobileMenuOpen, setMobileMenuOpen } = useAppStore();
 
   return (
     <>
@@ -19,7 +18,7 @@ export default function Header({ title, subtitle, showAdd = false, onAdd, rightI
       >
         <div className="flex items-center justify-between px-4 py-3 pt-10">
           <button
-            onClick={() => setDrawerOpen(true)}
+            onClick={() => setMobileMenuOpen(true)}
             className="w-8 h-8 flex items-center justify-center text-white rounded-lg active:bg-white/20"
           >
             <Menu size={22} />
@@ -54,7 +53,7 @@ export default function Header({ title, subtitle, showAdd = false, onAdd, rightI
         </div>
       </div>
 
-      <SideDrawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      <SideDrawer isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
     </>
   );
 }

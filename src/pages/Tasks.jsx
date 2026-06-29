@@ -5,6 +5,7 @@ import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import { openPrintWindow, statsRowHtml, badgeHtml } from '../lib/printReport';
+import { toast, confirmDialog } from '../lib/uiDialog';
 
 const PRIORITIES = ['Low', 'Medium', 'High', 'Urgent'];
 const STATUSES = ['To Do', 'In Progress', 'Done'];
@@ -37,7 +38,7 @@ function TaskModal({ task, associates, onClose, onSave }) {
   });
 
   const handleSave = () => {
-    if (!form.title.trim()) return alert('Title is required');
+    if (!form.title.trim()) return toast('Title is required', { type: 'error' });
     onSave(form);
     onClose();
   };
@@ -217,8 +218,9 @@ export default function Tasks() {
     return matchSearch && matchStatus && matchPriority;
   });
 
-  const handleDelete = (id) => {
-    if (window.confirm('Delete this task?')) deleteTask(id);
+  const handleDelete = async (id) => {
+    const ok = await confirmDialog({ title: 'Delete this task?', confirmText: 'Delete', danger: true });
+    if (ok) deleteTask(id);
   };
 
   const handlePrint = () => {

@@ -9,6 +9,7 @@ import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import { getRoleShortLabel, isAdminUser } from '../lib/roles';
+import { confirmDialog } from '../lib/uiDialog';
 const APP_VERSION = '2.1.0';
 
 // ── Inline section card ──────────────────────────────────────────────────────
@@ -335,9 +336,13 @@ export default function Settings() {
 
   const handleClearPrivateData = async () => {
     if (!user?.uid || user.uid === 'demo_user') return;
-    if (!window.confirm(
-      'This will permanently delete ALL of your private notes and calendar events from the cloud — including any that may have been accidentally imported from another account.\n\nThis cannot be undone. Continue?'
-    )) return;
+    const ok = await confirmDialog({
+      title: 'This will permanently delete ALL of your private notes and calendar events from the cloud — including any that may have been accidentally imported from another account.',
+      message: 'This cannot be undone. Continue?',
+      confirmText: 'Clear',
+      danger: true,
+    });
+    if (!ok) return;
     setClearingPrivate(true);
     try {
       const { clearAllPrivateData } = await import('../lib/firestoreSync');
@@ -353,7 +358,8 @@ export default function Settings() {
   };
 
   const handleSignOut = async () => {
-    if (!window.confirm('Sign out of Panda Manager Hub?')) return;
+    const ok = await confirmDialog({ title: 'Sign out of Panda Manager Hub?', confirmText: 'Sign Out', danger: false });
+    if (!ok) return;
     try {
       const { getFirebaseModules, resetAuthReadyPromise } = await import('../lib/firebase');
       const { auth } = await getFirebaseModules();

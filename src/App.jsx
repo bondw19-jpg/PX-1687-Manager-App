@@ -7,6 +7,8 @@ import { loadOrCreateMemberProfile } from './lib/memberRoles';
 import { canAccessPath, SHIFT_LEAD_FIRST_PATH } from './lib/permissions';
 import { isShiftLeadUser } from './lib/roles';
 import PWAUpdatePrompt from './components/PWAUpdatePrompt';
+import ToastHost from './components/ToastHost';
+import ConfirmHost from './components/ConfirmHost';
 
 // Lazy load pages
 const Dashboard          = lazy(() => import('./pages/Dashboard'));
@@ -289,6 +291,8 @@ export default function App() {
         </AuthSessionGate>
       </BrowserRouter>
       <PWAUpdatePrompt />
+      <ToastHost />
+      <ConfirmHost />
     </ErrorBoundary>
   );
 }

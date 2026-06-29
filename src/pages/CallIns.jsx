@@ -10,6 +10,7 @@ import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { openPrintWindow, statsRowHtml, badgeHtml, disciplineColor, printAssociateAttendanceReport } from '../lib/printReport';
+import { toast, confirmDialog } from '../lib/uiDialog';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PANDA EXPRESS ATTENDANCE POINT SYSTEM
@@ -282,9 +283,9 @@ function LogCallInModal({ onClose, onSave, associates }) {
   };
 
   const handleSave = () => {
-    if (!form.associateName) return alert('Select an associate');
-    if (!form.categoryId)    return alert('Select an attendance category');
-    if (!form.subtypeId)     return alert('Select a specific type');
+    if (!form.associateName) return toast('Select an associate', { type: 'error' });
+    if (!form.categoryId)    return toast('Select an attendance category', { type: 'error' });
+    if (!form.subtypeId)     return toast('Select a specific type', { type: 'error' });
     onSave({
       ...form,
       points: pointValue,
@@ -540,8 +541,9 @@ function CallInDetailModal({ callIn, onClose, onDelete, associates, allCallIns }
   const badgeBg   = category?.badge || 'bg-gray-100 text-gray-700';
   const typeLabel = subtype?.label || callIn.type || 'Unknown';
 
-  const handleDelete = () => {
-    if (window.confirm(`Remove this attendance record for ${callIn.associateName}? This cannot be undone.`)) {
+  const handleDelete = async () => {
+    const ok = await confirmDialog({ title: `Remove this attendance record for ${callIn.associateName}?`, message: 'This cannot be undone.', confirmText: 'Remove', danger: true });
+    if (ok) {
       onDelete(callIn.id);
       onClose();
     }

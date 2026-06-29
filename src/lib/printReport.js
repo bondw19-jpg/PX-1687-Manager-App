@@ -14,6 +14,8 @@
  *  - PDF-safe fonts (Arial/Helvetica)
  */
 
+import { toast } from './uiDialog';
+
 const STORE_NAME  = 'PANDA EXPRESS #1687';
 const BRAND_COLOR = '#C8102E';  // PX red
 
@@ -298,7 +300,7 @@ export function openPrintWindow({ title, subtitle = '', html, autoPrint = true }
 
   const win = window.open('', '_blank');
   if (!win) {
-    alert('Popup blocked — please allow popups for this site to print reports.');
+    toast('Popup blocked — please allow popups for this site to print reports.', { type: 'warning' });
     return;
   }
   win.document.write(doc);

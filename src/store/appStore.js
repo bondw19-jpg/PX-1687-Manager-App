@@ -197,6 +197,10 @@ export const useAppStore = create(
       setStoreName: (name) => set({ storeName: name }),
       setOnline:  (v)    => set({ isOnline: v }),
 
+      // ── Mobile side-drawer open state (ephemeral, not persisted) ──────────
+      mobileMenuOpen: false,
+      setMobileMenuOpen: (v) => set({ mobileMenuOpen: v }),
+
       // ── Note attachment upload tracking ───────────────────────────────────
       // noteUploads: { [noteId]: { noteTitle, files: [{name, pct, done, error}], allDone } }
       noteUploads: {},

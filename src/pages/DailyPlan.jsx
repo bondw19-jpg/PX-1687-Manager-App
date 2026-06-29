@@ -8,6 +8,7 @@ import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import { FIVE_POINTS, getActionsForDate, toDateString, fromDateString } from '../lib/dailyPlanData';
 import { openPrintWindow } from '../lib/printReport';
+import { SkeletonList } from '../components/Skeleton';
 
 const STORE_ID = 'store_1687';
 
@@ -367,7 +368,7 @@ function HistoryView({ onSelectDate }) {
   }, []);
 
   if (loading) {
-    return <div className="text-center py-12 text-gray-400 text-sm">Loading history…</div>;
+    return <div className="py-2"><SkeletonList count={6} /></div>;
   }
 
   const colorClasses = {
@@ -651,9 +652,7 @@ export default function DailyPlan() {
         {summaryBar}
 
         {/* Loading state */}
-        {loading && (
-          <div className="text-center py-8 text-gray-400 text-sm">Loading checklist…</div>
-        )}
+        {loading && <SkeletonList count={5} />}
 
         {!loading && (
           <>

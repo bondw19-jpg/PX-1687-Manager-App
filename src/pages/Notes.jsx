@@ -10,6 +10,7 @@ import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import { openPrintWindow, statsRowHtml, badgeHtml } from '../lib/printReport';
+import { toast, confirmDialog } from '../lib/uiDialog';
 
 const CATEGORIES = ['All Categories', 'General', 'Operations', 'HR', 'Food Safety', 'Reminder', 'Other'];
 const CAT_COLORS = {
@@ -269,11 +270,11 @@ function AttachmentUploader({ attachments, onChange }) {
     const results = [];
     for (const file of files) {
       if (file.size > MAX_FILE_SIZE) {
-        alert(`"${file.name}" exceeds 10 MB limit. Skipping.`);
+        toast(`"${file.name}" exceeds 10 MB limit. Skipping.`, { type: 'warning' });
         continue;
       }
       if (!ACCEPTED_FILE_TYPES.includes(file.type)) {
-        alert(`"${file.name}" file type is not supported. Skipping.`);
+        toast(`"${file.name}" file type is not supported. Skipping.`, { type: 'error' });
         continue;
       }
       try {
@@ -286,7 +287,7 @@ function AttachmentUploader({ attachments, onChange }) {
           dataUrl,
         });
       } catch {
-        alert(`Failed to read "${file.name}".`);
+        toast(`Failed to read "${file.name}".`, { type: 'error' });
       }
     }
     if (results.length > 0) onChange([...attachments, ...results]);
@@ -371,7 +372,7 @@ function NoteModal({ note, onClose, onSave }) {
   });
 
   const handleSave = () => {
-    if (!form.title.trim()) return alert('Title is required');
+    if (!form.title.trim()) return toast('Title is required', { type: 'error' });
     onSave({ ...form, attachments: form.attachments || [] });
     onClose();
   };
@@ -645,7 +646,10 @@ export default function Notes() {
   const pinnedCount = notes.filter(n => n.pinned).length;
 
   const handlePin    = note => updateNote(note.id, { pinned: !note.pinned });
-  const handleDelete = id => { if (window.confirm('Delete this note?')) deleteNote(id); };
+  const handleDelete = async id => {
+    const ok = await confirmDialog({ title: 'Delete this note?', confirmText: 'Delete', danger: true });
+    if (ok) deleteNote(id);
+  };
   const openLightbox = (attachments, index) => setLightbox({ attachments, index });
 
   const handlePrint = () => {

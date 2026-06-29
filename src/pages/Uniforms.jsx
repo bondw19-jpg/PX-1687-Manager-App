@@ -8,6 +8,7 @@ import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import { badgeHtml, infoGridHtml, openPrintWindow, statsRowHtml } from '../lib/printReport';
 import { colorOptionsFor, uniformSkuKey } from '../lib/uniformSku';
+import { toast } from '../lib/uiDialog';
 import {
   ModalHeader,
   ModalFooter,
@@ -148,8 +149,8 @@ function UniformModal({ record, associates, onClose }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.associateId) return alert('Please choose an associate.');
-    if (!form.date) return alert('Please choose a check date.');
+    if (!form.associateId) return toast('Please choose an associate.', { type: 'error' });
+    if (!form.date) return toast('Please choose a check date.', { type: 'error' });
     const payload = {
       ...form,
       associateName: associateName(associates, form.associateId),
@@ -197,7 +198,7 @@ function InventoryModal({ record, onClose }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.item) return alert('Please choose an item.');
+    if (!form.item) return toast('Please choose an item.', { type: 'error' });
     const payload = {
       ...form,
       onHandQty: num(form.onHandQty),
@@ -270,8 +271,8 @@ function ManagerStockModal({ record, inventory, managerQtyByInventoryId, associa
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.managerName) return alert('Please choose a manager.');
-    if (!form.item) return alert('Please choose a uniform item.');
+    if (!form.managerName) return toast('Please choose a manager.', { type: 'error' });
+    if (!form.item) return toast('Please choose a uniform item.', { type: 'error' });
 
     let inventoryItemId = form.inventoryItemId;
 
@@ -409,15 +410,15 @@ function AssociateItemModal({ record, associates, inventory, managerStock = [], 
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.associateId) return alert('Please choose an associate.');
-    if (!form.item) return alert('Please choose an item.');
+    if (!form.associateId) return toast('Please choose an associate.', { type: 'error' });
+    if (!form.item) return toast('Please choose an item.', { type: 'error' });
     if (!form.sourceManagerStockId && managerSourceOptions.length > 0) {
-      return alert("Select which manager these items come from so their on-hand count updates. If they come straight from store stock, leave it blank — but a manager's count won't change.");
+      return toast("Select which manager these items come from so their on-hand count updates. If they come straight from store stock, leave it blank — but a manager's count won't change.", { type: 'error' });
     }
     if (form.sourceManagerStockId) {
       const ms = managerStock.find(m => m.id === form.sourceManagerStockId);
       if (ms && num(form.qty) > managerNetOnHand(ms)) {
-        return alert(`${ms.managerName} only has ${managerNetOnHand(ms)} on hand. Lower the quantity or pick a different source.`);
+        return toast(`${ms.managerName} only has ${managerNetOnHand(ms)} on hand. Lower the quantity or pick a different source.`, { type: 'error' });
       }
     }
     const payload = {

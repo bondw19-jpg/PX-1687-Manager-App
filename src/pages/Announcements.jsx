@@ -5,12 +5,13 @@ import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
 import { openPrintWindow, badgeHtml } from '../lib/printReport';
+import { toast, confirmDialog } from '../lib/uiDialog';
 
 function AnnouncementModal({ onClose, onSave }) {
   const [form, setForm] = useState({ title: '', body: '', priority: 'Normal' });
 
   const handleSave = () => {
-    if (!form.title.trim()) return alert('Title is required');
+    if (!form.title.trim()) return toast('Title is required', { type: 'error' });
     onSave(form);
     onClose();
   };
@@ -94,8 +95,9 @@ export default function Announcements() {
     openPrintWindow({ title: 'Announcements', subtitle: announcements.length + ' announcements', html });
   };
 
-  const handleDelete = (id, title) => {
-    if (window.confirm(`Delete "${title}"? This cannot be undone.`)) {
+  const handleDelete = async (id, title) => {
+    const ok = await confirmDialog({ title: `Delete "${title}"?`, message: 'This cannot be undone.', confirmText: 'Delete', danger: true });
+    if (ok) {
       deleteAnnouncement(id);
     }
   };

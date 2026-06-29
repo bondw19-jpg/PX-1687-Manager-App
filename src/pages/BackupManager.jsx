@@ -8,6 +8,7 @@ import { format } from 'date-fns';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
 import { useAppStore } from '../store/appStore';
+import { SkeletonList } from '../components/Skeleton';
 
 const APP_VERSION  = '2.1.2';
 const STORAGE_KEY  = 'panda-manager-storage';
@@ -813,9 +814,7 @@ export default function BackupManager() {
               </button>
 
               {loadingCloud && cloudSnaps.length === 0 ? (
-                <div className="bg-white rounded-xl p-6 flex items-center justify-center gap-2 text-sm text-gray-400 shadow-sm">
-                  <RefreshCw size={16} className="animate-spin" /> Loading snapshots…
-                </div>
+                <SkeletonList count={3} />
               ) : cloudSnaps.length === 0 ? (
                 <div className="bg-white rounded-xl p-6 flex flex-col items-center text-center shadow-sm">
                   <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center mb-2">

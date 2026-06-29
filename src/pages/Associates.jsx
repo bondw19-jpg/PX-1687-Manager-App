@@ -7,6 +7,7 @@ import { useAppStore } from '../store/appStore';
 import WorkFileModal from '../components/WorkFileModal';
 import { get90DayPoints, get90DayCallIns, pointsColor, pointsEmoji } from './CallIns';
 import { openPrintWindow, statsRowHtml, badgeHtml, disciplineColor, disciplineLabel } from '../lib/printReport';
+import { toast, confirmDialog } from '../lib/uiDialog';
 
 const POSITIONS = ['All Positions', 'FOH', 'BOH', 'Cook', 'Shift Lead', 'Manager'];
 const POSITION_COLORS = {
@@ -47,7 +48,7 @@ function AssociateModal({ associate, onClose, onSave }) {
   });
 
   const handleSave = () => {
-    if (!form.name.trim()) return alert('Name is required');
+    if (!form.name.trim()) return toast('Name is required', { type: 'error' });
     onSave(form);
     onClose();
   };
@@ -362,8 +363,9 @@ export default function Associates() {
     })
     .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
-  const handleDelete = (id) => {
-    if (window.confirm('Delete this associate?')) deleteAssociate(id);
+  const handleDelete = async (id) => {
+    const ok = await confirmDialog({ title: 'Delete this associate?', confirmText: 'Delete', danger: true });
+    if (ok) deleteAssociate(id);
   };
 
   return (
