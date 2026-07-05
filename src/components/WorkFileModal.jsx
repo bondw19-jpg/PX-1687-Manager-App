@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Plus, Trash2, RefreshCw, Printer, User } from 'lucide-react';
+import { X, Plus, Trash2, RefreshCw, Printer, User, Check } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { openPrintWindow, infoGridHtml, statsRowHtml } from '../lib/printReport';
 import { toast, confirmDialog } from '../lib/uiDialog';
@@ -67,6 +67,9 @@ export default function WorkFileModal({ associate, onClose }) {
     existing?.rows || [emptyRow(user), emptyRow(user), emptyRow(user)]
   );
 
+  const [showPrintOptions, setShowPrintOptions] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+
   const addRow = () => setRows(prev => [...prev, emptyRow(user)]);
 
   const clearRows = async () => {
@@ -92,8 +95,45 @@ export default function WorkFileModal({ associate, onClose }) {
     toast('Work file saved!', { type: 'success' });
   };
 
-  const handlePrint = () => {
-    const filledRows = rows.filter(r => r.date || r.key || r.details);
+  // All rows that actually contain an incident (date, key, or details).
+  const filledRows = rows.filter(r => r.date || r.key || r.details);
+  const allSelected = filledRows.length > 0 && filledRows.every(r => selectedIds.has(r.id));
+
+  const openPrintOptions = () => {
+    if (filledRows.length === 0) {
+      toast('Add at least one incident before printing.', { type: 'error' });
+      return;
+    }
+    // Default to every incident selected (i.e. "print all").
+    setSelectedIds(new Set(filledRows.map(r => r.id)));
+    setShowPrintOptions(true);
+  };
+
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds(allSelected ? new Set() : new Set(filledRows.map(r => r.id)));
+  };
+
+  const handleConfirmPrint = () => {
+    const toPrint = filledRows.filter(r => selectedIds.has(r.id));
+    if (toPrint.length === 0) {
+      toast('Select at least one incident to print.', { type: 'error' });
+      return;
+    }
+    setShowPrintOptions(false);
+    printRows(toPrint);
+  };
+
+  const printRows = (rowsToPrint) => {
+    const printedRows = rowsToPrint.filter(r => r.date || r.key || r.details);
+    const partial = printedRows.length < filledRows.length;
     // Escape HTML so user text can't break the layout, and preserve line breaks typed into Details.
     const esc = (s) => String(s ?? '')
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -112,13 +152,13 @@ export default function WorkFileModal({ associate, onClose }) {
       ])}
 
       ${statsRowHtml([
-        { value: filledRows.length, label: 'Total Entries' },
-        { value: rows.filter(r => r.key === 'A').length, label: 'No Call No Show' },
-        { value: rows.filter(r => r.key === 'F').length, label: 'Tardiness' },
-        { value: rows.filter(r => r.key === 'G').length, label: 'Counseling' },
+        { value: printedRows.length, label: 'Total Entries' },
+        { value: printedRows.filter(r => r.key === 'A').length, label: 'No Call No Show' },
+        { value: printedRows.filter(r => r.key === 'F').length, label: 'Tardiness' },
+        { value: printedRows.filter(r => r.key === 'G').length, label: 'Counseling' },
       ])}
 
-      <h2 class="section-title">Work Log</h2>
+      <h2 class="section-title">Work Log${partial ? ` <span style="font-size:11px;font-weight:normal;color:#888;">(selected incidents — ${printedRows.length} of ${filledRows.length})</span>` : ''}</h2>
       <table>
         <thead>
           <tr>
@@ -129,7 +169,7 @@ export default function WorkFileModal({ associate, onClose }) {
           </tr>
         </thead>
         <tbody>
-          ${rows.map(r => `
+          ${printedRows.map(r => `
             <tr>
               <td>${esc(fmtDate(r.date))}</td>
               <td><strong>${esc(r.key || '')}</strong></td>
@@ -342,13 +382,108 @@ export default function WorkFileModal({ associate, onClose }) {
             </button>
           </div>
           <button
-            onClick={handlePrint}
+            onClick={openPrintOptions}
             className="w-full py-2.5 bg-primary text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
           >
             <Printer size={16} /> Print / Save PDF
           </button>
         </div>
       </div>
+
+      {/* Print options — choose all incidents or specific dates */}
+      {showPrintOptions && (
+        <div
+          className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4"
+          onClick={e => e.target === e.currentTarget && setShowPrintOptions(false)}
+        >
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-sm max-h-[80dvh] flex flex-col animate-slide-up">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <Printer size={18} className="text-primary" />
+                <h3 className="font-bold text-gray-800">Print Work File</h3>
+              </div>
+              <button onClick={() => setShowPrintOptions(false)} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg">
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Select all toggle */}
+            <div className="px-4 pt-3 pb-2 flex-shrink-0">
+              <p className="text-xs text-gray-500 mb-2">Choose which incidents to include:</p>
+              <button
+                onClick={toggleSelectAll}
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-sm font-semibold ${
+                  allSelected ? 'border-primary bg-primary/5 text-primary' : 'border-gray-200 text-gray-700'
+                }`}
+              >
+                <span className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 ${
+                  allSelected ? 'bg-primary text-white' : 'border-2 border-gray-300'
+                }`}>
+                  {allSelected && <Check size={14} strokeWidth={3} />}
+                </span>
+                All incidents ({filledRows.length})
+              </button>
+            </div>
+
+            {/* Incident list */}
+            <div className="px-4 pb-2 overflow-y-auto flex-1">
+              <div className="space-y-1.5">
+                {filledRows.map(r => {
+                  const checked = selectedIds.has(r.id);
+                  return (
+                    <button
+                      key={r.id}
+                      onClick={() => toggleSelect(r.id)}
+                      className={`w-full flex items-start gap-2.5 px-3 py-2.5 rounded-xl border text-left ${
+                        checked ? 'border-primary/40 bg-primary/5' : 'border-gray-200'
+                      }`}
+                    >
+                      <span className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                        checked ? 'bg-primary text-white' : 'border-2 border-gray-300'
+                      }`}>
+                        {checked && <Check size={14} strokeWidth={3} />}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-gray-800">
+                            {r.date ? fmtDate(r.date) : 'No date'}
+                          </span>
+                          {r.key && (
+                            <span className="text-[10px] font-bold bg-gray-800 text-white rounded px-1.5 py-0.5">
+                              {r.key}
+                            </span>
+                          )}
+                        </span>
+                        {r.details && (
+                          <span className="block text-xs text-gray-500 truncate mt-0.5">{r.details}</span>
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-gray-100 flex-shrink-0 flex gap-2">
+              <button
+                onClick={() => setShowPrintOptions(false)}
+                className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmPrint}
+                className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                disabled={selectedIds.size === 0}
+              >
+                <Printer size={16} /> Print ({selectedIds.size})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
