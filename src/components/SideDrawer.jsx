@@ -4,7 +4,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, PhoneMissed, Star, Calendar,
   ClipboardCheck, StickyNote, ListChecks, Megaphone, BookUser, Shirt,
-  Settings, LogOut, X, HardDrive, ShieldCheck, ClipboardList, UserSearch
+  Settings, LogOut, X, HardDrive, ShieldCheck, ClipboardList, UserSearch,
+  ArrowLeftRight, Banknote
 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { getRoleShortLabel, isAdminUser, isShiftLeadUser } from '../lib/roles';
@@ -35,6 +36,8 @@ const sections = [
       { label: '5P7A',             icon: ClipboardList,   path: '/daily-plan' },
       { label: 'Notes',            icon: StickyNote,      path: '/notes' },
       { label: 'Tasks & To-Do',    icon: ListChecks,      path: '/tasks' },
+      { label: 'Lend / Borrow',    icon: ArrowLeftRight,  path: '/lend-borrow' },
+      { label: 'Loomis Change Order', icon: Banknote,     path: '/change-orders' },
     ]
   },
   {

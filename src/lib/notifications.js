@@ -19,11 +19,11 @@
  *   { id, type, level, title, body, link, ts, icon }
  *
  *   level: 'critical' | 'warning' | 'info' | 'success'
- *   type:  'attendance' | 'task' | 'event' | 'announcement' | 'workfile' | 'review'
+ *   type:  'attendance' | 'task' | 'event' | 'announcement' | 'workfile' | 'review' | 'inventory' | 'delivery'
  *   link:  route path the user should navigate to (e.g. '/callins')
  */
 
-import { subDays, isAfter, differenceInDays, parseISO, isValid } from 'date-fns';
+import { subDays, isAfter, differenceInDays, differenceInCalendarDays, parseISO, isValid } from 'date-fns';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -98,6 +98,8 @@ export function generateNotifications({
   announcements = [],
   workFiles     = {},
   reviews       = [],
+  lendBorrow    = [],   // ✅ SHARED — store-to-store lend/borrow records
+  changeOrders  = [],   // ✅ SHARED — Loomis change orders
   // myNotes intentionally excluded — personal, never shared
   // teamNotes not used for notifications (content is internal)
 } = {}) {
@@ -334,6 +336,90 @@ export function generateNotifications({
         }
       }
     });
+
+  // ── 7. LEND/BORROW: Saturday inventory reminder (8:30 PM count) ──────────
+  // Fires every Saturday. The id is date-stamped so the alert returns each
+  // week even after being marked read on a previous Saturday.
+  if (today.getDay() === 6) {
+    // Local (not UTC) YYYY-MM-DD so the id never flips mid-Saturday.
+    const dateKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const openRecords = lendBorrow.filter(r => r.status !== 'settled');
+    if (openRecords.length > 0) {
+      const lentOut  = openRecords.filter(r => r.direction === 'lent').length;
+      const borrowed = openRecords.length - lentOut;
+      const parts = [];
+      if (lentOut)  parts.push(`${lentOut} lent out`);
+      if (borrowed) parts.push(`${borrowed} borrowed`);
+      alerts.push({
+        id: `lb-inv-${dateKey}`,
+        type: 'inventory', level: 'warning',
+        icon: '📦',
+        title: 'Inventory Tonight 8:30 PM — Check Lend/Borrow',
+        body: `${openRecords.length} open record${openRecords.length !== 1 ? 's' : ''} (${parts.join(', ')}) to account for in tonight's count.`,
+        link: '/lend-borrow',
+        ts: Date.now(),
+      });
+    } else {
+      alerts.push({
+        id: `lb-inv-${dateKey}`,
+        type: 'inventory', level: 'info',
+        icon: '📦',
+        title: 'Weekly Inventory Tonight at 8:30 PM',
+        body: 'No open lend/borrow records — nothing extra to account for.',
+        link: '/lend-borrow',
+        ts: Date.now(),
+      });
+    }
+  }
+
+  // ── 8. LOOMIS CHANGE ORDERS: prepare the payment fund ────────────────────
+  // Reminds the day BEFORE and the day OF delivery until the order is
+  // confirmed received. Calendar-day math (not 24-hour windows) so
+  // "tomorrow" means tomorrow regardless of the current time of day.
+  {
+    const fmtCents = (c) => '$' + ((c || 0) / 100).toLocaleString('en-US', {
+      minimumFractionDigits: (c || 0) % 100 === 0 ? 0 : 2,
+      maximumFractionDigits: 2,
+    });
+    changeOrders.forEach(o => {
+      if (o.status === 'received') return;
+      const delivery = safeDate(o.deliveryDate);
+      if (!delivery) return;
+      const daysUntil = differenceInCalendarDays(delivery, today);
+      const amt = fmtCents(o.amountCents);
+      if (daysUntil === 1) {
+        alerts.push({
+          id: `co-prep1-${o.id}`,
+          type: 'delivery', level: 'warning',
+          icon: '🚚',
+          title: `Loomis Tomorrow — Have ${amt} Ready`,
+          body: `Change order arrives ${o.deliveryDate}. Prepare the payment fund before the drop-off.`,
+          link: '/change-orders',
+          ts: delivery.getTime(),
+        });
+      } else if (daysUntil === 0) {
+        alerts.push({
+          id: `co-prep0-${o.id}`,
+          type: 'delivery', level: 'warning',
+          icon: '🚚',
+          title: `Loomis Today — Have ${amt} Ready`,
+          body: 'Change order delivery is today. Have the payment fund counted and ready.',
+          link: '/change-orders',
+          ts: delivery.getTime(),
+        });
+      } else if (daysUntil < 0) {
+        alerts.push({
+          id: `co-late-${o.id}`,
+          type: 'delivery', level: 'info',
+          icon: '🚚',
+          title: `Change Order Not Confirmed — ${amt}`,
+          body: `Delivery was expected ${o.deliveryDate}. Confirm it was received or update the order.`,
+          link: '/change-orders',
+          ts: delivery.getTime(),
+        });
+      }
+    });
+  }
 
   // ── Sort: critical → warning → info → success, then by ts desc ───────────
   const ORDER = { critical: 0, warning: 1, info: 2, success: 3 };

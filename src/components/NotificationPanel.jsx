@@ -32,14 +32,14 @@ export function useNotifications() {
   const {
     associates, callIns, tasks,
     teamEvents, announcements,
-    workFiles, reviews,
+    workFiles, reviews, lendBorrow, changeOrders,
   } = useAppStore();
 
   const alerts = useMemo(() => generateNotifications({
     associates, callIns, tasks,
     teamEvents, announcements,
-    workFiles, reviews,
-  }), [associates, callIns, tasks, teamEvents, announcements, workFiles, reviews]);
+    workFiles, reviews, lendBorrow, changeOrders,
+  }), [associates, callIns, tasks, teamEvents, announcements, workFiles, reviews, lendBorrow, changeOrders]);
 
   const unread = useMemo(
     () => alerts.filter(a => !readIds.has(a.id)).length,
@@ -100,6 +100,8 @@ const TYPE_LABELS = {
   announcement: 'Announcements',
   workfile:     'Work File',
   review:       'Reviews',
+  inventory:    'Inventory',
+  delivery:     'Delivery',
 };
 
 // ─── single notification card ─────────────────────────────────────────────────

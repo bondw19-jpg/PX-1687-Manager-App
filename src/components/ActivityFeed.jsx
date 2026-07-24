@@ -16,7 +16,7 @@
  *   { id, type, icon, title, body, detail, ts, author, level }
  *
  *   type:   'callin' | 'associate' | 'task' | 'announcement' | 'note' |
- *            'workfile' | 'review' | 'event'
+ *            'workfile' | 'review' | 'event' | 'lendborrow'
  *   level:  'critical' | 'warning' | 'info' | 'success'
  *   detail: object with all fields for the detail modal
  */
@@ -87,7 +87,7 @@ const CAT_ICONS = {
 function generateActivities({
   callIns = [], associates = [], tasks = [],
   announcements = [], teamNotes = [], reviews = [],
-  teamEvents = [], workFiles = {},
+  teamEvents = [], workFiles = {}, lendBorrow = [], changeOrders = [],
 } = {}) {
   const items = [];
   const LIMIT_DAYS = 14; // show activity from last 14 days
@@ -344,6 +344,132 @@ function generateActivities({
     });
   });
 
+  // ── 8. Lend / Borrow records ───────────────────────────────────────────────
+  lendBorrow.forEach(r => {
+    const dirLabel  = r.direction === 'lent' ? 'Lent to' : 'Borrowed from';
+    const itemsText = (r.items || []).map(i => `${i.qty}× ${i.name}`).join(', ');
+    const baseRows = [
+      ['Direction', r.direction === 'lent' ? '📤 Lent out' : '📥 Borrowed'],
+      ['Other Store', r.otherStore || '—'],
+      ['Items', itemsText || '—'],
+      ['Date', r.date || '—'],
+      ['Notes', r.notes || '—'],
+      ['Logged By', r.createdBy?.name || '—'],
+    ];
+
+    // 8a. New record logged
+    const created = safeDate(r.createdAt || r.date);
+    if (created && created >= cutoff) {
+      items.push({
+        id: `lb-${r.id}`,
+        type: 'lendborrow',
+        icon: r.direction === 'lent' ? '📤' : '📥',
+        level: 'info',
+        title: `${dirLabel} ${r.otherStore || 'another store'}`,
+        body: itemsText ? itemsText.slice(0, 80) : 'Products recorded',
+        author: r.createdBy?.name || 'Manager',
+        ts: created.getTime(),
+        detail: {
+          headline: `${dirLabel} ${r.otherStore || 'another store'}`,
+          rows: baseRows.filter(([, v]) => v && v !== '—'),
+          link: '/lend-borrow',
+        },
+      });
+    }
+
+    // 8b. Record settled (paid back / transferred)
+    if (r.status === 'settled') {
+      const settledD = safeDate(r.settledAt);
+      if (settledD && settledD >= cutoff) {
+        const method = r.settleMethod === 'transferred' ? 'Transferred' : 'Paid back';
+        items.push({
+          id: `lb-settled-${r.id}`,
+          type: 'lendborrow',
+          icon: '🤝',
+          level: 'success',
+          title: `Settled — ${method}: ${r.otherStore || 'other store'}`,
+          body: itemsText ? itemsText.slice(0, 80) : '',
+          author: r.settledBy?.name || 'Manager',
+          ts: settledD.getTime(),
+          detail: {
+            headline: `Settled (${method}) — ${r.otherStore || 'other store'}`,
+            rows: [
+              ...baseRows,
+              ['Settled Via', method],
+              ['Settled By', r.settledBy?.name || '—'],
+              ['Settled On', fmtDate(r.settledAt)],
+            ].filter(([, v]) => v && v !== '—'),
+            link: '/lend-borrow',
+          },
+        });
+      }
+    }
+  });
+
+  // ── 9. Loomis change orders ────────────────────────────────────────────────
+  const fmtCents = (c) => '$' + ((c || 0) / 100).toLocaleString('en-US', {
+    minimumFractionDigits: (c || 0) % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  });
+  changeOrders.forEach(o => {
+    const amt = fmtCents(o.amountCents);
+    const denomText = (o.denominations || []).map(d => `${d.qty}× ${d.label}`).join(', ');
+    const baseRows = [
+      ['Amount', amt],
+      ['Delivery Date', o.deliveryDate || '—'],
+      ['Denominations', denomText || '—'],
+      ['Notes', o.notes || '—'],
+      ['Ordered By', o.createdBy?.name || '—'],
+      ['Ordered On', fmtDate(o.createdAt)],
+    ];
+
+    // 9a. Order placed
+    const created = safeDate(o.createdAt);
+    if (created && created >= cutoff) {
+      items.push({
+        id: `co-${o.id}`,
+        type: 'changeorder',
+        icon: '💵',
+        level: 'info',
+        title: `Change order placed — ${amt}`,
+        body: `Loomis delivery ${o.deliveryDate}${denomText ? ' · ' + denomText : ''}`.slice(0, 80),
+        author: o.createdBy?.name || 'Manager',
+        ts: created.getTime(),
+        detail: {
+          headline: `Loomis Change Order — ${amt}`,
+          rows: baseRows.filter(([, v]) => v && v !== '—'),
+          link: '/change-orders',
+        },
+      });
+    }
+
+    // 9b. Delivery received
+    if (o.status === 'received') {
+      const recvD = safeDate(o.receivedAt);
+      if (recvD && recvD >= cutoff) {
+        items.push({
+          id: `co-recv-${o.id}`,
+          type: 'changeorder',
+          icon: '🚚',
+          level: 'success',
+          title: `Change order received — ${amt}`,
+          body: denomText ? denomText.slice(0, 80) : 'Delivery confirmed',
+          author: o.receivedBy?.name || 'Manager',
+          ts: recvD.getTime(),
+          detail: {
+            headline: `Received — Loomis Change Order ${amt}`,
+            rows: [
+              ...baseRows,
+              ['Received By', o.receivedBy?.name || '—'],
+              ['Received On', fmtDate(o.receivedAt)],
+            ].filter(([, v]) => v && v !== '—'),
+            link: '/change-orders',
+          },
+        });
+      }
+    }
+  });
+
   // Sort newest first
   items.sort((a, b) => b.ts - a.ts);
 
@@ -389,6 +515,8 @@ const TYPE_LABELS = {
   review:       'Review',
   event:        'Calendar',
   workfile:     'Work File',
+  lendborrow:   'Lend/Borrow',
+  changeorder:  'Change Order',
 };
 
 const TYPE_BADGE_COLORS = {
@@ -399,6 +527,8 @@ const TYPE_BADGE_COLORS = {
   review:       'bg-yellow-100 text-yellow-700',
   event:        'bg-green-100 text-green-700',
   workfile:     'bg-gray-100 text-gray-700',
+  lendborrow:   'bg-teal-100 text-teal-700',
+  changeorder:  'bg-emerald-100 text-emerald-700',
 };
 
 // ─── detail modal ─────────────────────────────────────────────────────────────
@@ -547,7 +677,7 @@ const FILTER_TABS = [
 export default function ActivityFeed({ maxItems = 30, compact = false }) {
   const {
     callIns, associates, tasks, announcements,
-    teamNotes, reviews, teamEvents, workFiles, user,
+    teamNotes, reviews, teamEvents, workFiles, lendBorrow, changeOrders, user,
   } = useAppStore();
   const navigate = useNavigate();
 
@@ -571,8 +701,8 @@ export default function ActivityFeed({ maxItems = 30, compact = false }) {
   // Generate all activities
   const allActivities = useMemo(() => generateActivities({
     callIns, associates, tasks, announcements,
-    teamNotes, reviews, teamEvents, workFiles,
-  }), [callIns, associates, tasks, announcements, teamNotes, reviews, teamEvents, workFiles]);
+    teamNotes, reviews, teamEvents, workFiles, lendBorrow, changeOrders,
+  }), [callIns, associates, tasks, announcements, teamNotes, reviews, teamEvents, workFiles, lendBorrow, changeOrders]);
 
   // Only show unread items (read ones disappear after tap)
   const unreadActivities = useMemo(

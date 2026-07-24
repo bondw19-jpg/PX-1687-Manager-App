@@ -20,6 +20,7 @@ const Checklist     = lazy(() => import('./pages/Checklist'));
 const Notes         = lazy(() => import('./pages/Notes'));
 const Reviews       = lazy(() => import('./pages/Reviews'));
 const Interviews    = lazy(() => import('./pages/Interviews'));
+const LendBorrow    = lazy(() => import('./pages/LendBorrow'));
 const Uniforms      = lazy(() => import('./pages/Uniforms'));
 const Tasks         = lazy(() => import('./pages/Tasks'));
 const Contacts      = lazy(() => import('./pages/Contacts'));
@@ -29,6 +30,7 @@ const DailyPlan     = lazy(() => import('./pages/DailyPlan'));
 const Login         = lazy(() => import('./pages/Login'));
 const AdminPage     = lazy(() => import('./pages/AdminPage'));
 const Settings      = lazy(() => import('./pages/Settings'));
+const ChangeOrders  = lazy(() => import('./pages/ChangeOrders'));
 
 // ── Loading spinner ───────────────────────────────────────────────────────────
 function LoadingSpinner() {
@@ -276,6 +278,8 @@ export default function App() {
                   <Route path="/notes"         element={<PrivatePage authReady={authReady} path="/notes"><Notes /></PrivatePage>} />
                   <Route path="/reviews"       element={<PrivatePage authReady={authReady} path="/reviews"><Reviews /></PrivatePage>} />
                   <Route path="/interviews"    element={<PrivatePage authReady={authReady} path="/interviews"><Interviews /></PrivatePage>} />
+                  <Route path="/lend-borrow"   element={<PrivatePage authReady={authReady} path="/lend-borrow"><LendBorrow /></PrivatePage>} />
+                  <Route path="/change-orders" element={<PrivatePage authReady={authReady} path="/change-orders"><ChangeOrders /></PrivatePage>} />
                   <Route path="/uniforms"      element={<PrivatePage authReady={authReady} path="/uniforms"><Uniforms /></PrivatePage>} />
                   <Route path="/tasks"         element={<PrivatePage authReady={authReady} path="/tasks"><Tasks /></PrivatePage>} />
                   <Route path="/contacts"      element={<PrivatePage authReady={authReady} path="/contacts"><Contacts /></PrivatePage>} />

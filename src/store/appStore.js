@@ -368,6 +368,85 @@ export const useAppStore = create(
         fsDel('callIns', id);
       },
 
+      // ── Lend / Borrow (SHARED) ────────────────────────────────────────────
+      // Products lent to / borrowed from other Panda Express stores.
+      // Records stay 'open' until settled as paid back or transferred.
+      lendBorrow: [],
+      addLendBorrow: (r) => {
+        const u   = get().user;
+        const doc = {
+          direction: 'lent', otherStore: '', items: [], date: '', notes: '',
+          ...r,
+          status: 'open', settleMethod: null, settledAt: null, settledBy: null,
+          id: `lb_${Date.now()}`, createdAt: new Date().toISOString(),
+          createdBy: u ? { uid: u.uid, name: firstName(u.name || u.email?.split('@')[0]) } : null,
+        };
+        set(s => ({ lendBorrow: [...s.lendBorrow, doc] }));
+        fsWrite('lendBorrow', doc.id, doc);
+      },
+      updateLendBorrow: (id, d) => {
+        set(s => ({ lendBorrow: s.lendBorrow.map(r => r.id === id ? { ...r, ...d } : r) }));
+        fsUpdate('lendBorrow', id, d);
+      },
+      settleLendBorrow: (id, method) => {
+        // method: 'paid_back' | 'transferred'
+        const u = get().user;
+        const d = {
+          status: 'settled', settleMethod: method, settledAt: new Date().toISOString(),
+          settledBy: u ? { uid: u.uid, name: firstName(u.name || u.email?.split('@')[0]) } : null,
+        };
+        set(s => ({ lendBorrow: s.lendBorrow.map(r => r.id === id ? { ...r, ...d } : r) }));
+        fsUpdate('lendBorrow', id, d);
+      },
+      reopenLendBorrow: (id) => {
+        const d = { status: 'open', settleMethod: null, settledAt: null, settledBy: null };
+        set(s => ({ lendBorrow: s.lendBorrow.map(r => r.id === id ? { ...r, ...d } : r) }));
+        fsUpdate('lendBorrow', id, d);
+      },
+      deleteLendBorrow: (id) => {
+        set(s => ({ lendBorrow: s.lendBorrow.filter(r => r.id !== id) }));
+        fsDel('lendBorrow', id);
+      },
+
+      // ── Loomis Change Orders (SHARED) ─────────────────────────────────────
+      // Change funds ordered from Loomis. Orders stay 'ordered' until the
+      // drop-off is confirmed as received (stamps who confirmed and when).
+      changeOrders: [],
+      addChangeOrder: (o) => {
+        const u   = get().user;
+        const doc = {
+          amountCents: 0, denominations: [], deliveryDate: '', notes: '',
+          ...o,
+          status: 'ordered', receivedAt: null, receivedBy: null,
+          id: `co_${Date.now()}`, createdAt: new Date().toISOString(),
+          createdBy: u ? { uid: u.uid, name: firstName(u.name || u.email?.split('@')[0]) } : null,
+        };
+        set(s => ({ changeOrders: [...s.changeOrders, doc] }));
+        fsWrite('changeOrders', doc.id, doc);
+      },
+      updateChangeOrder: (id, d) => {
+        set(s => ({ changeOrders: s.changeOrders.map(o => o.id === id ? { ...o, ...d } : o) }));
+        fsUpdate('changeOrders', id, d);
+      },
+      receiveChangeOrder: (id) => {
+        const u = get().user;
+        const d = {
+          status: 'received', receivedAt: new Date().toISOString(),
+          receivedBy: u ? { uid: u.uid, name: firstName(u.name || u.email?.split('@')[0]) } : null,
+        };
+        set(s => ({ changeOrders: s.changeOrders.map(o => o.id === id ? { ...o, ...d } : o) }));
+        fsUpdate('changeOrders', id, d);
+      },
+      unreceiveChangeOrder: (id) => {
+        const d = { status: 'ordered', receivedAt: null, receivedBy: null };
+        set(s => ({ changeOrders: s.changeOrders.map(o => o.id === id ? { ...o, ...d } : o) }));
+        fsUpdate('changeOrders', id, d);
+      },
+      deleteChangeOrder: (id) => {
+        set(s => ({ changeOrders: s.changeOrders.filter(o => o.id !== id) }));
+        fsDel('changeOrders', id);
+      },
+
       // ── Calendar ──────────────────────────────────────────────────────────
       // teamEvents = SHARED (synced to stores/{storeId}/teamEvents)
       // myEvents   = PRIVATE (synced to users/{uid}/myEvents — per-account cloud backup)
@@ -802,7 +881,7 @@ export const useAppStore = create(
     {
       name: 'panda-manager-storage',
       storage: createBackupStorage(),
-      version: 8,
+      version: 10,
       migrate: (persistedState, fromVersion) => {
         const state = { ...(persistedState || {}) };
         if ((fromVersion ?? -1) < 1) {
@@ -846,6 +925,14 @@ export const useAppStore = create(
           if (!Array.isArray(state.candidates)) state.candidates = [];
           if (!Array.isArray(state.interviews)) state.interviews = [];
         }
+        if ((fromVersion ?? -1) < 9) {
+          // Lend/Borrow tracker: ensure the new shared array exists.
+          if (!Array.isArray(state.lendBorrow)) state.lendBorrow = [];
+        }
+        if ((fromVersion ?? -1) < 10) {
+          // Loomis change orders: ensure the new shared array exists.
+          if (!Array.isArray(state.changeOrders)) state.changeOrders = [];
+        }
         return state;
       },
       merge: (persisted, current) => ({
@@ -859,6 +946,8 @@ export const useAppStore = create(
         reviews:       Array.isArray(persisted?.reviews)       ? persisted.reviews       : current.reviews,
         candidates:    Array.isArray(persisted?.candidates)    ? persisted.candidates    : current.candidates,
         interviews:    Array.isArray(persisted?.interviews)    ? persisted.interviews    : current.interviews,
+        lendBorrow:    Array.isArray(persisted?.lendBorrow)    ? persisted.lendBorrow    : current.lendBorrow,
+        changeOrders:  Array.isArray(persisted?.changeOrders)  ? persisted.changeOrders  : current.changeOrders,
         tasks:         Array.isArray(persisted?.tasks)         ? persisted.tasks         : current.tasks,
         contacts:      Array.isArray(persisted?.contacts)      ? persisted.contacts      : current.contacts,
         uniforms:      Array.isArray(persisted?.uniforms)      ? persisted.uniforms      : current.uniforms,
@@ -901,6 +990,8 @@ export const useAppStore = create(
           reviews:       state.reviews,
           candidates:    state.candidates,
           interviews:    state.interviews,
+          lendBorrow:    state.lendBorrow,
+          changeOrders:  state.changeOrders,
           tasks:         state.tasks,
           uniforms:      state.uniforms,
           uniformInventory: state.uniformInventory,

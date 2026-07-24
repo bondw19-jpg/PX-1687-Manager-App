@@ -133,7 +133,7 @@ export async function batchImportToFirestore(localData) {
 
     const COLLECTIONS = [
       'associates','callIns','teamEvents','myEvents',
-      'teamNotes','myNotes','reviews','tasks','contacts','announcements',
+      'teamNotes','myNotes','reviews','tasks','lendBorrow','changeOrders','contacts','announcements',
     ];
 
     for (const collName of COLLECTIONS) {
