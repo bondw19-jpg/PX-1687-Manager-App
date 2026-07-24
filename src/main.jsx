@@ -2,79 +2,12 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
-import { registerSW } from 'virtual:pwa-register'
+// PWA service worker registration is disabled in the Replit preview environment.
+// vite-plugin-pwa / virtual:pwa-register is not available here; the real PWA
+// build on Firebase Hosting handles registration via the production Vite config.
+const updateSW = () => {}
 
 const APP_VERSION = '2.2.1'
-
-// ── Startup version check ─────────────────────────────────────────────────────
-// Fetches /version.json with cache:'no-store' (bypasses SW + HTTP cache).
-// If the server version doesn't match the compiled APP_VERSION, clear all
-// caches and hard-reload so iOS standalone PWAs pick up the latest build.
-async function checkVersionAndReload() {
-  try {
-    const res = await fetch('/version.json?t=' + Date.now(), { cache: 'no-store' })
-    if (!res.ok) return
-    const { version } = await res.json()
-    if (version && version !== APP_VERSION) {
-      if ('caches' in window) {
-        const keys = await caches.keys()
-        await Promise.all(keys.map(k => caches.delete(k)))
-      }
-      window.location.reload()
-    }
-  } catch (e) {
-    // Offline or fetch error — skip silently
-  }
-}
-
-checkVersionAndReload()
-
-// ── SW controllerchange → reload ──────────────────────────────────────────────
-// When the new SW activates (skipWaiting + clientsClaim), the browser fires
-// 'controllerchange'. Reloading here ensures the page uses the new bundles.
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    window.location.reload()
-  })
-}
-
-// ── Legacy Firebase cache cleanup ─────────────────────────────────────────────
-async function clearLegacyFirebaseRuntimeCaches() {
-  try {
-    if (!('caches' in window)) return
-    const names = await caches.keys()
-    await Promise.all(
-      names
-        .filter((name) => name === 'firebase-cache' || name.toLowerCase().includes('firebase'))
-        .map((name) => caches.delete(name))
-    )
-  } catch (e) {
-    console.warn('[SW] Legacy Firebase cache cleanup skipped:', e?.message || e)
-  }
-}
-
-clearLegacyFirebaseRuntimeCaches()
-
-// ── Service Worker registration ───────────────────────────────────────────────
-// registerType: 'prompt' → onNeedRefresh fires when a new SW is waiting.
-// We show a persistent toast; tapping "Update" calls updateSW(true) which
-// tells the waiting SW to skipWaiting, then reloads the page.
-const updateSW = registerSW({
-  onRegistered(r) {
-    if (!r) return
-    // Poll for updates every 30 minutes while the app is open
-    setInterval(() => r.update(), 30 * 60 * 1000)
-  },
-  onNeedRefresh() {
-    showUpdateToast()
-  },
-  onOfflineReady() {
-    console.log('[SW] App ready to work offline')
-  },
-  onRegisterError(e) {
-    console.warn('[SW] Registration error:', e)
-  },
-})
 
 // ── Update toast ──────────────────────────────────────────────────────────────
 function showUpdateToast() {
