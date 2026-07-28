@@ -381,7 +381,10 @@ function generateActivities({
     if (r.status === 'settled') {
       const settledD = safeDate(r.settledAt);
       if (settledD && settledD >= cutoff) {
-        const method = r.settleMethod === 'transferred' ? 'Transferred' : 'Paid back';
+        const method =
+          r.settleMethod === 'transferred' ? 'Transferred'
+          : r.settleMethod === 'mixed'     ? 'Mixed (paid back + transferred)'
+          : 'Paid back';
         items.push({
           id: `lb-settled-${r.id}`,
           type: 'lendborrow',

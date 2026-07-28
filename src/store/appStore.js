@@ -389,18 +389,64 @@ export const useAppStore = create(
         fsUpdate('lendBorrow', id, d);
       },
       settleLendBorrow: (id, method) => {
-        // method: 'paid_back' | 'transferred'
-        const u = get().user;
+        // Settle the WHOLE record. method: 'paid_back' | 'transferred'
+        // Any items not yet individually settled are stamped with this method.
+        const u  = get().user;
+        const by = u ? { uid: u.uid, name: firstName(u.name || u.email?.split('@')[0]) } : null;
+        const at = new Date().toISOString();
+        const r  = get().lendBorrow.find(x => x.id === id);
+        if (!r) return;
+        const items = (r.items || []).map(it =>
+          it.settled ? it : { ...it, settled: { method, at, by } });
+        const methods = [...new Set(items.map(it => it.settled.method))];
         const d = {
-          status: 'settled', settleMethod: method, settledAt: new Date().toISOString(),
-          settledBy: u ? { uid: u.uid, name: firstName(u.name || u.email?.split('@')[0]) } : null,
+          items, status: 'settled',
+          settleMethod: methods.length === 1 ? methods[0] : 'mixed',
+          settledAt: at, settledBy: by,
         };
-        set(s => ({ lendBorrow: s.lendBorrow.map(r => r.id === id ? { ...r, ...d } : r) }));
+        set(s => ({ lendBorrow: s.lendBorrow.map(x => x.id === id ? { ...x, ...d } : x) }));
+        fsUpdate('lendBorrow', id, d);
+      },
+      settleLendBorrowItem: (id, index, method) => {
+        // Settle ONE item. If it was the last open item, the record settles too.
+        // A record settled item-by-item with mixed methods gets settleMethod 'mixed'.
+        const u  = get().user;
+        const by = u ? { uid: u.uid, name: firstName(u.name || u.email?.split('@')[0]) } : null;
+        const at = new Date().toISOString();
+        const r  = get().lendBorrow.find(x => x.id === id);
+        if (!r) return;
+        const items = (r.items || []).map((it, i) =>
+          i === index ? { ...it, settled: { method, at, by } } : it);
+        const allDone = items.length > 0 && items.every(it => it.settled);
+        const methods = [...new Set(items.filter(it => it.settled).map(it => it.settled.method))];
+        const d = allDone
+          ? { items, status: 'settled',
+              settleMethod: methods.length === 1 ? methods[0] : 'mixed',
+              settledAt: at, settledBy: by }
+          : { items };
+        set(s => ({ lendBorrow: s.lendBorrow.map(x => x.id === id ? { ...x, ...d } : x) }));
+        fsUpdate('lendBorrow', id, d);
+      },
+      unsettleLendBorrowItem: (id, index) => {
+        // Undo a single item's settlement; the record reopens if it was settled.
+        const r = get().lendBorrow.find(x => x.id === id);
+        if (!r) return;
+        const items = (r.items || []).map((it, i) => {
+          if (i !== index) return it;
+          const { settled, ...rest } = it;
+          return rest;
+        });
+        const d = { items, status: 'open', settleMethod: null, settledAt: null, settledBy: null };
+        set(s => ({ lendBorrow: s.lendBorrow.map(x => x.id === id ? { ...x, ...d } : x) }));
         fsUpdate('lendBorrow', id, d);
       },
       reopenLendBorrow: (id) => {
-        const d = { status: 'open', settleMethod: null, settledAt: null, settledBy: null };
-        set(s => ({ lendBorrow: s.lendBorrow.map(r => r.id === id ? { ...r, ...d } : r) }));
+        // Reopen the whole record, clearing every item's settlement.
+        const r = get().lendBorrow.find(x => x.id === id);
+        if (!r) return;
+        const items = (r.items || []).map(({ settled, ...rest }) => rest);
+        const d = { items, status: 'open', settleMethod: null, settledAt: null, settledBy: null };
+        set(s => ({ lendBorrow: s.lendBorrow.map(x => x.id === id ? { ...x, ...d } : x) }));
         fsUpdate('lendBorrow', id, d);
       },
       deleteLendBorrow: (id) => {

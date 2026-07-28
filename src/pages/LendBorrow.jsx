@@ -42,6 +42,7 @@ const DIR_META = {
 const METHOD_META = {
   paid_back:   { label: 'Paid Back',   badge: 'bg-green-100 text-green-700'   },
   transferred: { label: 'Transferred', badge: 'bg-purple-100 text-purple-700' },
+  mixed:       { label: 'Settled (mixed)', badge: 'bg-teal-100 text-teal-700' },
 };
 
 const itemsSummary = (r) => (r.items || []).map(i => `${i.qty}× ${i.name}`).join(', ');
@@ -52,10 +53,13 @@ function fmtDateTime(iso) {
 
 // ─── record card ──────────────────────────────────────────────────────────────
 
-function RecordCard({ r, onSettle, onReopen, onDelete }) {
+function RecordCard({ r, onSettle, onSettleItem, onUnsettleItem, onReopen, onDelete }) {
   const dir    = DIR_META[r.direction] || DIR_META.lent;
   const isOpen = r.status !== 'settled';
   const method = METHOD_META[r.settleMethod];
+  const items        = r.items || [];
+  const settledCount = items.filter(it => it.settled).length;
+  const multi        = items.length > 1;
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
@@ -86,15 +90,58 @@ function RecordCard({ r, onSettle, onReopen, onDelete }) {
         </div>
 
         <div className="mt-2 space-y-1">
-          {(r.items || []).map((it, i) => (
-            <div key={i} className="flex items-center justify-between text-sm gap-2">
-              <span className="text-gray-700 flex items-center gap-1.5 min-w-0">
-                <Package size={13} className="text-gray-300 flex-shrink-0" />
-                <span className="truncate">{it.name}</span>
-              </span>
-              <span className="font-semibold text-gray-800 flex-shrink-0">× {it.qty}</span>
-            </div>
-          ))}
+          {items.map((it, i) => {
+            const im = it.settled ? METHOD_META[it.settled.method] : null;
+            return (
+              <div key={i} className="flex items-center justify-between text-sm gap-2">
+                <span className={`flex items-center gap-1.5 min-w-0 ${it.settled ? 'text-gray-400' : 'text-gray-700'}`}>
+                  <Package size={13} className="text-gray-300 flex-shrink-0" />
+                  <span className={`truncate ${it.settled ? 'line-through' : ''}`}>{it.name}</span>
+                </span>
+                <span className="flex items-center gap-1.5 flex-shrink-0">
+                  <span className={`font-semibold ${it.settled ? 'text-gray-400' : 'text-gray-800'}`}>× {it.qty}</span>
+                  {it.settled && im && (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${im.badge}`}>
+                      {im.label}
+                    </span>
+                  )}
+                  {isOpen && multi && (
+                    it.settled ? (
+                      <button
+                        onClick={() => onUnsettleItem(r, i)}
+                        title="Undo — reopen this item"
+                        className="p-1 text-gray-300 hover:text-gray-500 rounded-lg"
+                      >
+                        <Undo2 size={13} />
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => onSettleItem(r, i, 'paid_back')}
+                          title="Mark this item paid back"
+                          className="p-1 rounded-lg text-green-600 bg-green-50 border border-green-200 hover:bg-green-100"
+                        >
+                          <Banknote size={13} />
+                        </button>
+                        <button
+                          onClick={() => onSettleItem(r, i, 'transferred')}
+                          title="Mark this item transferred"
+                          className="p-1 rounded-lg text-purple-600 bg-purple-50 border border-purple-200 hover:bg-purple-100"
+                        >
+                          <Truck size={13} />
+                        </button>
+                      </>
+                    )
+                  )}
+                </span>
+              </div>
+            );
+          })}
+          {isOpen && multi && settledCount > 0 && (
+            <p className="text-[11px] text-gray-400 pt-0.5">
+              {settledCount} of {items.length} items settled
+            </p>
+          )}
         </div>
 
         {r.notes && (
@@ -119,13 +166,13 @@ function RecordCard({ r, onSettle, onReopen, onDelete }) {
             onClick={() => onSettle(r, 'paid_back')}
             className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold bg-green-50 text-green-700 border border-green-200 active:bg-green-100 hover:bg-green-100 transition-colors"
           >
-            <Banknote size={14} /> Paid Back
+            <Banknote size={14} /> {multi ? 'All Paid Back' : 'Paid Back'}
           </button>
           <button
             onClick={() => onSettle(r, 'transferred')}
             className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200 active:bg-purple-100 hover:bg-purple-100 transition-colors"
           >
-            <Truck size={14} /> Transferred
+            <Truck size={14} /> {multi ? 'All Transferred' : 'Transferred'}
           </button>
         </div>
       ) : (
@@ -311,7 +358,10 @@ function AddRecordModal({ onClose, onSave }) {
 // ─── page ─────────────────────────────────────────────────────────────────────
 
 export default function LendBorrow() {
-  const { lendBorrow, addLendBorrow, settleLendBorrow, reopenLendBorrow, deleteLendBorrow } = useAppStore();
+  const {
+    lendBorrow, addLendBorrow, settleLendBorrow, settleLendBorrowItem,
+    unsettleLendBorrowItem, reopenLendBorrow, deleteLendBorrow,
+  } = useAppStore();
   const [showModal, setShowModal] = useState(false);
   const [view,      setView]      = useState('open'); // 'open' | 'settled'
   const [search,    setSearch]    = useState('');
@@ -341,15 +391,43 @@ export default function LendBorrow() {
   const isSaturday = new Date().getDay() === 6;
 
   const handleSettle = async (r, method) => {
-    const meta = METHOD_META[method];
+    const meta  = METHOD_META[method];
+    const multi = (r.items || []).length > 1;
     const ok = await confirmDialog({
-      title: `Mark as ${meta.label}?`,
+      title: multi ? `Mark ALL items as ${meta.label}?` : `Mark as ${meta.label}?`,
       message: `${DIR_META[r.direction]?.phrase || ''} ${r.otherStore}: ${itemsSummary(r)}. This settles the record — your name and today's date will be saved.`,
       confirmText: meta.label,
     });
     if (!ok) return;
     settleLendBorrow(r.id, method);
     toast(`Settled — ${meta.label.toLowerCase()}`, { type: 'success' });
+  };
+
+  const handleSettleItem = async (r, index, method) => {
+    const meta = METHOD_META[method];
+    const it   = (r.items || [])[index];
+    if (!it) return;
+    const openLeft = (r.items || []).filter((x, i) => i !== index && !x.settled).length;
+    const ok = await confirmDialog({
+      title: `Mark item as ${meta.label}?`,
+      message: `${it.qty}× ${it.name} — ${DIR_META[r.direction]?.phrase || ''} ${r.otherStore}.${
+        openLeft === 0 ? ' This is the last open item, so the whole record settles.' : ''
+      }`,
+      confirmText: meta.label,
+    });
+    if (!ok) return;
+    settleLendBorrowItem(r.id, index, method);
+    toast(
+      openLeft === 0
+        ? 'Last item settled — record closed'
+        : `Item settled — ${meta.label.toLowerCase()}`,
+      { type: 'success' },
+    );
+  };
+
+  const handleUnsettleItem = (r, index) => {
+    unsettleLendBorrowItem(r.id, index);
+    toast('Item reopened', { type: 'info' });
   };
 
   const handleReopen = async (r) => {
@@ -462,6 +540,8 @@ export default function LendBorrow() {
                 key={r.id}
                 r={r}
                 onSettle={handleSettle}
+                onSettleItem={handleSettleItem}
+                onUnsettleItem={handleUnsettleItem}
                 onReopen={handleReopen}
                 onDelete={handleDelete}
               />
