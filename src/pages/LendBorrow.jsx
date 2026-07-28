@@ -15,7 +15,7 @@ import React, { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import {
   ArrowLeftRight, ArrowUpRight, ArrowDownLeft, Plus, X, Trash2,
-  Banknote, Truck, Undo2, Package, Search, Store,
+  Banknote, Truck, Undo2, Package, Search, Store, Pencil,
 } from 'lucide-react';
 import Header from '../components/Header';
 import DesktopPageHeader from '../components/DesktopPageHeader';
@@ -53,7 +53,7 @@ function fmtDateTime(iso) {
 
 // ─── record card ──────────────────────────────────────────────────────────────
 
-function RecordCard({ r, onSettle, onSettleItem, onUnsettleItem, onReopen, onDelete }) {
+function RecordCard({ r, onSettle, onSettleItem, onUnsettleItem, onReopen, onEdit, onDelete }) {
   const dir    = DIR_META[r.direction] || DIR_META.lent;
   const isOpen = r.status !== 'settled';
   const method = METHOD_META[r.settleMethod];
@@ -75,13 +75,24 @@ function RecordCard({ r, onSettle, onSettleItem, onUnsettleItem, onReopen, onDel
               </span>
             )}
           </div>
-          <button
-            onClick={() => onDelete(r)}
-            title="Delete record"
-            className="p-1.5 text-gray-300 hover:text-red-500 rounded-lg flex-shrink-0"
-          >
-            <Trash2 size={15} />
-          </button>
+          <div className="flex items-center flex-shrink-0">
+            {isOpen && (
+              <button
+                onClick={() => onEdit(r)}
+                title="Edit record"
+                className="p-1.5 text-gray-300 hover:text-primary rounded-lg"
+              >
+                <Pencil size={15} />
+              </button>
+            )}
+            <button
+              onClick={() => onDelete(r)}
+              title="Delete record"
+              className="p-1.5 text-gray-300 hover:text-red-500 rounded-lg"
+            >
+              <Trash2 size={15} />
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center gap-1.5 font-bold text-gray-900">
@@ -191,12 +202,15 @@ function RecordCard({ r, onSettle, onSettleItem, onUnsettleItem, onReopen, onDel
 
 // ─── add-record bottom sheet ──────────────────────────────────────────────────
 
-function AddRecordModal({ onClose, onSave }) {
-  const [direction,  setDirection]  = useState('lent');
-  const [otherStore, setOtherStore] = useState('');
-  const [date,       setDate]       = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [items,      setItems]      = useState([{ name: '', qty: 1 }]);
-  const [notes,      setNotes]      = useState('');
+function AddRecordModal({ onClose, onSave, initial }) {
+  const isEdit = !!initial;
+  const [direction,  setDirection]  = useState(initial?.direction || 'lent');
+  const [otherStore, setOtherStore] = useState(initial?.otherStore || '');
+  const [date,       setDate]       = useState(initial?.date || format(new Date(), 'yyyy-MM-dd'));
+  const [items,      setItems]      = useState(
+    initial?.items?.length ? initial.items.map(it => ({ ...it })) : [{ name: '', qty: 1 }]
+  );
+  const [notes,      setNotes]      = useState(initial?.notes || '');
 
   const setItem   = (i, patch) => setItems(arr => arr.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
   const addRow    = () => setItems(arr => [...arr, { name: '', qty: 1 }]);
@@ -205,7 +219,7 @@ function AddRecordModal({ onClose, onSave }) {
   const handleSave = () => {
     const store = otherStore.trim();
     const cleanItems = items
-      .map(it => ({ name: (it.name || '').trim(), qty: Number(it.qty) || 0 }))
+      .map(it => ({ ...it, name: (it.name || '').trim(), qty: Number(it.qty) || 0 }))
       .filter(it => it.name);
     if (!store) { toast('Enter the other store (e.g. PX 2301)', { type: 'error' }); return; }
     if (!date)  { toast('Pick a date', { type: 'error' }); return; }
@@ -220,7 +234,8 @@ function AddRecordModal({ onClose, onSave }) {
         {/* Header */}
         <div className="flex items-center justify-between p-4 pb-3 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-bold text-gray-900 flex items-center gap-2">
-            <ArrowLeftRight size={18} className="text-primary" /> New Lend / Borrow Record
+            <ArrowLeftRight size={18} className="text-primary" />
+            {isEdit ? 'Edit Lend / Borrow Record' : 'New Lend / Borrow Record'}
           </h2>
           <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-xl">
             <X size={20} />
@@ -347,7 +362,7 @@ function AddRecordModal({ onClose, onSave }) {
             onClick={handleSave}
             className="flex-1 bg-primary text-white py-3 rounded-xl text-sm font-semibold"
           >
-            Save Record
+            {isEdit ? 'Save Changes' : 'Save Record'}
           </button>
         </div>
       </div>
@@ -359,10 +374,11 @@ function AddRecordModal({ onClose, onSave }) {
 
 export default function LendBorrow() {
   const {
-    lendBorrow, addLendBorrow, settleLendBorrow, settleLendBorrowItem,
-    unsettleLendBorrowItem, reopenLendBorrow, deleteLendBorrow,
+    lendBorrow, addLendBorrow, updateLendBorrow, settleLendBorrow,
+    settleLendBorrowItem, unsettleLendBorrowItem, reopenLendBorrow, deleteLendBorrow,
   } = useAppStore();
   const [showModal, setShowModal] = useState(false);
+  const [editing,   setEditing]   = useState(null); // record being edited, or null
   const [view,      setView]      = useState('open'); // 'open' | 'settled'
   const [search,    setSearch]    = useState('');
 
@@ -428,6 +444,27 @@ export default function LendBorrow() {
   const handleUnsettleItem = (r, index) => {
     unsettleLendBorrowItem(r.id, index);
     toast('Item reopened', { type: 'info' });
+  };
+
+  const handleEditSave = (rec) => {
+    // Preserve each item's settled state (carried through the modal); if every
+    // remaining item is already settled, the record settles too.
+    const allDone = rec.items.length > 0 && rec.items.every(it => it.settled);
+    const methods = [...new Set(rec.items.filter(it => it.settled).map(it => it.settled.method))];
+    // Stamp who/when from the most recent item settlement so a settled record
+    // always carries settledAt/settledBy.
+    const latest = allDone
+      ? rec.items.reduce((a, it) => (!a || (it.settled.at || '') > (a.at || '') ? it.settled : a), null)
+      : null;
+    const d = allDone
+      ? { ...rec, status: 'settled',
+          settleMethod: methods.length === 1 ? methods[0] : 'mixed',
+          settledAt: editing.settledAt || latest?.at || new Date().toISOString(),
+          settledBy: editing.settledBy || latest?.by || null }
+      : { ...rec, status: 'open', settleMethod: null, settledAt: null, settledBy: null };
+    updateLendBorrow(editing.id, d);
+    setEditing(null);
+    toast('Record updated', { type: 'success' });
   };
 
   const handleReopen = async (r) => {
@@ -543,6 +580,7 @@ export default function LendBorrow() {
                 onSettleItem={handleSettleItem}
                 onUnsettleItem={handleUnsettleItem}
                 onReopen={handleReopen}
+                onEdit={setEditing}
                 onDelete={handleDelete}
               />
             ))}
@@ -558,6 +596,14 @@ export default function LendBorrow() {
             setShowModal(false);
             toast('Record added', { type: 'success' });
           }}
+        />
+      )}
+
+      {editing && (
+        <AddRecordModal
+          initial={editing}
+          onClose={() => setEditing(null)}
+          onSave={handleEditSave}
         />
       )}
     </div>
